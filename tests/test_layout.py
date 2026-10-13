@@ -9,7 +9,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from keystonectl.generate.docker import compose_prefix
+from keystonectl.generate.docker import (
+    compose_prefix,
+    layout_problems,
+    service_on_upstreams_network,
+)
 from keystonectl.layout import (
     Deployment,
     LayoutError,
@@ -593,3 +597,30 @@ def test_compose_prefix_passes_layout_profiles(tmp_path: Path) -> None:
     prefix = compose_prefix(tmp_path, layout)
     assert prefix[:4] == ["docker", "compose", "-f", str(tmp_path / "docker-compose.yml")]
     assert prefix[-2:] == ["--profile", "keystone-mcp"]
+
+
+def test_layout_problems_accepts_operator_upstreams_network_alias() -> None:
+    config = {
+        "services": {
+            "keystone-mcp": {
+                "environment": {
+                    "KEYSTONE_MCP_UPSTREAMS_PATH": "/etc/keystone-mcp/keystonectl/upstreams.yaml",
+                    "KEYSTONE_MCP_RBAC_CATALOG_SNAPSHOT": (
+                        "/etc/keystone-mcp/keystonectl/catalog-snapshot.yaml"
+                    ),
+                },
+                "volumes": ["./keystonectl:/etc/keystone-mcp/keystonectl:ro"],
+                "networks": ["mcp_net", "keystone_upstreams"],
+            }
+        },
+        "networks": {
+            "mcp_net": {"name": "keystone_mcp_net", "external": True},
+            "keystone_upstreams": {"name": "keystone-mcp-upstreams", "external": True},
+        },
+    }
+    layout = {"keystone_service": "keystone-mcp"}
+    service = config["services"]["keystone-mcp"]
+    assert service_on_upstreams_network(config, service)
+    assert "service is not on the keystone-mcp-upstreams network" not in layout_problems(
+        config, layout
+    )
