@@ -66,7 +66,11 @@ from keystonectl.generate.validators import (
     unreachable_tools,
 )
 from keystonectl.keystone_mcp_rules import MAX_REGISTRY_ENTRIES
-from keystonectl.layout import LayoutError, replace_managed_env_block
+from keystonectl.layout import (
+    LayoutError,
+    env_assigned_outside_managed_block,
+    replace_managed_env_block,
+)
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.plan import Context, StepPlan
 from keystonectl.resources.network import ip_for_service
@@ -1486,7 +1490,11 @@ def _materialise(
             ),
         )
         if allow == "true":
-            root_values["KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"] = "true"
+            insecure = "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"
+            env_path = ctx.root / ".env"
+            env_text = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
+            if not env_assigned_outside_managed_block(env_text, insecure):
+                root_values[insecure] = "true"
     if root_values:
         _write_root_env(ctx, root_values, undo)
         if ctx.failure is not None:

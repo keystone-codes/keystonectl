@@ -57,6 +57,12 @@ def compose_prefix(
         command.extend(["-p", project, "--project-directory", str(root)])
     for path in compose_files(root, layout):
         command.extend(["-f", path])
+    profiles = layout.get("profiles")
+    if isinstance(profiles, list):
+        for item in profiles:
+            profile = str(item).strip()
+            if profile:
+                command.extend(["--profile", profile])
     return command
 
 
