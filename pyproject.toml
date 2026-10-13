@@ -1,0 +1,32 @@
+[project]
+name = "keystonectl"
+version = "0.1.0"
+description = "Validate service packages that sit behind keystone-mcp"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    "pyyaml>=6",
+    "jsonschema>=4.18",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/keystonectl"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: needs Docker",
+]
