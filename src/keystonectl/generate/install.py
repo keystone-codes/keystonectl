@@ -1375,6 +1375,43 @@ def _start(ctx: Context, manifest: Mapping[str, Any], *, recreate: bool) -> str 
     return project
 
 
+def service_install_would_rerun(ctx: Context) -> bool:
+    """True when apply would leave the generated fragment and registry untouched."""
+
+    manifest = _manifest_of(ctx)
+    if manifest is None or ctx.resolved is None or manifest.get("kind") == "resource":
+        return False
+    name = str(manifest["name"])
+    from keystonectl.public import fragment_ports, install_questions
+
+    if _service(ctx.lock, name) and _service(ctx.lock, name).get("managed") == "ejected":
+        return False
+    if _env_questions(ctx, manifest) or install_questions(ctx, manifest):
+        return False
+    entries = _entries(_load_yaml(ctx.root / "keystonectl" / "upstreams.yaml"))
+    namespace = _namespace_choice(ctx, manifest, entries) if mcp_role(manifest) else None
+    if ctx.failure is not None:
+        return False
+    registry_name = _registry_name(ctx, manifest) if namespace else None
+    if namespace and registry_name and _taken(ctx, registry_name, entries):
+        return False
+    if namespace and registry_name:
+        names = {str(item.get("name")) for item in entries}
+        if registry_name not in names and len(entries) >= MAX_REGISTRY_ENTRIES:
+            return False
+    env_values = _env_values(ctx, manifest)
+    host_port, extra_hosts = fragment_ports(ctx, manifest)
+    if ctx.failure is not None:
+        return False
+    fragment = render_fragment(
+        manifest,
+        {"env_values": env_values},
+        host_port=host_port,
+        extra_hosts=extra_hosts,
+    )
+    return _unchanged(ctx, manifest, fragment, namespace)
+
+
 def install_service(ctx: Context) -> None:
     manifest = _manifest_of(ctx)
     if manifest is None or ctx.resolved is None:
@@ -1383,7 +1420,7 @@ def install_service(ctx: Context) -> None:
         return
     name = str(manifest["name"])
     from keystonectl.lifecycle import prune_retired_names
-    from keystonectl.public import fragment_ports, install_questions
+    from keystonectl.public import install_questions
 
     if isinstance(ctx.lock, dict):
         prune_retired_names(ctx.root, ctx.lock)
@@ -1412,17 +1449,7 @@ def install_service(ctx: Context) -> None:
         if registry_name not in names and len(entries) >= MAX_REGISTRY_ENTRIES:
             _fail(ctx, "registry_full", ERRORS["registry_full"].title)
             return
-    env_values = _env_values(ctx, manifest)
-    host_port, extra_hosts = fragment_ports(ctx, manifest)
-    if ctx.failure is not None:
-        return
-    fragment = render_fragment(
-        manifest,
-        {"env_values": env_values},
-        host_port=host_port,
-        extra_hosts=extra_hosts,
-    )
-    if _unchanged(ctx, manifest, fragment, namespace):
+    if service_install_would_rerun(ctx):
         ctx.rerun = True
         entry = _service(ctx.lock, name)
         if isinstance(entry, dict):
@@ -1434,6 +1461,18 @@ def install_service(ctx: Context) -> None:
             ctx, manifest, namespace=namespace, registry_name=registry_name, discovery="unknown"
         )
         return
+    env_values = _env_values(ctx, manifest)
+    from keystonectl.public import fragment_ports
+
+    host_port, extra_hosts = fragment_ports(ctx, manifest)
+    if ctx.failure is not None:
+        return
+    fragment = render_fragment(
+        manifest,
+        {"env_values": env_values},
+        host_port=host_port,
+        extra_hosts=extra_hosts,
+    )
     if namespace and not _validate(ctx, manifest, namespace, registry_name or name):
         return
     if mcp_role(manifest) is None and not _validate_compose_only(ctx):
