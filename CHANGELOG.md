@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Guide for service authors: `docs/packaging-a-service.md`.
 - CLI skeleton: `init`, `lint`, `check`, `plan`/`apply`, lock file, catalog sources, JSON output.
 - Resource binding for `s3/v1` and `postgres/v1` with probes.
 - Published on PyPI as `keystonectl`; tags `vX.Y.Z` publish through trusted publishing.

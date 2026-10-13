@@ -100,6 +100,7 @@ docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d
 
 ## Documentation
 
+- Packaging your own service: [docs/packaging-a-service.md](docs/packaging-a-service.md)
 - [Service package spec](docs/spec/service-package.md)
 - [Catalog spec](docs/spec/catalog.md)
 - [S3 resource interface](docs/spec/resources/s3-v1.md)
