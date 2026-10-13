@@ -1,0 +1,3 @@
+<stand-host>
+example-customer
+example-vendor
