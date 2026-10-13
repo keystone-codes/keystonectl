@@ -1400,6 +1400,27 @@ def _split_managed_block(text: str) -> tuple[str, str | None]:
     return text[:start], text[after:]
 
 
+def drop_managed_env_keys(text: str, names: set[str]) -> str:
+    """Remove named keys from the managed block. Other keys stay."""
+
+    outside, rest = _split_managed_block(text)
+    if rest is None:
+        return text
+    start = text.find(_ENV_BLOCK_START)
+    end = text.find(_ENV_BLOCK_END, start)
+    block = text[start + len(_ENV_BLOCK_START) : end]
+    kept: dict[str, str] = {}
+    for line in block.splitlines():
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key not in names:
+            kept[key] = value
+    if not kept:
+        return outside + rest
+    return outside + _render_env_block(kept) + rest
+
+
 def _env_assigns(text: str, name: str) -> bool:
     pattern = re.compile(rf"^\s*(?:export\s+)?{re.escape(name)}\s*=")
     return any(pattern.match(line) for line in text.splitlines())

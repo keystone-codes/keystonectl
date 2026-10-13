@@ -3,6 +3,26 @@
 from dataclasses import dataclass
 
 
+class KsctlError(Exception):
+    """Installer error that carries a registry id."""
+
+    def __init__(
+        self,
+        error_id: str,
+        message: str,
+        *,
+        retryable: bool = False,
+        hint: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_id = error_id
+        self.message = message
+        self.retryable = retryable
+        spec = ERRORS.get(error_id)
+        self.hint = hint if hint is not None else (spec.action if spec is not None else "")
+        self.code = spec.code if spec is not None else 3
+
+
 @dataclass(frozen=True)
 class ErrorSpec:
     id: str
@@ -475,6 +495,162 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "A service container did not become healthy.",
             "Read the container log and run the command again.",
         ),
+        _e(
+            "domain_invalid",
+            3,
+            False,
+            "The public domain is not a lowercase hostname.",
+            "Use a lowercase DNS name with at least two labels, for example files.example.com.",
+        ),
+        _e(
+            "domain_in_use",
+            3,
+            False,
+            "That domain is already used by another service or nginx site.",
+            "Pick another domain, or disable the other site and run the command again.",
+        ),
+        _e(
+            "sudo_required",
+            3,
+            False,
+            "nginx and certificates need passwordless sudo, or TLS=manual.",
+            "Allow sudo -n for nginx and certbot, or answer TLS=manual.",
+        ),
+        _e(
+            "nginx_missing",
+            3,
+            False,
+            "nginx is not installed.",
+            "Install nginx, or answer TLS=manual.",
+        ),
+        _e(
+            "nginx_config_invalid",
+            3,
+            False,
+            "nginx -t rejected the new site.",
+            "Read the nginx -t output. The previous site file was restored.",
+        ),
+        _e(
+            "certbot_missing",
+            3,
+            False,
+            "certbot is not installed.",
+            "Install certbot and python3-certbot-nginx, or choose another TLS method.",
+        ),
+        _e(
+            "cert_unreadable",
+            3,
+            False,
+            "The certificate or key file cannot be read.",
+            "Check the path and try another KEYSTONE_SETUP_SERVICE_<NAME>_CERT_PATH or _KEY_PATH.",
+        ),
+        _e(
+            "cert_not_pem",
+            3,
+            False,
+            "The certificate is not a PEM file.",
+            "A .pfx or .der file must be converted: "
+            "openssl pkcs12 -in x.pfx -nokeys -out fullchain.pem",
+        ),
+        _e(
+            "key_not_pem",
+            3,
+            False,
+            "The private key is not a PEM file.",
+            "Replace KEYSTONE_SETUP_SERVICE_<NAME>_KEY_PATH with a PEM key.",
+        ),
+        _e(
+            "key_mismatch",
+            3,
+            False,
+            "The private key does not match the certificate.",
+            "Point KEYSTONE_SETUP_SERVICE_<NAME>_KEY_PATH at the key for this certificate.",
+        ),
+        _e(
+            "cert_expired",
+            3,
+            False,
+            "The certificate has expired.",
+            "Replace KEYSTONE_SETUP_SERVICE_<NAME>_CERT_PATH with a current certificate.",
+        ),
+        _e(
+            "cert_install_failed",
+            3,
+            False,
+            "The certificate files could not be installed.",
+            "Check sudo and the destination directory, then run the command again.",
+        ),
+        _e(
+            "port_range_exhausted",
+            3,
+            False,
+            "Every loopback port from 47600 to 47699 is in use.",
+            "Free a port in that range and run the command again.",
+        ),
+        _e(
+            "required_by",
+            3,
+            False,
+            "Another installed service requires this one.",
+            "Remove the services listed in the message first.",
+        ),
+        _e(
+            "no_previous_version",
+            3,
+            False,
+            "There is no previous version to roll back to.",
+            "Rollback restores one upgrade. Install the version you want with service apply.",
+        ),
+        _e(
+            "not_ejectable",
+            3,
+            False,
+            "A remote service has no generated fragment to eject.",
+            "Remote services are not generated. There is nothing to eject.",
+        ),
+        _e(
+            "not_ejected",
+            3,
+            False,
+            "This service was not ejected.",
+            "service adopt only takes back a fragment that was ejected.",
+        ),
+        _e(
+            "public_ip_unknown",
+            3,
+            True,
+            "The public address of this host could not be read.",
+            "Check outbound HTTPS and run the command again, or answer DNS=skip.",
+        ),
+        _e(
+            "dns_no_record",
+            3,
+            True,
+            "The domain has no A record.",
+            "Add an A record for the domain pointing at this host, then run apply again.",
+        ),
+        _e(
+            "dns_mismatch",
+            3,
+            True,
+            "The domain does not point at this host.",
+            "Update the A record or wait for DNS to propagate (often 1-10 min), "
+            "then run apply again.",
+        ),
+        _e(
+            "certbot_failed",
+            3,
+            True,
+            "certbot could not issue the certificate.",
+            "Check DNS, port 80, and /var/log/letsencrypt/letsencrypt.log, then run apply again.",
+        ),
+        _e(
+            "public_unreachable",
+            3,
+            True,
+            "https on the public domain did not answer.",
+            "Finish the proxy and certificate, then run apply again.",
+        ),
     ]
 )
 
@@ -630,6 +806,56 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "The public certificate is not trusted by the system trust store.",
             "The service answered. Install the certificate in the system trust store "
             "if clients should trust it.",
+        ),
+        _w(
+            "dns_system_resolver",
+            "dig is not installed, so the system resolver was used.",
+            "Install dig for a check against 1.1.1.1. The system resolver can be cached.",
+        ),
+        _w(
+            "chain_missing",
+            "The certificate file has no chain.",
+            "Add the intermediate certificates to the full chain.",
+        ),
+        _w(
+            "cert_may_not_cover_domain",
+            "The certificate may not cover this domain.",
+            "Check the certificate names. A wildcard covers one label only.",
+        ),
+        _w(
+            "cert_expiring",
+            "The certificate expires soon.",
+            "Renew it before it expires. service status warns again until you do.",
+        ),
+        _w(
+            "renewal_timer_missing",
+            "certbot has no renewal timer.",
+            "Enable the certbot systemd timer or /etc/cron.d/certbot.",
+        ),
+        _w(
+            "renewal_manual",
+            "Renewal of this certificate is on you.",
+            "service status warns 30 days before expiry.",
+        ),
+        _w(
+            "public_check_failed",
+            "The public health check did not return 200.",
+            "The service is installed. Check the proxy and run apply again.",
+        ),
+        _w(
+            "public_pending",
+            "The public address is not ready.",
+            "Run service apply again with a domain when you want the public paths published.",
+        ),
+        _w(
+            "extra_hosts_manual",
+            "A fragment was not updated with extra_hosts.",
+            "Add the host line yourself in the override or in your own compose file.",
+        ),
+        _w(
+            "policy_rows_orphaned",
+            "Policy rows still match tools this service no longer publishes.",
+            "Delete these policy rows. The tool names stay reserved until you do.",
         ),
     ]
 )
