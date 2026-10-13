@@ -1,0 +1,17 @@
+# Starting policy for the e2e layouts. keystonectl checks this file and does not edit it.
+# The reader role allows only hello_* so a later apply can show that nothing was added.
+version: "1.0.0"
+default_deny: true
+
+roles:
+  administrator:
+    description: "Full access, including user administration."
+    allow:
+      - "*"
+  reader:
+    description: "Hello tools only."
+    allow:
+      - "hello_*"
+
+requires_human_identity: []
+critical_tools: []
