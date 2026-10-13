@@ -901,6 +901,12 @@ def test_manual_mode_no_sudo_no_nginx_checks_https(tmp_path: Path) -> None:
     assert ok.code == 0, ok.error
     assert not any(call[0][:2] == ("sudo", "-n") for call in host.calls)
     assert not any("nginx" in call[0] for call in host.calls)
+    assert ok.result["public"] == {
+        "state": "ready",
+        "domain": DOMAIN,
+        "last_error": None,
+        "tls": "manual",
+    }
     ready = load_lock(root / "services.lock.yaml")["services"][0]["public"]
     assert ready["state"] == "ready"
     assert (root / ".keystonectl" / "nginx" / "keystone-svc-file-mcp.conf").is_file()
