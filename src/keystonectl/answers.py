@@ -50,6 +50,161 @@ QUESTION_TEMPLATES: dict[str, Question] = {
         "file",
         secret=True,
     ),
+    "KEYSTONE_SETUP_RESOURCE_S3": Question(
+        "KEYSTONE_SETUP_RESOURCE_S3",
+        "Where should the package keep files: in S3 storage you already have (external), "
+        "or in a new MinIO on this server (catalog)?",
+        "choice",
+        choices=("external", "catalog"),
+        help="Answer external or catalog.",
+    ),
+    "KEYSTONE_SETUP_RESOURCE_POSTGRES": Question(
+        "KEYSTONE_SETUP_RESOURCE_POSTGRES",
+        "Which PostgreSQL should the package use: a server you already have (external), "
+        "or a new PostgreSQL on this server (catalog)?",
+        "choice",
+        choices=("external", "catalog"),
+        help="Answer external or catalog.",
+    ),
+    "KEYSTONE_SETUP_RESOURCE_S3_PACKAGE": Question(
+        "KEYSTONE_SETUP_RESOURCE_S3_PACKAGE",
+        "Which S3 provider from the catalogs should be installed?",
+        "choice",
+        help="Answer source/name, for example keystone-codes/minio.",
+    ),
+    "KEYSTONE_SETUP_RESOURCE_POSTGRES_PACKAGE": Question(
+        "KEYSTONE_SETUP_RESOURCE_POSTGRES_PACKAGE",
+        "Which PostgreSQL provider from the catalogs should be installed?",
+        "choice",
+        help="Answer source/name, for example keystone-codes/postgres.",
+    ),
+    "KEYSTONE_SETUP_S3_ENDPOINT": Question(
+        "KEYSTONE_SETUP_S3_ENDPOINT",
+        "S3 endpoint URL (for example https://s3.amazonaws.com).",
+        "text",
+        help="Example: https://s3.amazonaws.com",
+    ),
+    "KEYSTONE_SETUP_S3_REGION": Question(
+        "KEYSTONE_SETUP_S3_REGION",
+        "S3 region (for example us-east-1).",
+        "text",
+        default="us-east-1",
+        help="Example: us-east-1",
+    ),
+    "KEYSTONE_SETUP_S3_PATH_STYLE": Question(
+        "KEYSTONE_SETUP_S3_PATH_STYLE",
+        "Use path-style S3 URLs? Answer true or false.",
+        "text",
+        default="true",
+        help="Example: true",
+    ),
+    "KEYSTONE_SETUP_S3_BUCKET": Question(
+        "KEYSTONE_SETUP_S3_BUCKET",
+        "S3 bucket name for this package (for example docs-mcp).",
+        "text",
+        help="Example: docs-mcp",
+    ),
+    "KEYSTONE_SETUP_S3_ACCESS_KEY_FILE": Question(
+        "KEYSTONE_SETUP_S3_ACCESS_KEY_FILE",
+        "Path to a mode 600 file with the S3 access key.",
+        "file",
+        secret=True,
+        help="Example: /home/operator/s3-access-key",
+    ),
+    "KEYSTONE_SETUP_S3_SECRET_KEY_FILE": Question(
+        "KEYSTONE_SETUP_S3_SECRET_KEY_FILE",
+        "Path to a mode 600 file with the S3 secret key.",
+        "file",
+        secret=True,
+        help="Example: /home/operator/s3-secret-key",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_HOST": Question(
+        "KEYSTONE_SETUP_POSTGRES_HOST",
+        "PostgreSQL host name (for example db.example.com).",
+        "text",
+        help="Example: db.example.com",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_PORT": Question(
+        "KEYSTONE_SETUP_POSTGRES_PORT",
+        "PostgreSQL port.",
+        "text",
+        default="5432",
+        help="Example: 5432",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_SSLMODE": Question(
+        "KEYSTONE_SETUP_POSTGRES_SSLMODE",
+        "PostgreSQL sslmode.",
+        "choice",
+        choices=("disable", "prefer", "require", "verify-ca", "verify-full"),
+        default="require",
+        help="Example: require",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_DATABASE": Question(
+        "KEYSTONE_SETUP_POSTGRES_DATABASE",
+        "PostgreSQL database name for this package.",
+        "text",
+        help="Example: docs_mcp",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_USER": Question(
+        "KEYSTONE_SETUP_POSTGRES_USER",
+        "PostgreSQL user name for this package.",
+        "text",
+        help="Example: docs_mcp",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_PASSWORD_FILE": Question(
+        "KEYSTONE_SETUP_POSTGRES_PASSWORD_FILE",
+        "Path to a mode 600 file with the PostgreSQL password.",
+        "file",
+        secret=True,
+        help="Example: /home/operator/postgres-password",
+    ),
+    "KEYSTONE_SETUP_POSTGRES_URL_FILE": Question(
+        "KEYSTONE_SETUP_POSTGRES_URL_FILE",
+        "Path to a mode 600 file with a postgresql:// URL that includes sslmode. "
+        "This replaces the other PostgreSQL questions.",
+        "file",
+        secret=True,
+        help="Example: /home/operator/postgres-url",
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_S3_BUCKET": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_S3_BUCKET",
+        "S3 bucket for package {PKG}. Overrides KEYSTONE_SETUP_S3_BUCKET.",
+        "text",
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_S3_ACCESS_KEY_FILE": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_S3_ACCESS_KEY_FILE",
+        "Path to a mode 600 file with the S3 access key for package {PKG}.",
+        "file",
+        secret=True,
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_S3_SECRET_KEY_FILE": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_S3_SECRET_KEY_FILE",
+        "Path to a mode 600 file with the S3 secret key for package {PKG}.",
+        "file",
+        secret=True,
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_DATABASE": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_DATABASE",
+        "PostgreSQL database for package {PKG}. Overrides KEYSTONE_SETUP_POSTGRES_DATABASE.",
+        "text",
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_USER": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_USER",
+        "PostgreSQL user for package {PKG}. Overrides KEYSTONE_SETUP_POSTGRES_USER.",
+        "text",
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_PASSWORD_FILE": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_PASSWORD_FILE",
+        "Path to a mode 600 file with the PostgreSQL password for package {PKG}.",
+        "file",
+        secret=True,
+    ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_URL_FILE": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_URL_FILE",
+        "Path to a mode 600 file with a postgresql:// URL for package {PKG}.",
+        "file",
+        secret=True,
+    ),
 }
 
 
@@ -123,6 +278,8 @@ def read_secret_file(path: Path, secrets: SecretRegistry) -> str:
 
 
 def _prompt(question: Question) -> str:
+    if question.help:
+        print(question.help, file=sys.stderr)
     if question.kind == "choice" and question.choices:
         print(question.text, file=sys.stderr)
         for index, choice in enumerate(question.choices, start=1):
