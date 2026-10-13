@@ -393,8 +393,8 @@ EOF
 }
 
 install_reader_policy() {
-  # The running server already loaded the boot policy. The file on disk is what
-  # the untouched-policy check reads. A restart before hello exists would refuse it.
+  # The untouched-policy check reads this file. hello_* matches the reserved
+  # snapshot name, so a later restart still accepts the policy.
   if [[ "$(id -u)" -eq 0 ]]; then
     cp "$HERE/e2e/fixtures/rbac-policy.yaml" "$ROOT/policy/rbac-policy.yaml"
     chown 10001:10001 "$ROOT/policy/rbac-policy.yaml"
@@ -402,6 +402,26 @@ install_reader_policy() {
     sudo cp "$HERE/e2e/fixtures/rbac-policy.yaml" "$ROOT/policy/rbac-policy.yaml"
     sudo chown 10001:10001 "$ROOT/policy/rbac-policy.yaml"
   fi
+}
+
+seed_hello_reservation() {
+  # keystone-mcp refuses hello_* until some catalog name matches it.
+  python3 - "$ROOT/keystonectl/catalog-snapshot.yaml" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8") if path.is_file() else "active: []\n"
+if "hello_ping" in text:
+    raise SystemExit(0)
+if not text.endswith("\n"):
+    text += "\n"
+if "reserved:" not in text:
+    text += "reserved:\n  - hello_ping\n"
+else:
+    text = text.replace("reserved:", "reserved:\n  - hello_ping", 1)
+path.write_text(text, encoding="utf-8")
+PY
 }
 
 prepare_production_example() {
@@ -454,7 +474,6 @@ EOF
       >"$DIAG/keystone.log" 2>&1 || true
     fail prepare "the keystone container did not become healthy"
   fi
-  install_reader_policy
   kc init --adopt "$ROOT"
   [[ "$KC_RC" -eq 0 ]] || fail prepare "init --adopt exited ${KC_RC}"
   local command
@@ -464,6 +483,9 @@ EOF
   kc init --adopt "$ROOT"
   [[ "$KC_RC" -eq 0 ]] || fail prepare "second init exited ${KC_RC}"
   [[ "$(jq_ changes <"$WORK/log/kc.out")" == "0" ]] || fail prepare "second init changed files"
+  seed_hello_reservation
+  install_reader_policy
+  ensure_network keystone-mcp-upstreams
   compose up -d --wait
   kc check
   [[ "$KC_RC" -eq 0 ]] || fail prepare "check after adopt exited ${KC_RC}"
@@ -515,8 +537,9 @@ prepare_deploy_ci() {
     || fail prepare "compose command is missing the packages file"
   kc init --adopt "$ROOT"
   [[ "$(jq_ changes <"$WORK/log/kc.out")" == "0" ]] || fail prepare "second init changed files"
-  compose --profile keystone-mcp up -d --wait keystone-mcp
+  seed_hello_reservation
   install_reader_policy
+  compose --profile keystone-mcp up -d --wait keystone-mcp
   kc check
   [[ "$KC_RC" -eq 0 ]] || fail prepare "check after adopt exited ${KC_RC}"
   KEYSTONE_SERVICE="$(lockq layout-keystone-service)"
