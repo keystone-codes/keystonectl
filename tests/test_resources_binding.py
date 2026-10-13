@@ -107,6 +107,39 @@ def test_one_provider_per_kind(tmp_path: Path, kind: str, monkeypatch: pytest.Mo
     )
 
 
+def test_catalog_provider_manifest_is_parsed_before_deploy(tmp_path: Path, kind: str) -> None:
+    if kind != "s3":
+        return
+    lab = Lab(tmp_path, standard_manifests())
+    document = yaml.safe_load(lab.texts["minio"])
+    document["containers"]["server"]["privileged"] = True
+    bad = yaml.safe_dump(document)
+    lab.by_url["https://example.com/minio.git"] = bad
+    seeded = (
+        lab.root
+        / ".keystonectl"
+        / "packages"
+        / "local"
+        / "minio"
+        / "1.0.0"
+        / "keystone-service.yaml"
+    )
+    seeded.write_text(bad, encoding="utf-8")
+    result = lab.apply(
+        "file-mcp",
+        environ={
+            "KEYSTONE_SETUP_RESOURCE_S3": "catalog",
+            "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_MAX_BYTES": "10",
+            "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_LINK_TTL_SECONDS": "60",
+        },
+    )
+    assert result.code == 3, result.error
+    assert result.error is not None
+    assert result.error["id"] == "manifest_invalid"
+    assert lab.deployer.events == []
+    assert not (lab.root / "packages" / "minio.yml").exists()
+
+
 def test_direct_provider_install_binds_without_consumers(tmp_path: Path, kind: str) -> None:
     lab = Lab(tmp_path, standard_manifests())
     result = lab.apply(provider_name(kind))

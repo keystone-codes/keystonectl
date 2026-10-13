@@ -149,6 +149,38 @@ def test_fragment_never_has_dangerous_keys() -> None:
     assert "/etc/passwd" not in text
 
 
+def test_newline_in_yaml_fields_cannot_open_a_key() -> None:
+    manifest = _manifest("minio")
+    spec = manifest["containers"].pop("server")
+    spec["volumes"] = [
+        {
+            "name": "data",
+            "path": "/data\n    - /var/run/docker.sock:/var/run/docker.sock",
+        }
+    ]
+    spec["healthcheck"]["interval"] = "10s\n    network_mode: host\n    ports:\n      - 80:80"
+    spec["healthcheck"]["timeout"] = "5s\n    privileged: true"
+    spec["healthcheck"]["start_period"] = "20s\n    pid: host"
+    spec["healthcheck"]["retries"] = "5\n    cap_add: [ALL]"
+    role = "server\n  privileged: true\n  network_mode: host"
+    manifest["containers"][role] = spec
+    text = render_fragment(manifest, {})
+    loaded = yaml.safe_load(text)
+    for service in loaded["services"].values():
+        assert "privileged" not in service
+        assert "network_mode" not in service
+        assert "pid" not in service
+        assert "ports" not in service
+        assert "cap_add" not in service
+        for volume in service.get("volumes") or []:
+            source = str(volume).split(":", 1)[0]
+            assert "docker.sock" not in source
+            assert not source.startswith("/")
+    assert "\n    network_mode:" not in text
+    assert "\n    privileged:" not in text
+    assert "\n    - /var/run/docker.sock:" not in text
+
+
 def test_fragment_keys_do_not_clash() -> None:
     texts = [render_fragment(_manifest(name), {}) for name in ("file-mcp", "docs-service", "minio")]
     networks: list[str] = []
