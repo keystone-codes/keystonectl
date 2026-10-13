@@ -1,0 +1,158 @@
+services:
+  keystone-mcp:
+    profiles:
+    - keystone-mcp
+    build:
+      context: ${KEYSTONE_MCP_REPO_PATH:-./keystone-mcp}
+    image: keystone-mcp:local
+    container_name: keystone-mcp
+    env_file:
+    - .env
+    environment:
+      KEYSTONE_MCP_HOST: 0.0.0.0
+      KEYSTONE_MCP_PORT: 8080
+      KEYSTONE_MCP_FILE_API_URL: http://backend:8000
+      KEYSTONE_MCP_WEBHOOK_BASE_URL: http://backend:8000
+    ports:
+    - 127.0.0.1:8080:8080
+    restart: unless-stopped
+    networks:
+    - mcp_net
+    - keystone_upstreams
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/.well-known/oauth-authorization-server', timeout=5).status==200 else 1)
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+  mcp-yandex-tracker:
+    image: node:22-alpine
+    command: npx -y supergateway --stdio "npx -y @fractalizer/mcp-server-yandex-tracker" --port 3000 --outputTransport streamableHttp --healthEndpoint /health
+    env_file:
+    - .env
+    ports:
+    - 3001:3000
+    restart: on-failure
+    networks:
+    - mcp_net
+    volumes:
+    - npm-cache-tracker:/root/.npm
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3000/health
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+  mcp-yandex-wiki:
+    image: node:22-alpine
+    command: "sh -c \"apk add --no-cache curl python3 &&\n       curl -LsSf https://astral.sh/uv/install.sh | sh &&\n       export PATH=/root/.local/bin:$$PATH &&\n       npx -y supergateway --stdio 'uvx ya-wiki-mcp' --port 3000 --outputTransport streamableHttp --healthEndpoint /health\""
+    env_file:
+    - .env
+    ports:
+    - 3002:3000
+    restart: on-failure
+    networks:
+    - mcp_net
+    volumes:
+    - npm-cache-wiki:/root/.npm
+    - uv-cache-wiki:/root/.local/share/uv
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3000/health
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+  mcp-tavily:
+    image: node:22-alpine
+    command: npx -y supergateway --stdio "npx -y tavily-mcp@latest" --port 3000 --outputTransport streamableHttp --healthEndpoint /health
+    env_file:
+    - .env
+    ports:
+    - 3003:3000
+    restart: on-failure
+    networks:
+    - mcp_net
+    volumes:
+    - npm-cache-tavily:/root/.npm
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3000/health
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+  mcp-jira:
+    image: node:22-alpine
+    command: "sh -c \"apk add --no-cache curl python3 &&\n       curl -LsSf https://astral.sh/uv/install.sh | sh &&\n       export PATH=/root/.local/bin:$$PATH &&\n       npx -y supergateway --stdio 'uvx mcp-atlassian' --port 3000 --outputTransport streamableHttp --healthEndpoint /health\""
+    env_file:
+    - .env
+    ports:
+    - 3004:3000
+    restart: on-failure
+    networks:
+    - mcp_net
+    volumes:
+    - npm-cache-jira:/root/.npm
+    - uv-cache-jira:/root/.local/share/uv
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3000/health
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+  mcp-notion:
+    image: node:22-alpine
+    command: npx -y supergateway --stdio "npx -y @notionhq/notion-mcp-server" --port 3000 --outputTransport streamableHttp --healthEndpoint /health
+    env_file:
+    - .env
+    ports:
+    - 3005:3000
+    restart: on-failure
+    networks:
+    - mcp_net
+    volumes:
+    - npm-cache-notion:/root/.npm
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3000/health
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+networks:
+  mcp_net:
+    name: keystone_mcp_net
+    external: true
+  keystone_upstreams:
+    name: keystone-mcp-upstreams
+    external: true
+volumes:
+  npm-cache-tracker: null
+  npm-cache-wiki: null
+  npm-cache-tavily: null
+  npm-cache-jira: null
+  npm-cache-notion: null
+  uv-cache-wiki: null
+  uv-cache-jira: null
