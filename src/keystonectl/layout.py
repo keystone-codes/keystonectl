@@ -1400,6 +1400,13 @@ def _split_managed_block(text: str) -> tuple[str, str | None]:
     return text[:start], text[after:]
 
 
+def env_assigned_outside_managed_block(text: str, name: str) -> bool:
+    """Return whether ``name`` is set in ``.env`` outside the managed block."""
+
+    outside, _rest = _split_managed_block(text)
+    return _env_assigns(outside, name)
+
+
 def drop_managed_env_keys(text: str, names: set[str]) -> str:
     """Remove named keys from the managed block. Other keys stay."""
 

@@ -10,7 +10,7 @@ import yaml
 from keystonectl.envfiles import read_env
 from keystonectl.generate.tokens import token_urlsafe
 from tests.support import mode
-from tests.support.deploylab import apply_package
+from tests.support.deploylab import apply_package, prepare_root
 
 PACKAGES = Path(__file__).resolve().parent / "data" / "packages"
 
@@ -150,6 +150,31 @@ def test_allow_insecure_http_added(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     _apply(tmp_path, monkeypatch)
     env = read_env(tmp_path / "root" / ".env")
     assert env["KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"] == "true"
+
+
+def test_allow_insecure_http_keeps_operator_copy_outside_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = yaml.safe_load((PACKAGES / "file-mcp" / "keystone-service.yaml").read_text())
+    document.pop("needs", None)
+    document["containers"]["mcp"].pop("env", None)
+    manifest = {"file-mcp": yaml.safe_dump(document)}
+    _patch(monkeypatch)
+
+    def prepare_with_operator_insecure(root: Path, manifests: dict[str, str], *, resources=None):
+        catalog = prepare_root(root, manifests, resources=resources)
+        (root / ".env").write_text(
+            "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP=true\n", encoding="utf-8"
+        )
+        return catalog
+
+    monkeypatch.setattr("tests.support.deploylab.prepare_root", prepare_with_operator_insecure)
+    result, _runner, _box = apply_package(tmp_path / "root", "file-mcp", manifest)
+    root = tmp_path / "root"
+    assert result.code == 0, result.error
+    text = (root / ".env").read_text(encoding="utf-8")
+    assert text.count("KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP=") == 1
+    assert read_env(root / ".env")["KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"] == "true"
 
 
 def test_narrowed_generate_secret_leaves_the_shared_file(
