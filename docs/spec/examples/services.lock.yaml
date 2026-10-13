@@ -1,0 +1,127 @@
+schema_version: 1
+layout_version: 1
+updated_at: "2026-10-12T10:15:00Z"
+updated_by: keystonectl 0.1.0
+layout:
+  flavor: keystone-mcp-example
+  project: keystone-production
+  compose_files:
+    - docker-compose.yml
+    - docker-compose.packages.yml
+  keystone_service: keystone
+  profiles: []
+  keystone_image: "ghcr.io/keystone-codes/keystone-mcp:0.5.0"
+  keystone_build: null
+  keystone_mcp_version: null
+  env_file: .env
+  policy:
+    file: policy/rbac-policy.yaml
+    container_path: /etc/keystone-mcp/policy/rbac-policy.yaml
+  upstreams_network:
+    name: keystone-mcp-upstreams
+    attached_by: keystonectl
+services:
+  - name: file-mcp
+    role: service
+    managed: generated
+    source: keystone-codes
+    package: file-mcp
+    version: 1.0.0
+    ref: v1.0.0
+    commit: "3f2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e"
+    manifest_sha256: "9a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef"
+    compat_keystone_mcp: ">=0.5.0,<2.0"
+    containers:
+      mcp:
+        service: file-mcp-mcp
+        image: "ghcr.io/keystone-codes/file-mcp@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        init: false
+    fragment: packages/file-mcp.yml
+    fragment_sha256: "c0deaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    registry_name: file-mcp
+    namespace: files
+    url: http://file-mcp-mcp:8081/mcp
+    tools:
+      - create_upload_url
+      - get_download_link
+      - get_file_info
+    filters: null
+    env:
+      keystone:
+        - KEYSTONE_MCP_UPSTREAM_FILES_BEARER
+        - KEYSTONE_MCP_UPSTREAM_FILES_IDENTITY_SECRET
+      files:
+        - packages/file-mcp.env
+        - packages/file-mcp.mcp.env
+      generated:
+        - FILE_MCP_SIGNING_SECRET
+    answers:
+      FILE_MCP_MAX_BYTES: "104857600"
+    resources:
+      - s3
+    public:
+      state: ready
+      domain: files-stage.example.com
+      host_port: 47600
+      dns: checked
+      tls: certbot
+      cert_kind: letsencrypt
+      cert_path: /etc/letsencrypt/live/files-stage.example.com/fullchain.pem
+      key_path: /etc/letsencrypt/live/files-stage.example.com/privkey.pem
+      not_after: "2027-01-10T00:00:00Z"
+      vhost: /etc/nginx/sites-available/keystone-svc-file-mcp
+      took_over: null
+      last_error: null
+    retired_tools: []
+    previous: null
+    installed_at: "2026-10-12T10:15:00Z"
+    updated_at: "2026-10-12T10:15:00Z"
+  - name: minio
+    role: resource
+    managed: generated
+    source: keystone-codes
+    package: minio
+    version: 1.0.0
+    ref: v1.0.0
+    commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    manifest_sha256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    containers:
+      server:
+        service: minio-server
+        image: "minio/minio@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        init: false
+    fragment: packages/minio.yml
+    fragment_sha256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    registry_name: null
+    namespace: null
+    url: null
+    tools: []
+    filters: null
+    env:
+      keystone: []
+      files:
+        - packages/minio.env
+      generated:
+        - MINIO_ROOT_USER
+        - MINIO_ROOT_PASSWORD
+    answers: {}
+    resources: []
+    public:
+      state: none
+    retired_tools: []
+    previous: null
+    installed_at: "2026-10-12T10:15:00Z"
+    updated_at: "2026-10-12T10:15:00Z"
+resources:
+  - kind: s3
+    interface_version: 1
+    origin: catalog
+    provider: minio
+    params:
+      endpoint: "http://minio-server:9000"
+      region: us-east-1
+      path_style: true
+    consumers:
+      - service: file-mcp
+        bucket: file-mcp
+        provisioned_at: "2026-10-12T10:15:00Z"
