@@ -37,6 +37,7 @@ jobs:
     env:
       E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || 'dd4538167af85bf5842d88e43bca53748063879f' }}
       E2E_KEYSTONE_MCP_REF: ${{ inputs.keystone_mcp_ref || '6b04a198101dac22815b17d5bcf55b0e1c6463d8' }}
+      KEYSTONE_DEPLOY_TOKEN: ${{ secrets.KEYSTONE_DEPLOY_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
