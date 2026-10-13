@@ -1090,9 +1090,22 @@ scenario_remove_and_reinstall() {
   if grep -q 'name: file-mcp' "$ROOT/keystonectl/upstreams.yaml"; then
     fail remove_and_reinstall "file-mcp is still in the registry"
   fi
-  if grep -q 'files_' "$ROOT/keystonectl/catalog-snapshot.yaml"; then
-    fail remove_and_reinstall "files tools are still in the snapshot"
-  fi
+  uv run --project "$REPO" python - "$ROOT/keystonectl/catalog-snapshot.yaml" <<'PY' \
+    || fail remove_and_reinstall "files snapshot state is wrong"
+import sys
+
+import yaml
+
+doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+active = doc.get("active") or []
+reserved = doc.get("reserved") or []
+files_active = [name for name in active if str(name).startswith("files_")]
+files_reserved = [name for name in reserved if str(name).startswith("files_")]
+if files_active:
+    sys.exit(f"files tools still active: {', '.join(files_active)}")
+if not files_reserved:
+    sys.exit("no files tools in reserved")
+PY
   if [[ -e "/etc/nginx/sites-enabled/keystone-svc-file-mcp" ]]; then
     fail remove_and_reinstall "nginx site is still enabled"
   fi
