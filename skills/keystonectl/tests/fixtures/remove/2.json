@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service remove",
+  "target": "file-mcp",
+  "summary": "Removed file-mcp.",
+  "actions": [
+    {
+      "id": "remove",
+      "title": "Remove file-mcp",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "kept": [
+      "volume",
+      "bucket",
+      "certificate"
+    ]
+  }
+}

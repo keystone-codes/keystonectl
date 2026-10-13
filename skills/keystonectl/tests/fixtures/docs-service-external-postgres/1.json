@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "check",
+  "target": "/srv/keystone",
+  "summary": "Deployment checks passed.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "checks": [
+      {
+        "id": "lock",
+        "status": "ok",
+        "message": "services.lock.yaml is present."
+      }
+    ],
+    "services": [
+      {
+        "name": "minio",
+        "role": "resource",
+        "kind": "s3"
+      }
+    ]
+  }
+}
