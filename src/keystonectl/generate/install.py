@@ -1472,11 +1472,11 @@ def _materialise(
             _write_env_values(path, {}, undo)
     _retire_shared_secrets(ctx, manifest, undo)
     _fill_secrets(ctx, manifest, undo)
-    from keystonectl.public import deferred_env
+    from keystonectl.public import materialise_public_base_env
 
-    placeholder = deferred_env(ctx, manifest)
-    if placeholder:
-        _write_env_values(ctx.root / plan.shared, placeholder, undo)
+    public_base = materialise_public_base_env(ctx, manifest)
+    if public_base:
+        _write_env_values(ctx.root / plan.shared, public_base, undo)
     root_values: dict[str, str] = {}
     if namespace and registry_name:
         root_values = _gateway_secrets(ctx, manifest, namespace, registry_name, undo)
