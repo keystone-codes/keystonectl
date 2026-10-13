@@ -1,0 +1,670 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keystone.codes/schemas/service-package-v1.json",
+  "title": "Keystone service package",
+  "description": "Package manifest (keystone-service.yaml) schema_version 1. Defaults are documentation for the installer; this schema does not apply them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "name",
+    "version",
+    "publisher",
+    "summary",
+    "containers"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "enum": ["service", "resource"]
+    },
+    "name": {
+      "$ref": "#/$defs/packageName"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "publisher": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\n]+$"
+    },
+    "homepage": {
+      "type": "string",
+      "pattern": "^https://\\S+$"
+    },
+    "containers": {
+      "$ref": "#/$defs/containers"
+    },
+    "compat": {
+      "$ref": "#/$defs/compat"
+    },
+    "mcp": {
+      "$ref": "#/$defs/mcp"
+    },
+    "identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "needs": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/need"
+      }
+    },
+    "requires": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/packageNamePattern"
+      }
+    },
+    "public_paths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/[a-z0-9][a-z0-9._-]{0,30}/$"
+      }
+    },
+    "public_container": {
+      "$ref": "#/$defs/roleName"
+    },
+    "public_base_url_env": {
+      "$ref": "#/$defs/envName"
+    },
+    "recommended_policy": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,128}\\.ya?ml$"
+    },
+    "provides": {
+      "$ref": "#/$defs/provides"
+    },
+    "provision": {
+      "$ref": "#/$defs/provision"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "service"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["compat"],
+        "properties": {
+          "provides": false,
+          "provision": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "resource"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["provides", "provision"],
+        "properties": {
+          "compat": false,
+          "mcp": false,
+          "identity": false,
+          "needs": false,
+          "requires": false,
+          "public_paths": false,
+          "public_container": false,
+          "public_base_url_env": false,
+          "recommended_policy": false
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "packageNamePattern": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9-]{1,38}[a-z0-9]$"
+    },
+    "packageName": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/packageNamePattern"
+        },
+        {
+          "not": {
+            "pattern": "^keystone(-.*)?$"
+          }
+        }
+      ]
+    },
+    "roleName": {
+      "type": "string",
+      "pattern": "^[a-z](?:[a-z0-9-]{0,22}[a-z0-9])?$"
+    },
+    "envName": {
+      "type": "string",
+      "allOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        },
+        {
+          "not": {
+            "pattern": "^KEYSTONE_(?:MCP|SETUP)_"
+          }
+        }
+      ]
+    },
+    "image": {
+      "type": "string",
+      "allOf": [
+        {
+          "pattern": "^(?:[a-z0-9.-]+(?::[0-9]+)?/)?[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[a-f0-9]{64}$"
+        },
+        {
+          "not": {
+            "pattern": ":latest(?:@|$)"
+          }
+        }
+      ]
+    },
+    "httpPath": {
+      "type": "string",
+      "pattern": "^/[A-Za-z0-9._~/-]{0,99}$"
+    },
+    "containers": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 8,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z](?:[a-z0-9-]{0,22}[a-z0-9])?$": {
+          "$ref": "#/$defs/container"
+        }
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image"],
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/image"
+        },
+        "init": {
+          "type": "boolean",
+          "default": false
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "string"
+          }
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[0-9]{1,10}(?::[0-9]{1,10})?$"
+        },
+        "env": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/envVar"
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/secret"
+          }
+        },
+        "volumes": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/volume"
+          }
+        },
+        "healthcheck": {
+          "$ref": "#/$defs/healthcheck"
+        }
+      }
+    },
+    "envVar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/envName"
+        },
+        "default": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/envName"
+        },
+        "generate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bytes"],
+          "properties": {
+            "bytes": {
+              "type": "integer",
+              "minimum": 16,
+              "maximum": 64
+            }
+          }
+        },
+        "required": {
+          "const": true
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["name", "generate"],
+          "not": {
+            "anyOf": [
+              {
+                "required": ["required"]
+              },
+              {
+                "required": ["description"]
+              }
+            ]
+          }
+        },
+        {
+          "required": ["name", "required"],
+          "not": {
+            "required": ["generate"]
+          }
+        }
+      ]
+    },
+    "volume": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,30}$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/[^\\s:]+$"
+        }
+      }
+    },
+    "healthcheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/httpPath"
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "string"
+          }
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,3}s$",
+          "default": "10s"
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,3}s$",
+          "default": "5s"
+        },
+        "start_period": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,3}s$",
+          "default": "20s"
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 5
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["path"],
+          "properties": {
+            "command": false
+          }
+        },
+        {
+          "required": ["command"],
+          "properties": {
+            "path": false
+          }
+        }
+      ]
+    },
+    "compat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keystone_mcp", "contracts"],
+      "properties": {
+        "keystone_mcp": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "contracts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["upstream-registry/1", "identity-assertion/1"]
+          }
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["container", "namespace", "tools", "bearer_env"],
+      "properties": {
+        "container": {
+          "$ref": "#/$defs/roleName"
+        },
+        "transport": {
+          "enum": ["http"],
+          "default": "http"
+        },
+        "path": {
+          "$ref": "#/$defs/httpPath",
+          "default": "/mcp"
+        },
+        "healthz": {
+          "$ref": "#/$defs/httpPath",
+          "default": "/healthz"
+        },
+        "namespace": {
+          "type": "string",
+          "maxLength": 32,
+          "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        },
+        "critical": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        },
+        "bearer_env": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signed_assertion", "secret_env", "audience_env"],
+      "properties": {
+        "signed_assertion": {
+          "const": "required"
+        },
+        "secret_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "audience_env": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "need": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "bind_env"],
+      "properties": {
+        "kind": {
+          "enum": ["s3", "postgres"]
+        },
+        "version": {
+          "const": 1
+        },
+        "bind_env": {
+          "type": "object"
+        },
+        "containers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/roleName"
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,62}$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "s3"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "bind_env": {
+                "$ref": "#/$defs/s3BindEnv"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "postgres"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "bind_env": {
+                "$ref": "#/$defs/postgresBindEnv"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "s3BindEnv": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "region", "bucket", "access_key", "secret_key", "path_style"],
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/envName"
+        },
+        "region": {
+          "$ref": "#/$defs/envName"
+        },
+        "bucket": {
+          "$ref": "#/$defs/envName"
+        },
+        "access_key": {
+          "$ref": "#/$defs/envName"
+        },
+        "secret_key": {
+          "$ref": "#/$defs/envName"
+        },
+        "path_style": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "postgresBindEnv": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/envName"
+        },
+        "host": {
+          "$ref": "#/$defs/envName"
+        },
+        "port": {
+          "$ref": "#/$defs/envName"
+        },
+        "database": {
+          "$ref": "#/$defs/envName"
+        },
+        "user": {
+          "$ref": "#/$defs/envName"
+        },
+        "password": {
+          "$ref": "#/$defs/envName"
+        },
+        "sslmode": {
+          "$ref": "#/$defs/envName"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["url"],
+          "properties": {
+            "host": false,
+            "port": false,
+            "database": false,
+            "user": false,
+            "password": false,
+            "sslmode": false
+          }
+        },
+        {
+          "required": ["host", "port", "database", "user", "password", "sslmode"],
+          "properties": {
+            "url": false
+          }
+        },
+        {
+          "required": ["url", "host", "port", "database", "user", "password", "sslmode"]
+        }
+      ]
+    },
+    "provides": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "container"],
+      "properties": {
+        "kind": {
+          "enum": ["s3", "postgres"]
+        },
+        "version": {
+          "const": 1
+        },
+        "container": {
+          "$ref": "#/$defs/roleName"
+        }
+      }
+    },
+    "provision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["per_consumer", "image", "script", "admin_env"],
+      "properties": {
+        "per_consumer": {
+          "enum": ["bucket_and_user", "database_and_user"]
+        },
+        "image": {
+          "$ref": "#/$defs/image"
+        },
+        "script": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,128}$"
+        },
+        "admin_env": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["user", "password"],
+          "properties": {
+            "user": {
+              "$ref": "#/$defs/envName"
+            },
+            "password": {
+              "$ref": "#/$defs/envName"
+            }
+          }
+        }
+      }
+    }
+  }
+}
