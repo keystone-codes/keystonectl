@@ -60,6 +60,9 @@ class Host:
         self.nginx_ok = True
         self.sudo_ok = True
         self.nginx_present = True
+        self.nginx_active = True
+        self.reload_ok = True
+        self.reload_stderr = "nginx: [emerg] bind() to [::]:443 failed"
         self.certbot_code = 0
         self.certbot_stderr = ""
         self.dig_stdout = "198.51.100.4\n"
@@ -79,6 +82,9 @@ class Host:
             code = 0 if self.nginx_ok else 1
             return CommandResult(recorded, code, "", "nginx: [emerg] config invalid")
         if body[:2] == ["nginx", "-s"]:
+            code = 0 if self.reload_ok else 1
+            return CommandResult(recorded, code, "", self.reload_stderr if not self.reload_ok else "")
+        if body == ["nginx"]:
             return CommandResult(recorded, 0, "", "")
         if body[:1] == ["tee"] and len(body) > 1:
             path = Path(body[1])
@@ -106,6 +112,15 @@ class Host:
             return CommandResult(recorded, 0, "certbot 2.11.0\n", "")
         if body[:1] == ["certbot"]:
             return CommandResult(recorded, self.certbot_code, "", self.certbot_stderr)
+        if body[:3] == ["systemctl", "is-active", "--quiet"] and body[-1] == "nginx":
+            code = 0 if self.nginx_active else 3
+            return CommandResult(recorded, code, "", "")
+        if body[:2] == ["systemctl", "start"] and body[-1] == "nginx":
+            self.nginx_active = True
+            return CommandResult(recorded, 0, "", "")
+        if body[:2] == ["systemctl", "reload"] and body[-1] == "nginx":
+            code = 0 if self.reload_ok else 1
+            return CommandResult(recorded, code, "", self.reload_stderr if not self.reload_ok else "")
         if body[:1] == ["systemctl"]:
             return CommandResult(recorded, 0, self.systemctl, "")
         if body[:1] == ["dig"]:
@@ -441,6 +456,23 @@ def test_vhost_written_via_sudo_tee_stdin(tmp_path: Path) -> None:
     assert tees[0][0][:2] == ("sudo", "-n")
     assert tees[0][1] and "server_name files.example.com" in tees[0][1]
     assert (nginx / "sites-available" / "keystone-svc-file-mcp").is_file()
+
+
+def test_nginx_reload_failure_fails_install(tmp_path: Path) -> None:
+    host = Host()
+    host.reload_ok = False
+    result, _root, _host, _nginx = _publish(tmp_path, host=host)
+    assert result.code == 3
+    assert result.error["id"] == "nginx_config_invalid"
+    assert "bind" in (result.error.get("message") or "").lower()
+
+
+def test_nginx_start_when_inactive(tmp_path: Path) -> None:
+    host = Host()
+    host.nginx_active = False
+    result, _root, host, _nginx = _publish(tmp_path, host=host)
+    assert result.code == 0, result.error
+    assert any(args[-2:] == ("start", "nginx") for args, _stdin in host.calls)
 
 
 def test_nginx_test_failure_restores_previous_file(tmp_path: Path) -> None:

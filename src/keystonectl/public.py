@@ -17,6 +17,7 @@ from keystonectl.envfiles import read_env, upsert_env
 from keystonectl.errors import ERRORS, WARNINGS
 from keystonectl.plan import Context, StepPlan
 from keystonectl.sources import warning
+from keystonectl.runner import CommandResult
 from keystonectl.tls import Tls, TlsError
 
 PLACEHOLDER_URL = "https://public-domain-pending.invalid"
@@ -516,10 +517,28 @@ def _nginx_test(tls: Tls) -> tuple[bool, str]:
     return result.returncode == 0, text
 
 
-def _reload(tls: Tls) -> None:
-    result = tls._run(["systemctl", "reload", "nginx"])
-    if result.returncode != 0:
-        tls._run(["nginx", "-s", "reload"])
+def _command_text(result: CommandResult) -> str:
+    return (result.stderr or result.stdout or "").strip()
+
+
+def _reload(tls: Tls) -> tuple[bool, str]:
+    active = tls._run(["systemctl", "is-active", "--quiet", "nginx"])
+    if active.returncode != 0:
+        start = tls._run(["systemctl", "start", "nginx"])
+        if start.returncode != 0:
+            direct = tls._run(["nginx"])
+            if direct.returncode != 0:
+                detail = _command_text(direct) or _command_text(start)
+                return False, detail or "nginx failed to start"
+        return True, ""
+    reload_result = tls._run(["systemctl", "reload", "nginx"])
+    if reload_result.returncode == 0:
+        return True, ""
+    reload_signal = tls._run(["nginx", "-s", "reload"])
+    if reload_signal.returncode == 0:
+        return True, ""
+    detail = _command_text(reload_signal) or _command_text(reload_result)
+    return False, detail or "nginx failed to reload"
 
 
 def _write_site(ctx: Context, tls: Tls, package: str, content: str) -> str | None:
@@ -535,8 +554,22 @@ def _write_site(ctx: Context, tls: Tls, package: str, content: str) -> str | Non
             return linked.stderr or "could not enable the nginx site"
     ok, detail = _nginx_test(tls)
     if ok:
-        _reload(tls)
-        return None
+        reloaded, reload_detail = _reload(tls)
+        if reloaded:
+            return None
+        if previous is None:
+            tls._run(["rm", "-f", str(path)])
+            if link.is_symlink():
+                tls._run(["rm", "-f", str(link)])
+        else:
+            _tee(tls, path, previous)
+        _fail(
+            ctx,
+            "nginx_config_invalid",
+            reload_detail or ERRORS["nginx_config_invalid"].title,
+            hint=ERRORS["nginx_config_invalid"].action,
+        )
+        return reload_detail
     if previous is None:
         tls._run(["rm", "-f", str(path)])
         if link.is_symlink():
