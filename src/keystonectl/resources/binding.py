@@ -30,6 +30,7 @@ from keystonectl.lock import save_lock, utc_now
 from keystonectl.output import SecretRegistry
 from keystonectl.plan import Context, StepPlan, register_step
 from keystonectl.resources import INTERFACES, RESOURCE_NETWORK, UPSTREAMS_NETWORK
+from keystonectl.resources.network import ip_for_service
 from keystonectl.resources.postgres_probe import PgParams, probe_postgres
 from keystonectl.resources.provision import (
     consumer_ident,
@@ -1133,21 +1134,9 @@ def _container_ip(ctx: Context, name: str) -> str | None:
             payload = json.loads(result.stdout)
         except json.JSONDecodeError:
             continue
-        if not isinstance(payload, dict):
-            continue
-        for item in payload.values():
-            if not isinstance(item, dict):
-                continue
-            names = [item.get("Name")]
-            aliases = item.get("Aliases") or []
-            if isinstance(aliases, list):
-                names.extend(aliases)
-            if name not in names:
-                continue
-            addr = str(item.get("IPv4Address") or "")
-            ip = addr.split("/", 1)[0]
-            if ip:
-                return ip
+        ip = ip_for_service(payload, name)
+        if ip:
+            return ip
     return None
 
 
@@ -1190,20 +1179,9 @@ def _find_alias_ip(ctx: Context, name: str) -> str | None:
             payload = json.loads(result.stdout)
         except json.JSONDecodeError:
             continue
-        if not isinstance(payload, dict):
-            continue
-        for item in payload.values():
-            if not isinstance(item, dict):
-                continue
-            names = [item.get("Name")]
-            aliases = item.get("Aliases") or []
-            if isinstance(aliases, list):
-                names.extend(aliases)
-            if name not in names:
-                continue
-            ip = str(item.get("IPv4Address") or "").split("/", 1)[0]
-            if ip:
-                return ip
+        ip = ip_for_service(payload, name)
+        if ip:
+            return ip
     return None
 
 

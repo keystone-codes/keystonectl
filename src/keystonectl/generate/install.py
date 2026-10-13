@@ -69,6 +69,7 @@ from keystonectl.keystone_mcp_rules import MAX_REGISTRY_ENTRIES
 from keystonectl.layout import LayoutError, replace_managed_env_block
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.plan import Context, StepPlan
+from keystonectl.resources.network import ip_for_service
 from keystonectl.sources import Resolution, package_cache, warning
 
 REGISTRY_SIGHUP_MIN_VERSION = None
@@ -1668,18 +1669,7 @@ class ComposeDeployer:
             payload = json.loads(result.stdout)
         except json.JSONDecodeError:
             return ""
-        if not isinstance(payload, dict):
-            return ""
-        for item in payload.values():
-            if not isinstance(item, dict):
-                continue
-            names = [item.get("Name")]
-            aliases = item.get("Aliases") or []
-            if isinstance(aliases, list):
-                names.extend(aliases)
-            if service in names or any(str(alias).endswith(service) for alias in names):
-                return str(item.get("IPv4Address") or "").split("/", 1)[0]
-        return ""
+        return ip_for_service(payload, service)
 
 
 def _wait_once(ctx: Context, manifest: Mapping[str, Any], project: str) -> bool:
