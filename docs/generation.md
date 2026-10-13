@@ -37,6 +37,8 @@ Put them in `packages/<name>.override.yml`. keystonectl never writes, deletes, o
 
 `keystonectl service eject` stops keystonectl from rewriting the fragment. Until then, a hand-edited fragment fails apply with `fragment_modified`. `service adopt` generates it again.
 
+A service you run yourself is a fourth path. `keystonectl service add-remote` records the URL in the registry and the lock. The service is entirely the operator's: keystonectl does not generate a fragment, an override, or a container for it.
+
 ## Checks before anything is written
 
 keystone-mcp `upstream validate` and `catalog validate` run in `docker run --network none` from the image recorded in the lock. `--strict-unreachable` is not passed: tools that no role can call are a warning (`tools_unreachable`), not a failure. If the candidate registry makes previously valid policy fail in a new way, apply stops with `policy_breaks`. The same unmatched set that already failed is a warning (`policy_already_inconsistent`).
