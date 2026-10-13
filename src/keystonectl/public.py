@@ -301,9 +301,24 @@ def choose_port(ctx: Context, package: str) -> int:
 
 
 def fragment_ports(ctx: Context, manifest: Mapping[str, Any]) -> tuple[int | None, tuple[str, ...]]:
-    if not public_paths(manifest) or ctx.defer_public:
+    if not public_paths(manifest):
         return None, tuple(ready_domains(ctx))
     name = str(manifest["name"])
+    domains = tuple(ready_domains(ctx))
+    if ctx.defer_public:
+        from keystonectl.resources.binding import _service
+
+        entry = _service(ctx.lock, name)
+        public = entry.get("public") if isinstance(entry, dict) else None
+        if isinstance(public, dict) and public.get("state") == "ready":
+            try:
+                port = choose_port(ctx, name)
+            except TlsError as exc:
+                _fail(ctx, exc.error_id, exc.message, hint=exc.hint)
+                return None, domains
+            ctx.chosen_port = port  # type: ignore[attr-defined]
+            return port, domains
+        return None, domains
     domain = _lookup(ctx, name, "DOMAIN")
     if not domain:
         return None, tuple(ready_domains(ctx))
