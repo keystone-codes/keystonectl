@@ -14,6 +14,7 @@ from keystonectl.keystone_mcp_rules import BUILTIN_TOOL_NAMES
 from keystonectl.manifest import (
     FORBIDDEN_HOST_KEYS,
     INSTALLER_KEYS,
+    load_manifest,
     manifest_errors,
 )
 
@@ -725,6 +726,19 @@ def test_errors_are_reported_together() -> None:
         ),
         f"version: {'1.0'!r} does not match {VERSION_PATTERN!r}",
     ]
+
+
+def test_spec_examples_validate() -> None:
+    root = Path(__file__).resolve().parents[1]
+    examples = sorted((root / "docs" / "spec" / "examples").glob("*.keystone-service.yaml"))
+    assert [path.name for path in examples] == [
+        "docs-service.keystone-service.yaml",
+        "file-mcp.keystone-service.yaml",
+        "minio.keystone-service.yaml",
+        "postgres.keystone-service.yaml",
+    ]
+    for path in examples:
+        assert isinstance(load_manifest(path), dict)
 
 
 def test_cli_exit_codes(tmp_path: Path) -> None:
