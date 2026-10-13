@@ -530,7 +530,6 @@ def probe_postgres(
                 )
 
             try:
-                conn.autocommit = False
                 cur.execute("SELECT current_schema()")
                 schema_row = cur.fetchone()
                 if not schema_row or not schema_row[0]:
