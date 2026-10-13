@@ -414,6 +414,83 @@ def test_provision_ignores_script_url_and_json_secrets(tmp_path: Path) -> None:
     )
 
 
+def test_provision_ignores_script_server_address(tmp_path: Path) -> None:
+    """Stdout cannot retarget the consumer secret onto a server the script names."""
+    consumer_secret = "consumer-secret-value-0123456789abcd"
+    installer_endpoint = "http://minio-server:9000"
+    s3_payload = {
+        "interface": "s3/v1",
+        "endpoint": "http://evil.example:1",
+        "host": "evil.example",
+        "port": 1,
+        "sslmode": "verify-full",
+        "region": "eu-central-1",
+        "bucket": "docs-mcp",
+        "access_key": "docs-mcp",
+        "path_style": True,
+        "secret_key_file": "/out/docs-mcp.secret",
+    }
+    s3_result, _package_dir, _secrets = _run(
+        tmp_path,
+        _runner(stdout=json.dumps(s3_payload)),
+        secret=consumer_secret,
+        endpoint=installer_endpoint,
+    )
+    assert s3_result.ok
+    assert s3_result.values["endpoint"] == installer_endpoint
+    assert s3_result.values["secret_key"] == consumer_secret
+    assert s3_result.values["region"] == "eu-central-1"
+    assert s3_result.values["bucket"] == "docs-mcp"
+    assert s3_result.values["access_key"] == "docs-mcp"
+    assert s3_result.values["path_style"] == "True"
+    assert "host" not in s3_result.values
+    assert "port" not in s3_result.values
+    assert "sslmode" not in s3_result.values
+    assert "evil.example" not in json.dumps(s3_result.values)
+
+    installer_host = "postgres-db"
+    installer_port = 5432
+    installer_database = "file_mcp"
+    pg_payload = {
+        "interface": "postgres/v1",
+        "host": "evil.example",
+        "port": 5433,
+        "endpoint": "http://evil.example:5432",
+        "database": "not_the_package",
+        "user": "not_the_user",
+        "sslmode": "verify-full",
+        "password_file": "/out/file-mcp.secret",
+        "extensions": ["pgcrypto"],
+    }
+    pg_result, _package_dir, _secrets = _run(
+        tmp_path,
+        _runner(stdout=json.dumps(pg_payload)),
+        kind="postgres",
+        image=PG_IMAGE,
+        consumer="file-mcp",
+        admin={"POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": ADMIN_PASSWORD},
+        secret=consumer_secret,
+        host=installer_host,
+        port=installer_port,
+        database=installer_database,
+        extensions=["pgcrypto"],
+    )
+    assert pg_result.ok
+    assert pg_result.values["host"] == installer_host
+    assert pg_result.values["port"] == str(installer_port)
+    assert pg_result.values["sslmode"] == "disable"
+    assert pg_result.values["database"] == installer_database
+    assert pg_result.values["user"] == installer_database
+    assert pg_result.values["password"] == consumer_secret
+    assert "endpoint" not in pg_result.values
+    assert pg_result.extensions == ["pgcrypto"]
+    dumped = json.dumps(pg_result.values)
+    assert "evil.example" not in dumped
+    assert "not_the_package" not in dumped
+    assert "not_the_user" not in dumped
+    assert "verify-full" not in dumped
+
+
 def test_stderr_redacted_in_error(tmp_path: Path) -> None:
     secret = "provision-secret-value-0123456789abcdef"
     runner = _runner(code=2, stderr=f"leaked {secret}\n")
