@@ -95,7 +95,7 @@ These fields are rejected on a resource.
 
 When `containers` is set and does not name every container in the package, the installer writes the resource variables to `packages/<name>.<kind>.env` and gives that file only to the listed roles. If the key is omitted, or it names every container, the variables go in the shared package env file.
 
-What an `s3` provider must promise, and how `s3_probe` checks it, is [resources/s3-v1.md](resources/s3-v1.md).
+What an `s3` provider must promise, and how `s3_probe` checks it, is [resources/s3-v1.md](resources/s3-v1.md). What a `postgres` provider must promise, and how `postgres_probe` checks it, is [resources/postgres-v1.md](resources/postgres-v1.md). Optional `needs[].extensions` names extensions the provider creates in the consumer database.
 
 ### `kind: resource` only
 
