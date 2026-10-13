@@ -17,6 +17,7 @@ from collections.abc import Callable
 from typing import Any
 
 MIB = 1024 * 1024
+FILES_UPLOAD_CONTENT_TYPE = "application/octet-stream"
 
 
 def host_path(url: str) -> str:
@@ -117,7 +118,7 @@ def run_files(
     created = payload_of(
         call_tool(
             "files_create_upload_url",
-            {"filename": "e2e.bin", "content_type": "application/octet-stream"},
+            {"filename": "e2e.bin", "content_type": FILES_UPLOAD_CONTENT_TYPE},
         )
     )
     if not isinstance(created, dict):
@@ -229,13 +230,17 @@ async def _execute(args: argparse.Namespace, url: str, key: str) -> dict[str, An
         created = payload_of(
             await client.call_tool(
                 "files_create_upload_url",
-                {"filename": "e2e.bin", "content_type": "application/octet-stream"},
+                {"filename": "e2e.bin", "content_type": FILES_UPLOAD_CONTENT_TYPE},
             )
         )
         with _http(args.ca) as http:
 
             def put(target: str, payload: bytes) -> int:
-                return http.put(target, content=payload).status_code
+                return http.put(
+                    target,
+                    content=payload,
+                    headers={"Content-Type": FILES_UPLOAD_CONTENT_TYPE},
+                ).status_code
 
             def get(target: str) -> bytes:
                 response = http.get(target)
