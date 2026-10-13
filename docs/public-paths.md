@@ -27,7 +27,7 @@ The port is the smallest of `47600`–`47699` that is not already in the lock an
 
 ## Taking over a site
 
-If `sites-enabled` already has a symlink whose `server_name` is this domain, apply asks before it removes that symlink. The file in `sites-available` stays, and `service remove` puts the symlink back. A regular file, or anything under `conf.d`, is left alone and apply stops with `domain_in_use`.
+If `sites-enabled` already has a symlink and every `server_name` in it is exactly this domain (comparison is case-insensitive), apply asks before it removes that symlink. The file in `sites-available` stays, and `service remove` puts the symlink back. A wildcard, a suffix, or any other name is left in place: apply stops with `domain_in_use` and the operator narrows that site by hand. A regular file, or anything under `conf.d`, is left alone the same way.
 
 ## extra_hosts
 
