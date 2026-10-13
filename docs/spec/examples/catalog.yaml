@@ -1,0 +1,27 @@
+schema_version: 1
+name: keystone-codes
+description: Keystone services catalog
+packages:
+  file-mcp:
+    kind: service
+    summary: Upload and download links for large files on S3-compatible storage.
+    source: https://github.com/keystone-codes/file-mcp.git
+    path: .
+    versions:
+      - {version: 1.0.0, ref: v1.0.0, keystone_mcp: ">=0.5.0,<2.0"}
+  minio:
+    kind: resource
+    provides: {kind: s3, version: 1}
+    source: https://github.com/keystone-codes/minio-resource.git
+    versions:
+      - {version: 1.0.0, ref: v1.0.0}
+  postgres:
+    kind: resource
+    provides: {kind: postgres, version: 1}
+    source: https://github.com/keystone-codes/postgres-resource.git
+    versions:
+      - {version: 1.0.0, ref: v1.0.0}
+bundles:
+  minimal:
+    description: File transfer for agents.
+    packages: [file-mcp]

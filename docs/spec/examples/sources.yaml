@@ -1,0 +1,10 @@
+schema_version: 1
+sources:
+  - name: keystone-codes
+    url: https://github.com/keystone-codes/keystone-catalog.git
+    ref: v1.0.0
+    priority: 100
+  - name: partner
+    url: git@git.example.com:partner/keystone-catalog.git
+    ref: v2.3.0
+    priority: 50
