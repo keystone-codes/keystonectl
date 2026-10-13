@@ -1516,18 +1516,19 @@ def _apply_catalog(
         )
         return
     values = dict(result.values)
+    # The probe dials the container by IP. These fields are what the service
+    # stores, so stdout cannot aim the consumer secret at another server.
     if kind == "s3":
         values["path_style"] = (
             "true" if str(values.get("path_style")).lower() in {"true", "1"} else "false"
         )
-        if "endpoint" not in values:
-            values["endpoint"] = f"http://{host}:{port}"
+        values["endpoint"] = f"http://{host}:{port}"
     else:
-        values.setdefault("host", host)
-        values.setdefault("port", str(port))
-        values.setdefault("sslmode", "disable")
-        values.setdefault("database", ident)
-        values.setdefault("user", ident)
+        values["host"] = host
+        values["port"] = str(port)
+        values["sslmode"] = "disable"
+        values["database"] = ident
+        values["user"] = ident
     _persist_consumer_secret(
         ctx,
         package=package,
