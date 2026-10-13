@@ -1,0 +1,46 @@
+# fictional digest
+schema_version: 1
+kind: resource
+name: minio
+version: "1.0.0"
+publisher: keystone-codes
+summary: S3-compatible object storage for packages that need s3/v1.
+provides:
+  kind: s3
+  version: 1
+  container: server
+provision:
+  per_consumer: bucket_and_user
+  # fictional digest
+  image: "minio/mc@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  script: provision.sh
+  admin_env:
+    user: MINIO_ROOT_USER
+    password: MINIO_ROOT_PASSWORD
+containers:
+  server:
+    # fictional digest
+    image: "minio/minio@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    port: 9000
+    command:
+      - server
+      - /data
+      - --quiet
+    env:
+      - name: MINIO_BROWSER
+        default: "off"
+    volumes:
+      - name: data
+        path: /data
+    secrets:
+      - name: MINIO_ROOT_USER
+        generate:
+          bytes: 16
+      - name: MINIO_ROOT_PASSWORD
+        generate:
+          bytes: 32
+    healthcheck:
+      command:
+        - mc
+        - ready
+        - local

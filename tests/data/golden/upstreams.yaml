@@ -1,0 +1,10 @@
+# Managed by keystonectl: entries are preserved, comments are not.
+schema_version: 1
+entries:
+- name: docs-service
+  url: http://docs-service-mcp:8081/mcp
+  namespace: docs
+  enabled: true
+  auth:
+    bearer_env: KEYSTONE_MCP_UPSTREAM_DOCS_BEARER
+    identity_secret_env: KEYSTONE_MCP_UPSTREAM_DOCS_IDENTITY_SECRET
