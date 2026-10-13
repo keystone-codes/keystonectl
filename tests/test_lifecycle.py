@@ -22,6 +22,7 @@ from keystonectl.lock import load_lock, save_lock
 from keystonectl.output import SecretRegistry
 from keystonectl.runner import CommandResult, FakeCommandRunner
 from keystonectl.sources import package_cache
+from tests.support import catalog_text
 from tests.support.deploylab import CLOCK, apply_package
 from tests.support.resources import Lab, s3_provider
 
@@ -342,6 +343,23 @@ def test_upgrade_refused_when_fragment_hash_differs(tmp_path: Path) -> None:
     assert "eject" in result.error["hint"]
 
 
+def _add_duplicate_catalog(root: Path, name: str = "e2e") -> None:
+    sources_path = root / "sources.yaml"
+    data = yaml.safe_load(sources_path.read_text(encoding="utf-8"))
+    data["sources"].append(
+        {
+            "name": name,
+            "url": f"https://example.com/{name}-catalog.git",
+            "ref": "v1.0.0",
+            "priority": 50,
+        }
+    )
+    sources_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    cache = root / ".keystonectl" / "catalogs" / name
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "catalog.yaml").write_text(catalog_text(name), encoding="utf-8")
+
+
 def _prepare_upgrade(root: Path) -> None:
     catalog_path = root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
     catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
@@ -377,7 +395,8 @@ def _apply_runner(root: Path) -> FakeCommandRunner:
     from tests.support import SHA
     from tests.support.deploylab import DockerBox
 
-    catalog = (root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml").read_text()
+    catalog_local = (root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml").read_text()
+    e2e_catalog = root / ".keystonectl" / "catalogs" / "e2e" / "catalog.yaml"
     current = _facade()
     newer = (
         current.replace("version: '1.0.0'", "version: '1.1.0'")
@@ -399,7 +418,12 @@ def _apply_runner(root: Path) -> FakeCommandRunner:
         dest.mkdir(parents=True, exist_ok=True)
         url = str(args[-2])
         if "catalog" in url:
-            (dest / "catalog.yaml").write_text(catalog, encoding="utf-8")
+            if "e2e" in url and e2e_catalog.is_file():
+                (dest / "catalog.yaml").write_text(
+                    e2e_catalog.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+            else:
+                (dest / "catalog.yaml").write_text(catalog_local, encoding="utf-8")
         else:
             (dest / "keystone-service.yaml").write_text(newer, encoding="utf-8")
         (dest / ".git").mkdir(exist_ok=True)
@@ -463,6 +487,19 @@ def test_upgrade_diff_tools_containers_and_policy(tmp_path: Path) -> None:
     assert "worker" in diff["containers_added"]
     assert diff["policy_rows_stop_matching"] == ["files_*"]
     assert diff["tools_unreachable"] == ["files_list_files"]
+
+
+def test_upgrade_applies_with_installed_source_when_name_is_ambiguous(tmp_path: Path) -> None:
+    root = _install(tmp_path)
+    _add_duplicate_catalog(root)
+    _prepare_upgrade(root)
+    result = _upgrade(
+        root,
+        runner=_apply_runner(root),
+        sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_UPGRADE": "1.1.0"},
+    )
+    assert result.code == 0, result.error
+    assert result.missing == []
 
 
 def test_upgrade_confirmation_must_match_version(tmp_path: Path) -> None:
