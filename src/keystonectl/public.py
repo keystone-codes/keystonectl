@@ -800,6 +800,49 @@ def _project(ctx: Context) -> str | None:
     return project or None
 
 
+def _ensure_loopback_ready(ctx: Context, manifest: Mapping[str, Any], port: int) -> bool:
+    from keystonectl.generate.compose import fragment_digest, fragment_guard, render_fragment
+    from keystonectl.generate.install import _env_values, _start, _wait
+
+    name = str(manifest["name"])
+    entry = _service(ctx, name)
+    path = ctx.root / "packages" / f"{name}.yml"
+    domain = _lookup(ctx, name, "DOMAIN") or ""
+    domains = ready_domains(ctx, extra=domain or None)
+    if isinstance(entry, dict) and not fragment_guard(entry, path):
+        desired = render_fragment(
+            manifest,
+            {"env_values": _env_values(ctx, manifest)},
+            host_port=port,
+            extra_hosts=tuple(domains),
+        )
+        if not path.is_file() or path.read_text(encoding="utf-8") != desired:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(desired, encoding="utf-8")
+            entry["fragment_sha256"] = fragment_digest(desired)
+            if _start(ctx, manifest, recreate=True) is None or ctx.failure is not None:
+                return False
+    project = _project(ctx)
+    if project is None or ctx.failure is not None:
+        return False
+    if not _wait(ctx, manifest, project):
+        return False
+    url = f"http://127.0.0.1:{port}{healthz_path(manifest)}"
+    client = ctx.http if ctx.http is not None else _tls(ctx).http
+    try:
+        response = client.get(url, timeout=5.0)
+        status = response.status_code
+    except (httpx.HTTPError, OSError) as exc:
+        status = 0
+        detail = str(exc)
+    else:
+        detail = f"HTTP {status}"
+    if status == 200:
+        return True
+    _fail(ctx, "service_unhealthy", f"{url} did not return 200 ({detail})")
+    return False
+
+
 def _rewrite_extra_hosts(ctx: Context, manifest: Mapping[str, Any], domain: str) -> None:
     from keystonectl.generate.compose import fragment_digest, fragment_guard, render_fragment
     from keystonectl.generate.install import _env_values, _start
@@ -1034,6 +1077,8 @@ def publish(ctx: Context) -> None:
         if not _base_url(ctx, manifest, domain):
             return
         _rewrite_extra_hosts(ctx, manifest, domain)
+        if not _ensure_loopback_ready(ctx, manifest, port):
+            return
         if not _external_check(ctx, tls, domain, healthz_path(manifest), manual=False):
             return
         _write_public(
