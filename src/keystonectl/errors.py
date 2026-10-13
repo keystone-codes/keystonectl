@@ -368,6 +368,14 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Add sslmode to the URL, for example ?sslmode=require.",
         ),
         _e(
+            "postgres_address_mismatch",
+            3,
+            False,
+            "The PostgreSQL URL points at a different server than the one already bound.",
+            "Use the host, port, and sslmode already recorded for PostgreSQL. "
+            "Database, user, and password can differ for each service.",
+        ),
+        _e(
             "s3_unreachable",
             3,
             True,
