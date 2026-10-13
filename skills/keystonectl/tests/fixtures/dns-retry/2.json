@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service apply",
+  "target": "file-mcp",
+  "summary": "Installed file-mcp 1.0.0.",
+  "actions": [
+    {
+      "id": "deploy",
+      "title": "Install file-mcp 1.0.0",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "version": "1.0.0",
+    "namespace": "files",
+    "public": {
+      "domain": "files.example.com",
+      "tls": "certbot"
+    }
+  }
+}
