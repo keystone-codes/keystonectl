@@ -1,3 +1,3 @@
-"""keystonectl: manifests for services that sit behind keystone-mcp."""
+"""Install and check services behind a Keystone MCP gateway."""
 
 __version__ = "0.1.0"
