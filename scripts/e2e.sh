@@ -986,7 +986,8 @@ scenario_override_survives_upgrade() {
   run_answered service apply e2e/file-mcp@0.9.0 \
     || fail override_survives_upgrade "apply 0.9.0 exited ${KC_RC}"
   write_override
-  compose up -d --force-recreate file-mcp-mcp
+  run_answered service apply e2e/file-mcp@0.9.0 \
+    || fail override_survives_upgrade "re-apply 0.9.0 after override exited ${KC_RC}"
   kc check
   [[ "$KC_RC" -eq 0 ]] || fail override_survives_upgrade "check exited ${KC_RC}"
   local id
