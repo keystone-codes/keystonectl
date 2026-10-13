@@ -24,14 +24,15 @@ from keystonectl.generate.compose import (
     service_names,
 )
 from keystonectl.generate.docker import (
+    FACADE_PROBE_CODE,
     METRICS_CODE,
-    PROBE_CODE,
     RESOURCES_NETWORK,
     UPSTREAMS_NETWORK,
     compose_config,
     compose_prefix,
     daemon_down,
     ensure_network,
+    facade_probe_host,
     image_ready,
     layout_problems,
     parse_config,
@@ -1056,6 +1057,10 @@ def _facade(ctx: Context, manifest: Mapping[str, Any], image: str) -> bool:
     port = int(containers[role]["port"])
     healthz = str((manifest.get("mcp") or {}).get("healthz") or "/healthz")
     url = f"http://{manifest['name']}-{role}:{port}{healthz}"
+    probe_args = [url]
+    host = facade_probe_host(ctx.root, manifest)
+    if host:
+        probe_args.append(host)
     result = run(
         ctx.runner,
         [
@@ -1068,8 +1073,8 @@ def _facade(ctx: Context, manifest: Mapping[str, Any], image: str) -> bool:
             "python",
             image,
             "-c",
-            PROBE_CODE,
-            url,
+            FACADE_PROBE_CODE,
+            *probe_args,
         ],
     )
     if result.returncode != 0:
