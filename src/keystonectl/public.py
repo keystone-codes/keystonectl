@@ -1173,6 +1173,7 @@ def _view(ctx: Context, name: str) -> dict[str, Any]:
         "state": public.get("state"),
         "domain": public.get("domain"),
         "last_error": public.get("last_error"),
+        "tls": public.get("tls"),
     }
 
 
