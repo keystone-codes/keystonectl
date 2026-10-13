@@ -152,6 +152,53 @@ def test_allow_insecure_http_added(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert env["KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"] == "true"
 
 
+def test_narrowed_generate_secret_leaves_the_shared_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = yaml.safe_load((PACKAGES / "hello-worker" / "keystone-service.yaml").read_text())
+    document.pop("needs", None)
+    image = document["containers"]["worker"]["image"]
+    health = {"command": ["hello-worker", "health"]}
+    token = {"name": "HELLO_TOKEN", "generate": {"bytes": 16}}
+    document["containers"]["worker"]["secrets"] = [token]
+    document["containers"]["worker"]["healthcheck"] = health
+    document["containers"]["helper"] = {
+        "image": image,
+        "healthcheck": health,
+        "secrets": [token],
+    }
+    _patch(monkeypatch)
+    root = tmp_path / "root"
+    first, _runner, _box = apply_package(
+        root, "hello-worker", {"hello-worker": yaml.safe_dump(document)}
+    )
+    assert first.code == 0, first.error
+    shared_path = root / "packages" / "hello-worker.env"
+    shared_path.write_text(shared_path.read_text(encoding="utf-8") + "OPERATOR_NOTE=keep\n")
+    original = read_env(shared_path)["HELLO_TOKEN"]
+    narrowed = yaml.safe_load(yaml.safe_dump(document))
+    narrowed["containers"]["worker"].pop("secrets")
+    again, _runner, _box = apply_package(
+        root,
+        "hello-worker",
+        {"hello-worker": yaml.safe_dump(narrowed)},
+        reset=False,
+    )
+    assert again.code == 0, again.error
+    shared = read_env(shared_path)
+    assert "HELLO_TOKEN" not in shared
+    assert shared["OPERATOR_NOTE"] == "keep"
+    partial = read_env(root / "packages" / "hello-worker.helper.env")
+    assert partial["HELLO_TOKEN"] == original
+    fragment = yaml.safe_load((root / "packages" / "hello-worker.yml").read_text())
+    worker_files = fragment["services"]["hello-worker-worker"]["env_file"]
+    helper_files = fragment["services"]["hello-worker-helper"]["env_file"]
+    assert "./hello-worker.helper.env" not in worker_files
+    assert "./hello-worker.helper.env" in helper_files
+    for relative in worker_files:
+        assert "HELLO_TOKEN" not in read_env(root / "packages" / relative.removeprefix("./"))
+
+
 def test_no_secret_in_output_lock_or_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result, runner, _box = _apply(tmp_path, monkeypatch)
     assert result.code == 0, result.error

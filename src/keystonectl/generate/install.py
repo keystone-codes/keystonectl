@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -330,6 +331,117 @@ def _write_env_values(path: Path, values: Mapping[str, str], undo: _Undo) -> Non
         upsert_env(path, values)
     elif not path.exists():
         upsert_env(path, {})
+
+
+def _env_state_path(ctx: Context) -> Path:
+    return ctx.root / ".keystonectl" / "env-applied.json"
+
+
+def _env_digests(ctx: Context, manifest: Mapping[str, Any]) -> dict[str, str]:
+    plan = placement(manifest)
+    found: dict[str, str] = {}
+    for relative in plan.files:
+        path = ctx.root / relative
+        data = path.read_bytes() if path.is_file() else b""
+        found[relative] = hashlib.sha256(data).hexdigest()
+    return found
+
+
+def _load_env_state(ctx: Context) -> dict[str, dict[str, str]]:
+    path = _env_state_path(ctx)
+    if not path.is_file():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    clean: dict[str, dict[str, str]] = {}
+    for name, item in loaded.items():
+        if not isinstance(name, str) or not isinstance(item, dict):
+            continue
+        clean[name] = {
+            str(key): str(value)
+            for key, value in item.items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+    return clean
+
+
+def _save_env_state(ctx: Context, manifest: Mapping[str, Any]) -> None:
+    state = _load_env_state(ctx)
+    state[str(manifest["name"])] = _env_digests(ctx, manifest)
+    atomic_write(
+        _env_state_path(ctx),
+        (json.dumps(state, sort_keys=True) + "\n").encode("utf-8"),
+        mode=0o600,
+    )
+
+
+def _generated_in_lock(ctx: Context, name: str) -> list[str]:
+    entry = _service(ctx.lock, name)
+    if not isinstance(entry, dict) or not isinstance(entry.get("env"), dict):
+        return []
+    return [str(item) for item in entry["env"].get("generated") or [] if isinstance(item, str)]
+
+
+def _shared_secret_drops(ctx: Context, manifest: Mapping[str, Any]) -> list[str]:
+    """Keys this version no longer places in the shared env file."""
+
+    plan = placement(manifest)
+    current = read_env(ctx.root / plan.shared)
+    if not current:
+        return []
+    placed_shared = {item.name for item in plan.secrets if item.file == plan.shared}
+    drop: list[str] = []
+    for item in plan.secrets:
+        if item.file != plan.shared and item.name in current:
+            drop.append(item.name)
+    for name in _generated_in_lock(ctx, str(manifest["name"])):
+        if name not in placed_shared and name in current and name not in drop:
+            drop.append(name)
+    return drop
+
+
+def _env_matches(ctx: Context, manifest: Mapping[str, Any]) -> bool:
+    if _shared_secret_drops(ctx, manifest):
+        return False
+    saved = _load_env_state(ctx).get(str(manifest["name"]))
+    if not isinstance(saved, dict) or not saved:
+        return False
+    return saved == _env_digests(ctx, manifest)
+
+
+def _retire_shared_secrets(ctx: Context, manifest: Mapping[str, Any], undo: _Undo) -> None:
+    """Move a narrowed secret out of the shared file, then delete the old key.
+
+    Every container receives the shared file. A name this version does not
+    place there must not stay, or a container that never declared it still
+    sees the value. The existing value is kept for the roles that still
+    declare the name.
+    """
+
+    plan = placement(manifest)
+    shared_path = ctx.root / plan.shared
+    current = read_env(shared_path)
+    if not current:
+        return
+    for item in plan.secrets:
+        if item.file == plan.shared or item.name not in current:
+            continue
+        target = ctx.root / item.file
+        if item.name not in read_env(target):
+            ctx.secrets.register(current[item.name])
+            _write_env_values(target, {item.name: current[item.name]}, undo)
+    drop = _shared_secret_drops(ctx, manifest)
+    if not drop:
+        return
+    for name in drop:
+        if name in current:
+            ctx.secrets.register(current[name])
+    undo.remember(shared_path)
+    upsert_env(shared_path, {}, remove=drop)
 
 
 def _fill_secrets(
@@ -746,6 +858,8 @@ def _unchanged(
     name = str(manifest["name"])
     path = ctx.root / "packages" / f"{name}.yml"
     if not path.is_file() or path.read_text(encoding="utf-8") != fragment:
+        return False
+    if not _env_matches(ctx, manifest):
         return False
     if (
         (ctx.root / "docker-compose.packages.yml").read_text(encoding="utf-8")
@@ -1324,10 +1438,12 @@ def _materialise(
 ) -> None:
     name = str(manifest["name"])
     plan = placement(manifest)
+    saved_env = _load_env_state(ctx).get(name)
     for relative in plan.files:
         path = ctx.root / relative
         if not path.exists():
             _write_env_values(path, {}, undo)
+    _retire_shared_secrets(ctx, manifest, undo)
     _fill_secrets(ctx, manifest, undo)
     root_values: dict[str, str] = {}
     if namespace and registry_name:
@@ -1365,7 +1481,8 @@ def _materialise(
         if daemon_down(created) or created.returncode != 0:
             _fail(ctx, "docker_unavailable", ERRORS["docker_unavailable"].title)
             return
-    recreate = previous_fragment != fragment or previous_packages != packages_text
+    env_changed = saved_env != _env_digests(ctx, manifest)
+    recreate = previous_fragment != fragment or previous_packages != packages_text or env_changed
     project = _start(ctx, manifest, recreate=recreate)
     if project is None or ctx.failure is not None:
         return
@@ -1396,6 +1513,7 @@ def _materialise(
             discovery = _discover(ctx, project, namespace)
     else:
         discovery = None
+    _save_env_state(ctx, manifest)
     if not commit:
         return
     _save_service(
@@ -1410,6 +1528,39 @@ def _materialise(
             discovery=discovery,
         )
     )
+
+
+def _reject_manifest(ctx: Context, document: Mapping[str, Any]) -> bool:
+    """Same manifest parse the service command runs before it writes anything."""
+
+    from keystonectl.manifest import manifest_errors
+
+    lines = manifest_errors(document)
+    if not lines:
+        return False
+    problems = [
+        {"path": line.split(": ", 1)[0], "message": line, "severity": "error"} for line in lines
+    ]
+    _fail(ctx, "manifest_invalid", problems[0]["message"], result={"problems": problems})
+    return True
+
+
+def fragment_write_blocked(ctx: Context, name: str) -> str | None:
+    """Stop a provider write the same way a service write stops.
+
+    ``ejected`` skips the write without an error. A hand edit is
+    ``modified`` and sets ``fragment_modified``.
+    """
+
+    current = _service(ctx.lock, name) or {"name": name, "managed": "generated"}
+    path = ctx.root / "packages" / f"{name}.yml"
+    guarded = fragment_guard(current, path)
+    if guarded == "ejected":
+        return "ejected"
+    if guarded:
+        _fail(ctx, "fragment_modified", guarded, hint=fragment_modified_message(name))
+        return "modified"
+    return None
 
 
 class ComposeDeployer:
@@ -1445,14 +1596,15 @@ class ComposeDeployer:
         if manifest is None:
             _fail(ctx, "manifest_invalid", f"{package.name} has no keystone-service.yaml.")
             return
+        if _reject_manifest(ctx, manifest):
+            return
+        name = str(manifest["name"])
+        blocked = fragment_write_blocked(ctx, name)
+        if blocked:
+            return
         if not _validate_compose_only(ctx):
             return
         fragment = render_fragment(manifest, {})
-        path = ctx.root / "packages" / f"{manifest['name']}.yml"
-        guarded = fragment_guard({"name": manifest["name"], "managed": "generated"}, path)
-        if guarded and guarded != "ejected":
-            _fail(ctx, "fragment_modified", guarded)
-            return
         undo = _Undo()
         _materialise(ctx, manifest, fragment, None, None, undo, commit=False)
         if ctx.failure is not None:
