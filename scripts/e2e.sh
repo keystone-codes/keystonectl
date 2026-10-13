@@ -359,12 +359,13 @@ EOF
 
 chown_policy() {
   local dir="$1"
+  # chmod while this user still owns the directory. After chown, chmod is refused.
+  chmod 775 "$dir"
   if [[ "$(id -u)" -eq 0 ]]; then
     chown -R 10001:10001 "$dir"
   else
     sudo chown -R 10001:10001 "$dir"
   fi
-  chmod 775 "$dir"
 }
 
 prepare_production_example() {
@@ -1515,6 +1516,10 @@ path.write_text("\n".join(kept) + "\n")
 ' "$line" || true
   fi
   if [[ -n "${WORK:-}" && -d "$WORK" ]]; then
+    # Provision files are owned by container users. Take them back, then remove the tree.
+    if [[ "$(id -u)" -ne 0 ]]; then
+      sudo chown -R "$(id -u):$(id -g)" "$WORK" || true
+    fi
     rm -rf "$WORK"
   fi
 }
