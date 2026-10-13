@@ -33,8 +33,13 @@ uvx keystonectl --version
 ```bash
 keystonectl init --adopt <deployment-dir>
 keystonectl --root <deployment-dir> catalog list
-keystonectl --root <deployment-dir> service plan file-mcp --json
+keystonectl --root <deployment-dir> bundle install minimal
+keystonectl --root <deployment-dir> service status
 ```
+
+Every command, its questions, and its error ids are in [docs/commands.md](docs/commands.md).
+
+A service you run yourself is not a package. `keystonectl service add-remote` records its URL, namespace, and filters, and writes a mode 600 handoff file for the team that runs it. keystonectl does not generate compose for that service.
 
 ## Run from a checkout
 
