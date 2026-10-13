@@ -24,15 +24,15 @@ from keystonectl.generate.compose import (
     service_names,
 )
 from keystonectl.generate.docker import (
-    FACADE_PROBE_CODE,
     METRICS_CODE,
+    PROBE_CODE,
     RESOURCES_NETWORK,
     UPSTREAMS_NETWORK,
     compose_config,
     compose_prefix,
     daemon_down,
     ensure_network,
-    facade_probe_host,
+    facade_probe_plan,
     image_ready,
     layout_problems,
     parse_config,
@@ -1056,11 +1056,22 @@ def _facade(ctx: Context, manifest: Mapping[str, Any], image: str) -> bool:
     containers = manifest["containers"]
     port = int(containers[role]["port"])
     healthz = str((manifest.get("mcp") or {}).get("healthz") or "/healthz")
-    url = f"http://{manifest['name']}-{role}:{port}{healthz}"
-    probe_args = [url]
-    host = facade_probe_host(ctx.root, manifest)
-    if host:
-        probe_args.append(host)
+    service = f"{manifest['name']}-{role}"
+    layout = _layout(ctx)
+    config = parse_config(compose_config(ctx.runner, ctx.root, layout))
+    project = str((config or {}).get("name") or layout.get("project") or "")
+    rows = {str(row.get("Service")): row for row in _ps(ctx, project)}
+    row = rows.get(service)
+    container_id = str(row.get("ID") or service) if isinstance(row, dict) else service
+    inspected = _inspect(ctx, container_id)
+    url, extra_hosts = facade_probe_plan(
+        ctx.root,
+        manifest,
+        service=service,
+        port=port,
+        healthz=healthz,
+        inspected=inspected,
+    )
     result = run(
         ctx.runner,
         [
@@ -1069,12 +1080,13 @@ def _facade(ctx: Context, manifest: Mapping[str, Any], image: str) -> bool:
             "--rm",
             "--network",
             UPSTREAMS_NETWORK,
+            *extra_hosts,
             "--entrypoint",
             "python",
             image,
             "-c",
-            FACADE_PROBE_CODE,
-            *probe_args,
+            PROBE_CODE,
+            url,
         ],
     )
     if result.returncode != 0:
