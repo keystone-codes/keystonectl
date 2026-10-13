@@ -76,6 +76,17 @@ class Context:
     halt_questions: list[Any] = field(default_factory=list)
     output_result: dict[str, Any] = field(default_factory=dict)
     rerun: bool = False
+    defer_public: bool = False
+    certbot_staging: bool = False
+    http: Any = None
+    nginx_root: Path | None = None
+    le_live: Path | None = None
+    custom_dir: Path | None = None
+    cron_file: Path | None = None
+    handshake: Any = None
+    action_log: list[dict[str, str]] = field(default_factory=list)
+    skip_actions: set[str] = field(default_factory=set)
+    chosen_port: int | None = None
 
 
 def register_step(step: Any, after: str | None = None) -> None:
@@ -335,7 +346,7 @@ def _manifest_ready(ctx: Context) -> bool:
 
 def _replan_resources(ctx: Context, steps: list[Any], plans: list[StepPlan]) -> None:
     for index, step in enumerate(steps):
-        if getattr(step, "id", None) == "resources":
+        if getattr(step, "id", None) in {"resources", "deploy", "public"}:
             plans[index] = step.plan(ctx)
 
 
@@ -357,6 +368,10 @@ def _failure_result(ctx: Context, command: str, warnings: list[dict[str, str]]) 
         result.retryable = True
     if ctx.probe_reports:
         result.result = {**result.result, "probes": ctx.probe_reports}
+    if ctx.action_log:
+        result.actions = list(ctx.action_log)
+    if ctx.output_result:
+        result.result = {**ctx.output_result, **result.result}
     return result
 
 
@@ -500,6 +515,14 @@ def run_service(
     interactive: bool,
     clock: Callable[[], datetime] | None = None,
     deployer: Any = None,
+    defer_public: bool = False,
+    certbot_staging: bool = False,
+    http: Any = None,
+    nginx_root: Path | None = None,
+    le_live: Path | None = None,
+    custom_dir: Path | None = None,
+    cron_file: Path | None = None,
+    handshake: Any = None,
 ) -> Result:
     command = f"service {verb}"
     ctx = Context(
@@ -513,6 +536,14 @@ def run_service(
         clock=clock or (lambda: datetime.now(UTC)),
         target=target,
         deployer=deployer,
+        defer_public=defer_public,
+        certbot_staging=certbot_staging,
+        http=http,
+        nginx_root=nginx_root,
+        le_live=le_live,
+        custom_dir=custom_dir,
+        cron_file=cron_file,
+        handshake=handshake,
     )
     steps = build_steps()
     plans: list[StepPlan] = []
@@ -748,8 +779,12 @@ def run_service(
             action["status"] = "unchanged"
     else:
         for action in actions:
-            if action["status"] == "planned":
+            if action["id"] in ctx.skip_actions:
+                action["status"] = "skipped"
+            elif action["status"] == "planned":
                 action["status"] = "done"
+    if ctx.action_log:
+        actions = [*actions, *ctx.action_log]
     result_body: dict[str, Any] = {"commit": ctx.resolved.commit, "version": ctx.resolved.version}
     if ctx.probe_reports:
         result_body["probes"] = ctx.probe_reports

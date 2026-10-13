@@ -279,6 +279,7 @@ def apply_package(
         deployer=__import__(
             "keystonectl.generate.install", fromlist=["ComposeDeployer"]
         ).ComposeDeployer(),
+        defer_public=True,
     )
     return result, runner, box
 

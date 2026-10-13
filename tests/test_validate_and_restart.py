@@ -51,6 +51,7 @@ def test_layout_invalid_when_keystone_service_missing(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 3
     assert result.error["id"] == "layout_invalid"
