@@ -44,6 +44,13 @@ _OVERRIDE_NOTE = (
 )
 
 
+def _qualified_apply_ref(entry: Mapping[str, Any], name: str, version: str) -> str:
+    source = entry.get("source")
+    if isinstance(source, str) and source:
+        return f"{source}/{name}@{version}"
+    return f"{name}@{version}"
+
+
 def _entry(lock: Mapping[str, Any], name: str) -> dict[str, Any] | None:
     for item in lock.get("services") or []:
         if isinstance(item, dict) and item.get("name") == name:
@@ -735,7 +742,7 @@ def upgrade_service(
     applied = run_service(
         root,
         "apply",
-        f"{name}@{target}",
+        _qualified_apply_ref(entry, name, target),
         runner=runner,
         secrets=secrets,
         sets=dict(sets),

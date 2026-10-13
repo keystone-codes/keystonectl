@@ -22,7 +22,7 @@ If `packages/<name>.yml` was edited by hand, upgrade stops with `fragment_modifi
 
 The preview lists tools and containers added or removed, and policy rows that stop matching (`catalog diff` before and after). New tools that no role can call are `tools_unreachable`. Confirmation is `y`, or `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_UPGRADE` set to the target version exactly. An older confirmation does not apply.
 
-On success, keystonectl keeps `.bak` copies (mode 600), records `previous` in the lock, and runs the normal apply. `registry_name`, `namespace`, and the override stay. A failed health check tells you to run `service rollback <name>` and does not roll back by itself.
+On success, keystonectl keeps `.bak` copies (mode 600), records `previous` in the lock, and runs the normal apply. The apply step uses the installed entry's `source` (`source/name@version`) so the same package name in another catalog does not ask which package to use. `registry_name`, `namespace`, and the override stay. A failed health check tells you to run `service rollback <name>` and does not roll back by itself.
 
 An ejected package is not rewritten. The lock, registry, and secrets move forward, and `result.manual_steps` lists the new images for the operator's file.
 
