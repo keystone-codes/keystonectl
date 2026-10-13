@@ -96,24 +96,43 @@ def check_override_access(context: Any) -> dict[str, str]:
     if code != 0 or not text.strip():
         return _item(
             "override_access",
-            "ok",
-            "Compose config was not available; override access was not compared.",
+            "warning",
+            "docker compose config did not return JSON, so override access was not checked.",
+            "Fix the compose files and run keystonectl check again.",
         )
     try:
         document = json.loads(text)
     except json.JSONDecodeError:
-        return _item("override_access", "ok", "Compose config was not JSON.")
+        return _item(
+            "override_access",
+            "warning",
+            "docker compose config did not return JSON, so override access was not checked.",
+            "Fix the compose files and run keystonectl check again.",
+        )
     services = document.get("services") if isinstance(document, dict) else None
-    if not isinstance(services, dict) or not services:
+    if not isinstance(services, dict):
+        return _item(
+            "override_access",
+            "warning",
+            "docker compose config did not return JSON, so override access was not checked.",
+            "Fix the compose files and run keystonectl check again.",
+        )
+    if not services:
         return _item("override_access", "ok", "Compose config has no services to compare.")
     widened = _widened(context.root, services)
     if widened:
         spec = WARNINGS["override_widens_access"]
-        return _item("override_widens_access", "warning", spec.title, spec.action)
+        listed = ", ".join(f"{service} {field}" for service, field in widened)
+        return _item(
+            "override_widens_access",
+            "warning",
+            f"{spec.title} ({listed}).",
+            spec.action,
+        )
     return _item("override_access", "ok", "Overrides do not publish ports or add privileges.")
 
 
-def _widened(root: Any, services: dict[str, Any]) -> bool:
+def _package_names(root: Any) -> set[str]:
     packages = root / "packages"
     names: set[str] = set()
     if packages.is_dir():
@@ -121,22 +140,66 @@ def _widened(root: Any, services: dict[str, Any]) -> bool:
             if path.name.endswith(".override.yml"):
                 continue
             names.add(path.stem)
+    return names
+
+
+def _port_leaves_loopback(port: object) -> bool:
+    """A port bound only to 127.0.0.1 is the loopback publish from K17."""
+
+    if isinstance(port, str):
+        body = port.split("/", 1)[0]
+        return not body.startswith("127.0.0.1:")
+    if isinstance(port, dict):
+        published = port.get("published")
+        host_ip = port.get("host_ip")
+        if published in (None, "") and host_ip in (None, ""):
+            return False
+        return str(host_ip or "") != "127.0.0.1"
+    return False
+
+
+def _volume_leaves_package(volume: object) -> bool:
+    if isinstance(volume, str):
+        if "docker.sock" in volume:
+            return True
+        source = volume.split(":", 1)[0]
+        return source.startswith(("/", ".", "~"))
+    if not isinstance(volume, dict):
+        return False
+    source = str(volume.get("source") or "")
+    target = str(volume.get("target") or "")
+    if "docker.sock" in source or "docker.sock" in target:
+        return True
+    if volume.get("type") == "bind":
+        return True
+    return source.startswith(("/", ".", "~"))
+
+
+def _widened(root: Any, services: dict[str, Any]) -> list[tuple[str, str]]:
+    names = _package_names(root)
+    found: list[tuple[str, str]] = []
     for name, spec in services.items():
         if not isinstance(spec, dict):
             continue
-        if not any(str(name).startswith(f"{package}-") for package in names):
+        service = str(name)
+        if not any(service.startswith(f"{package}-") for package in names):
             continue
-        if spec.get("privileged") or spec.get("cap_add"):
-            return True
-        for port in spec.get("ports") or []:
-            published = ""
-            if isinstance(port, str):
-                published = port
-            elif isinstance(port, dict):
-                published = str(port.get("published") or port.get("host_ip") or "")
-            if published and not str(published).startswith("127.0.0.1"):
-                return True
-    return False
+        fields: list[str] = []
+        if spec.get("privileged"):
+            fields.append("privileged")
+        if spec.get("cap_add"):
+            fields.append("cap_add")
+        if isinstance(spec.get("network_mode"), str) and spec.get("network_mode"):
+            fields.append("network_mode")
+        if spec.get("pid") == "host":
+            fields.append("pid")
+        if any(_port_leaves_loopback(port) for port in spec.get("ports") or []):
+            fields.append("ports")
+        if any(_volume_leaves_package(volume) for volume in spec.get("volumes") or []):
+            fields.append("volumes")
+        for field in fields:
+            found.append((service, field))
+    return found
 
 
 def ensure_checks() -> None:
