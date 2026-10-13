@@ -21,6 +21,7 @@ from keystonectl.public import (
     choose_port,
     healthz_path,
     location_block,
+    materialise_public_base_env,
     render_vhost,
     status_public,
     vhost_substitutions,
@@ -300,6 +301,23 @@ def test_domain_in_use_refused(tmp_path: Path) -> None:
     )
     assert result.code == 3
     assert result.error["id"] == "domain_in_use"
+
+
+def test_materialise_public_base_env_uses_domain_before_publish() -> None:
+    manifest = _manifest()
+    ctx = Context(
+        root=Path("/tmp/unused"),
+        runner=FakeCommandRunner(),
+        secrets=SecretRegistry(),
+        sets={},
+        environ={"KEYSTONE_SETUP_SERVICE_FILE_MCP_DOMAIN": DOMAIN},
+        interactive=False,
+        lock={"services": []},
+        clock=lambda: CLOCK,
+        defer_public=False,
+    )
+    env = materialise_public_base_env(ctx, manifest)
+    assert env == {"FILE_MCP_PUBLIC_BASE_URL": f"https://{DOMAIN}"}
 
 
 def test_defer_public_sets_pending_placeholder(tmp_path: Path) -> None:
