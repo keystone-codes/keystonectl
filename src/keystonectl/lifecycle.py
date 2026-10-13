@@ -6,8 +6,10 @@ import argparse
 import difflib
 import fnmatch
 import hashlib
+import json
 import os
 import shutil
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -261,6 +263,60 @@ def _published(namespace: str | None, tools: list[Any]) -> list[str]:
     return tool_names(namespace, [str(item) for item in tools if isinstance(item, str)])
 
 
+def _wait_keystone_healthy(
+    runner: CommandRunner,
+    root: Path,
+    layout: Mapping[str, Any],
+    *,
+    timeout: float = 120.0,
+) -> bool:
+    project = str(layout.get("project") or "")
+    service = str(layout.get("keystone_service") or "keystone")
+    prefix = compose_prefix(root, layout, project=project or None)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() <= deadline:
+        result = run(
+            runner,
+            [*prefix, "ps", "-a", "--format", "json"],
+            cwd=root,
+        )
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict) or str(row.get("Service") or "") != service:
+                continue
+            health = str(row.get("Health") or "")
+            state = str(row.get("State") or "")
+            if health == "healthy" or (state == "running" and not health):
+                return True
+        time.sleep(3)
+    return False
+
+
+def _restart_keystone_after_registry_change(
+    runner: CommandRunner,
+    root: Path,
+    layout: Mapping[str, Any],
+) -> bool:
+    project = str(layout.get("project") or "")
+    service = str(layout.get("keystone_service") or "keystone")
+    prefix = compose_prefix(root, layout, project=project or None)
+    running = run(
+        runner,
+        [*prefix, "ps", "--status", "running", "-q", service],
+        cwd=root,
+    )
+    if not running.stdout.strip():
+        return True
+    run(runner, [*prefix, "restart", service], cwd=root)
+    return _wait_keystone_healthy(runner, root, layout)
+
+
 def remove_service(
     root: Path,
     name: str,
@@ -407,6 +463,15 @@ def remove_service(
         ]
     lock["updated_by"] = f"keystonectl {__version__}"
     save_lock(root / "services.lock.yaml", lock, now=clock())
+    if not remote and entry.get("registry_name"):
+        if not _restart_keystone_after_registry_change(runner, root, layout):
+            return _error(
+                command,
+                name,
+                "service_unhealthy",
+                ERRORS["service_unhealthy"].title,
+                hint=ERRORS["service_unhealthy"].action,
+            )
     note = _OVERRIDE_NOTE.format(name=name) if override.is_file() else ""
     summary = f"Removed {name}."
     if note:
