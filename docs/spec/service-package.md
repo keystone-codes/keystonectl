@@ -61,7 +61,7 @@ These fields are rejected on a resource.
 
 | Field | Required | Constraints | Default |
 |---|---|---|---|
-| `compat.keystone_mcp` | yes | string, 1–100 characters. The schema does not parse the range; a later check does | |
+| `compat.keystone_mcp` | yes | string, 1–100 characters. Parsed by the same rules as catalog `keystone_mcp`; see [Compatibility with keystone-mcp](catalog.md#compatibility-with-keystone-mcp) | |
 | `compat.contracts` | yes | unique values from `upstream-registry/1` and `identity-assertion/1`. Both are required when `mcp` is set. Empty is allowed when there is no `mcp` | |
 | `mcp` | no | Facade block. Without it the package still installs, and it is not registered with keystone-mcp | |
 | `mcp.container` | yes, if `mcp` | Role of the facade. Only this container is registered, and only it receives the bearer and the assertion secret | |
