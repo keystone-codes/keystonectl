@@ -38,6 +38,7 @@ server {
 __LOCATIONS__
     location = __HEALTHZ_PATH__ {
         proxy_pass http://__UPSTREAM____HEALTHZ_PATH__;
+        proxy_set_header Host 127.0.0.1;
         access_log off;
     }
 
