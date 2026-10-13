@@ -26,7 +26,7 @@ def registry_url(manifest: Mapping[str, Any]) -> str:
     path = str(mcp.get("path") or "/mcp")
     if not path.startswith("/"):
         path = "/" + path
-    return f"http://{manifest['name']}-{role}:{port}{path}"
+    return f"http://{manifest['name']}:{port}{path}"
 
 
 def tool_names(namespace: str, tools: Sequence[str]) -> list[str]:

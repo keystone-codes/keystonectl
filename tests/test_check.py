@@ -65,7 +65,7 @@ def _service(**overrides: object) -> dict:
         "fragment_sha256": digest,
         "registry_name": "file-mcp",
         "namespace": "files",
-        "url": "http://file-mcp-mcp:8081/mcp",
+        "url": "http://file-mcp:8081/mcp",
         "tools": ["ping"],
         "env": {
             "keystone": [
@@ -96,7 +96,7 @@ def _write(
             {
                 "name": "file-mcp",
                 "namespace": "files",
-                "url": "http://file-mcp-mcp:8081/mcp",
+                "url": "http://file-mcp:8081/mcp",
                 "auth": {
                     "bearer_env": "KEYSTONE_MCP_UPSTREAM_FILES_BEARER",
                     "identity_secret_env": "KEYSTONE_MCP_UPSTREAM_FILES_IDENTITY_SECRET",
@@ -205,7 +205,7 @@ def test_registry_entry_missing_or_different(
                 {
                     "name": "file-mcp",
                     "namespace": "files",
-                    "url": "http://file-mcp-mcp:8081/mcp",
+                    "url": "http://file-mcp:8081/mcp",
                     "auth": {
                         "bearer_env": "KEYSTONE_MCP_UPSTREAM_FILES_BEARER",
                         "identity_secret_env": "KEYSTONE_MCP_UPSTREAM_FILES_IDENTITY_SECRET",
@@ -227,7 +227,7 @@ def test_registry_entry_missing_or_different(
             {
                 "name": "file-mcp",
                 "namespace": "files",
-                "url": "http://file-mcp-mcp:8081/mcp",
+                "url": "http://file-mcp:8081/mcp",
                 "auth": {
                     "bearer_env": "OTHER_BEARER",
                     "identity_secret_env": "KEYSTONE_MCP_UPSTREAM_FILES_IDENTITY_SECRET",
