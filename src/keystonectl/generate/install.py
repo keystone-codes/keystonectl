@@ -1284,6 +1284,9 @@ def _save_service(
     tools = (manifest.get("mcp") or {}).get("tools") if namespace else []
     entry["tools"] = [str(item) for item in tools or []]
     entry["updated_at"] = utc_now(ctx.clock())
+    from keystonectl.public import stamp_lock_public
+
+    stamp_lock_public(ctx, manifest, entry)
     ctx.lock["updated_by"] = f"keystonectl {__version__}"
     save_lock(ctx.root / "services.lock.yaml", ctx.lock, now=ctx.clock())
 
@@ -1363,9 +1366,20 @@ def install_service(ctx: Context) -> None:
     if manifest.get("kind") == "resource":
         return
     name = str(manifest["name"])
+    from keystonectl.lifecycle import prune_retired_names
+    from keystonectl.public import fragment_ports, install_questions
+
+    if isinstance(ctx.lock, dict):
+        prune_retired_names(ctx.root, ctx.lock)
+
     if _service(ctx.lock, name) and _service(ctx.lock, name).get("managed") == "ejected":
+        ctx.skip_actions.add("deploy.fragment")
+        questions = install_questions(ctx, manifest)
+        if questions:
+            ctx.halt_questions.extend(questions)
         return
     questions = _env_questions(ctx, manifest)
+    questions.extend(install_questions(ctx, manifest))
     if questions:
         ctx.halt_questions.extend(questions)
         return
@@ -1383,7 +1397,15 @@ def install_service(ctx: Context) -> None:
             _fail(ctx, "registry_full", ERRORS["registry_full"].title)
             return
     env_values = _env_values(ctx, manifest)
-    fragment = render_fragment(manifest, {"env_values": env_values})
+    host_port, extra_hosts = fragment_ports(ctx, manifest)
+    if ctx.failure is not None:
+        return
+    fragment = render_fragment(
+        manifest,
+        {"env_values": env_values},
+        host_port=host_port,
+        extra_hosts=extra_hosts,
+    )
     if _unchanged(ctx, manifest, fragment, namespace):
         ctx.rerun = True
         ctx.output_result = _result_body(
@@ -1445,6 +1467,11 @@ def _materialise(
             _write_env_values(path, {}, undo)
     _retire_shared_secrets(ctx, manifest, undo)
     _fill_secrets(ctx, manifest, undo)
+    from keystonectl.public import deferred_env
+
+    placeholder = deferred_env(ctx, manifest)
+    if placeholder:
+        _write_env_values(ctx.root / plan.shared, placeholder, undo)
     root_values: dict[str, str] = {}
     if namespace and registry_name:
         root_values = _gateway_secrets(ctx, manifest, namespace, registry_name, undo)

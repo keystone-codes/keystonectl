@@ -256,6 +256,7 @@ class Lab:
             interactive=False,
             deployer=self.deployer if deployer else None,
             clock=lambda: _CLOCK,
+            defer_public=True,
         )
 
     def plan(self, ref: str, *, environ: Mapping[str, str] | None = None):
