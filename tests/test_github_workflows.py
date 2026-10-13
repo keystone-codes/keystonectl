@@ -110,6 +110,22 @@ def test_github_release_needs_pypi() -> None:
     assert "pypi-verify" in needs
 
 
+def test_e2e_paths_include_the_script_and_its_unit_tests() -> None:
+    doc = _load("e2e.yml")
+    paths = _workflow_on(doc)["pull_request"]["paths"]
+    assert paths == [
+        "src/**",
+        "schemas/**",
+        "nginx/**",
+        "scripts/e2e*/**",
+        "scripts/e2e.sh",
+        "tests/e2e/**",
+        "tests/test_e2e_*.py",
+        "skills/**",
+        ".github/workflows/e2e.yml",
+    ]
+
+
 def test_no_pypi_token_secret_is_referenced() -> None:
     text = (WORKFLOWS_DIR / "release.yml").read_text(encoding="utf-8")
     assert "secrets.PYPI" not in text
