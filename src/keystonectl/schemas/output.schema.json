@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keystone.codes/schemas/keystonectl-output-v1.json",
+  "title": "keystonectl JSON output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok",
+    "code",
+    "command",
+    "target",
+    "summary",
+    "actions",
+    "changes",
+    "missing",
+    "warnings",
+    "error",
+    "retryable",
+    "result"
+  ],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "code": { "type": "integer", "enum": [0, 1, 2, 3] },
+    "command": { "type": "string" },
+    "target": { "type": ["string", "null"] },
+    "summary": { "type": "string" },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": {
+            "enum": ["planned", "done", "unchanged", "skipped", "failed"]
+          }
+        }
+      }
+    },
+    "changes": { "type": "integer", "minimum": 0 },
+    "missing": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["var", "question", "kind", "choices", "default", "secret"],
+        "properties": {
+          "var": { "type": "string" },
+          "question": { "type": "string" },
+          "kind": { "enum": ["text", "choice", "file", "confirm", "argument"] },
+          "choices": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "default": {},
+          "secret": { "type": "boolean" }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "message"],
+        "properties": {
+          "id": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "message", "hint"],
+          "properties": {
+            "id": { "type": "string" },
+            "message": { "type": "string" },
+            "hint": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "retryable": { "type": "boolean" },
+    "result": { "type": "object" }
+  }
+}
