@@ -1,5 +1,7 @@
 # Service package manifest (`schema_version` 1)
 
+For a step-by-step guide see [../packaging-a-service.md](../packaging-a-service.md).
+
 A package ships one `keystone-service.yaml`. The file is the contract between the author and the operator: what the package runs, which resource interfaces it needs, and which tools it publishes. The installer reads that file and asks the operator only for what the file does not already say.
 
 The machine-readable contract is a single Draft 2020-12 document, [`src/keystonectl/schemas/service-package-v1.json`](../../src/keystonectl/schemas/service-package-v1.json) (`$id`: `https://keystone.codes/schemas/service-package-v1.json`). Validators load that file. `default` values in the schema are notes for the installer. The validator does not fill them in.
