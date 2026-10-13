@@ -17,8 +17,23 @@ from keystonectl.output import SecretRegistry
 from keystonectl.runner import CommandRunner
 
 RESOURCE_NETWORK = "keystone-resources"
-# password, secret_key, and url are never taken from provision.sh stdout.
-_STDOUT_DROPPED = frozenset({"extensions", "url", "password", "secret_key"})
+# The installer owns the server and the consumer secret. Stdout may name an
+# object on that server (bucket, region, path_style, access_key). host, port,
+# endpoint, sslmode, database, and user would send the secret somewhere else.
+_STDOUT_DROPPED = frozenset(
+    {
+        "extensions",
+        "url",
+        "password",
+        "secret_key",
+        "host",
+        "port",
+        "endpoint",
+        "sslmode",
+        "database",
+        "user",
+    }
+)
 
 
 @dataclass
@@ -236,8 +251,20 @@ def run_provision(
         values = {key: str(value) for key, value in payload.items() if key not in _STDOUT_DROPPED}
         if kind == "s3":
             values["secret_key"] = written
+            if endpoint is not None:
+                values["endpoint"] = endpoint
         else:
             values["password"] = written
+            if host is not None:
+                values["host"] = host
+            if port is not None:
+                values["port"] = str(port)
+            if database is not None:
+                # A different name in stdout would be a different principal.
+                values["database"] = database
+                values["user"] = database
+            # The resource network is not TLS. The script must not store another mode.
+            values["sslmode"] = "disable"
         raw_extensions = payload.get("extensions") or list(extensions)
         if not isinstance(raw_extensions, list):
             raw_extensions = list(extensions)
