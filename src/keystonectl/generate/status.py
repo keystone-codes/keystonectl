@@ -180,6 +180,13 @@ def _one(
             body["warnings"].append(warning)
         if problem:
             body["problems"].append(problem)
+    from keystonectl.public import status_public
+
+    status_public(
+        _status_ctx(root, runner, dict(lock) if isinstance(lock, dict) else {"services": []}),
+        entry,
+        body,
+    )
     return body
 
 

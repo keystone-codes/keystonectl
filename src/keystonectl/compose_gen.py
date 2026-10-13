@@ -16,6 +16,9 @@ def ensure_registered() -> None:
     register_resources()
     if not any(getattr(step, "id", None) == "deploy" for step, _after in _EXTRAS):
         register_step(DeployStep(), after="resources")
+    from keystonectl.public import ensure_public
+
+    ensure_public()
     ensure_checks()
 
 

@@ -55,7 +55,8 @@ build-backend = "hatchling.build"
 packages = ["src/keystonectl"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/keystonectl/nginx/.gitkeep" = "keystonectl/nginx/.gitkeep"
+"src/keystonectl/nginx/service.conf.template" = "keystonectl/nginx/service.conf.template"
+"src/keystonectl/nginx/service-https.conf.template" = "keystonectl/nginx/service-https.conf.template"
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/keystonectl", "README.md", "LICENSE", "CHANGELOG.md", "pyproject.toml"]
