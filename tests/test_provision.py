@@ -274,7 +274,7 @@ def test_provision_reuses_existing_consumer_secret(tmp_path: Path) -> None:
             endpoint="http://minio-server:9000",
         )
         assert result.ok
-        assert captured == [expected]
+        assert captured == [expected + "\n"]
 
 
 def test_provision_result_bound_to_env(tmp_path: Path) -> None:

@@ -94,11 +94,22 @@ def _network_present(runner: CommandRunner) -> bool:
     return result.returncode == 0
 
 
+def _read_secret(path: Path, fallback: str) -> str:
+    if not path.is_file():
+        return fallback
+    text = path.read_text(encoding="utf-8")
+    if text.endswith("\n"):
+        text = text[:-1]
+    return text
+
+
 def _write_secret(directory: Path, consumer: str, secret: str) -> None:
     path = directory / f"{consumer}.secret"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, secret.encode("utf-8"))
+        # A POSIX read fails at EOF when the line has no newline. provision.sh
+        # treats that failure as an unreadable secret.
+        os.write(fd, secret.encode("utf-8") + b"\n")
     finally:
         os.close(fd)
     os.chmod(path, 0o600)
@@ -246,7 +257,7 @@ def run_provision(
         if payload is None:
             return _fail(problem)
         secret_path = out_dir / f"{consumer}.secret"
-        written = secret_path.read_text(encoding="utf-8") if secret_path.is_file() else chosen
+        written = _read_secret(secret_path, chosen)
         secrets.register(written)
         values = {key: str(value) for key, value in payload.items() if key not in _STDOUT_DROPPED}
         if kind == "s3":
