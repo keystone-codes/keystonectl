@@ -1101,14 +1101,24 @@ def _keystone_running(ctx: Context, project: str) -> bool:
 
 
 def _signal_keystone(
-    ctx: Context, project: str, *, wiring: bool, registry: bool, snapshot: bool
+    ctx: Context,
+    project: str,
+    *,
+    wiring: bool,
+    registry: bool,
+    snapshot: bool,
+    root_env_changed: bool = False,
 ) -> str:
     if not _keystone_running(ctx, project):
         return "keystone-mcp is not running; it will read the new registry when you start it"
     service = str(_layout(ctx).get("keystone_service") or "")
     prefix = compose_prefix(ctx.root, _layout(ctx), project=project)
-    if wiring:
-        run(ctx.runner, [*prefix, "up", "-d", "--no-deps", service], cwd=ctx.root)
+    if wiring or root_env_changed:
+        command = [*prefix, "up", "-d", "--no-deps"]
+        if root_env_changed:
+            command.append("--force-recreate")
+        command.append(service)
+        run(ctx.runner, command, cwd=ctx.root)
         return "recreated"
     if registry or REGISTRY_SIGHUP_MIN_VERSION is None and registry:
         run(ctx.runner, [*prefix, "restart", service], cwd=ctx.root)
@@ -1502,10 +1512,15 @@ def _materialise(
             env_text = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
             if not env_assigned_outside_managed_block(env_text, insecure):
                 root_values[insecure] = "true"
+    root_env_changed = False
     if root_values:
+        env_path = ctx.root / ".env"
+        env_before = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
         _write_root_env(ctx, root_values, undo)
         if ctx.failure is not None:
             return
+        env_after = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
+        root_env_changed = env_before != env_after
     fragment_path = ctx.root / "packages" / f"{name}.yml"
     previous_fragment = (
         fragment_path.read_text(encoding="utf-8") if fragment_path.is_file() else None
@@ -1548,6 +1563,7 @@ def _materialise(
             wiring=wiring,
             registry=registry_changed,
             snapshot=snapshot_changed and not registry_changed and not wiring,
+            root_env_changed=root_env_changed,
         )
         if info.startswith("keystone-mcp is not running"):
             ctx.output_result["info"] = info
