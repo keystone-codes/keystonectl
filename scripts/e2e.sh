@@ -1453,7 +1453,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 from keystonectl.cli import main
 sys.argv = [
     "keystonectl", "--root", sys.argv[1],
-    "service", "apply", "file-mcp", "--json", "--non-interactive",
+    "service", "apply", "e2e/file-mcp", "--json", "--non-interactive",
 ]
 raise SystemExit(main())
 ' "$ROOT" 2>>"$WORK/log/runner.debug")" || KC_RC=$?
@@ -1529,15 +1529,92 @@ scenario_legacy_gone() {
     return 0
   fi
   root="$(dirname "$ROOT")"
-  if grep -RIn --exclude-dir=.git -e configure_external_apis -e write_external_compose \
-    -e KEYSTONE_MCP_FILE_API_URL -e EXTERNAL_APIS "$root" \
-    | grep -v -e setup.sh -e README -e '.gitignore' >/dev/null; then
-    fail legacy_gone "a removed name is still in the tree"
-  fi
-  if grep -RIn --exclude-dir=.git docker-compose.external.yml "$root" \
-    | grep -v -e '.gitignore' -e README -e setup.sh >/dev/null; then
-    fail legacy_gone "docker-compose.external.yml is still referenced"
-  fi
+  python3 - "$root" <<'PY' || fail legacy_gone "a removed name is still in the tree"
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+files = [root / "setup.sh", root / "start.sh", root / "README.md", root / "SETUP.md"]
+files.extend(path for path in (root / "mcp").rglob("*") if path.is_file())
+text_of = {path: path.read_text(encoding="utf-8") for path in files}
+
+
+def setup_function_span(name):
+    lines = text_of[root / "setup.sh"].splitlines()
+    start = None
+    for index, line in enumerate(lines, start=1):
+        if line.startswith(f"{name}()"):
+            start = index
+            break
+    if start is None:
+        raise SystemExit(f"missing function {name}")
+    end = len(lines)
+    for index in range(start + 1, len(lines) + 1):
+        line = lines[index - 1]
+        if line.endswith("() {") and not line.startswith((" ", "\t", "#")):
+            end = index - 1
+            break
+    return start, end
+
+
+migrate_start, migrate_end = setup_function_span("migrate_external_apis")
+
+
+def in_migrate(path, line_no):
+    return path.name == "setup.sh" and migrate_start <= line_no <= migrate_end
+
+
+readme = text_of[root / "README.md"].splitlines()
+section_start = None
+section_end = len(readme)
+for index, line in enumerate(readme, start=1):
+    if line.startswith("## Службы из каталога"):
+        section_start = index
+        continue
+    if section_start and index > section_start and line.startswith("## "):
+        section_end = index - 1
+        break
+if section_start is None:
+    raise SystemExit("README catalog section is missing")
+
+
+def in_readme_section(path, line_no):
+    return path.name == "README.md" and section_start <= line_no <= section_end
+
+
+def in_setup_doc(path, line_no):
+    if path.name != "SETUP.md":
+        return False
+    line = text_of[path].splitlines()[line_no - 1]
+    return "переносит `EXTERNAL_APIS`" in line
+
+
+banned_exact = (
+    "configure_external_apis",
+    "write_external_compose",
+    "rebuild_external_json",
+    "EXTERNAL_API_ITEMS",
+    "MCP_EXTERNAL_COMPOSE",
+)
+problems = []
+for path, text in text_of.items():
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        for token in banned_exact:
+            if token in line:
+                problems.append(f"{path}:{line_no}: {token}")
+        if "managed" in line and not in_migrate(path, line_no) and not in_readme_section(path, line_no):
+            problems.append(f"{path}:{line_no}: managed")
+        if "EXTERNAL_APIS" in line and not (
+            in_migrate(path, line_no) or in_readme_section(path, line_no) or in_setup_doc(path, line_no)
+        ):
+            problems.append(f"{path}:{line_no}: EXTERNAL_APIS")
+        if "docker-compose.external.yml" in line and not (
+            in_migrate(path, line_no) or in_readme_section(path, line_no)
+        ):
+            problems.append(f"{path}:{line_no}: docker-compose.external.yml")
+if problems:
+    raise SystemExit("\n".join(problems))
+PY
   if grep -n 'build:' "$ROOT/docker-compose.yml" | grep 'keystone-mcp' >/dev/null; then
     fail legacy_gone "keystone-mcp still has a build"
   fi
