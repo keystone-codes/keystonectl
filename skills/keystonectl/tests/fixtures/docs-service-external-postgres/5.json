@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service apply",
+  "target": "docs-service",
+  "summary": "Installed docs-service 1.0.0.",
+  "actions": [
+    {
+      "id": "deploy",
+      "title": "Install docs-service 1.0.0",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "version": "1.0.0",
+    "namespace": "docs",
+    "tools": [
+      "docs_search_docs",
+      "docs_read_page"
+    ],
+    "containers": [
+      {
+        "role": "migrate",
+        "init": true,
+        "status": "completed"
+      },
+      {
+        "role": "api",
+        "init": false,
+        "status": "running"
+      },
+      {
+        "role": "mcp",
+        "init": false,
+        "status": "running"
+      }
+    ],
+    "resources": [
+      {
+        "kind": "postgres",
+        "mode": "external"
+      },
+      {
+        "kind": "s3",
+        "mode": "catalog",
+        "package": "minio"
+      }
+    ]
+  }
+}

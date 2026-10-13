@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service status",
+  "target": "docs-service",
+  "summary": "docs-service is running.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "containers": [
+      {
+        "service": "docs-service-migrate",
+        "state": "exited",
+        "init": true
+      },
+      {
+        "service": "docs-service-mcp",
+        "state": "running"
+      }
+    ],
+    "discovery": "available",
+    "problems": []
+  }
+}
