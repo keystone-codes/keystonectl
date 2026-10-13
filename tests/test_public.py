@@ -56,6 +56,15 @@ def _http(status: int = 200, text: str = "198.51.100.4") -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
+def _http_loopback_ok_external_down() -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if (request.url.host or "") in ("127.0.0.1", "localhost"):
+            return httpx.Response(200, text="ok")
+        raise httpx.ConnectError("down", request=request)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
 class Host:
     def __init__(self) -> None:
         self.nginx_ok = True
@@ -900,7 +909,7 @@ def test_manual_mode_no_sudo_no_nginx_checks_https(tmp_path: Path) -> None:
     failed, failed_root, _host, _nginx_root = _publish(
         tmp_path / "bad",
         host=failed_host,
-        http=_http(status=0),
+        http=_http_loopback_ok_external_down(),
         environ=_env(KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS="manual"),
         handshake=lambda _domain: {"notAfter": "Jan 10 08:00:00 2027 GMT"},
     )

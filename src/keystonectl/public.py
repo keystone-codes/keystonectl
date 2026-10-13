@@ -1125,6 +1125,8 @@ def publish(ctx: Context) -> None:
     if not _base_url(ctx, manifest, domain):
         return
     _rewrite_extra_hosts(ctx, manifest, domain)
+    if not _ensure_loopback_ready(ctx, manifest, port):
+        return
     if not _external_check(ctx, tls, domain, healthz_path(manifest), manual=True):
         _write_public(
             ctx,
