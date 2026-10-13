@@ -533,6 +533,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "service" and args.service_command in {"plan", "apply", "install"}:
         assert root is not None
         verb = "apply" if args.service_command == "install" else args.service_command
+        from keystonectl.resources.binding import register_resources
+
+        register_resources()
         result = run_service(
             root,
             verb,
