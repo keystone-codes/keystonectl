@@ -1,0 +1,18 @@
+{
+  "ok": false,
+  "code": 3,
+  "command": "service apply",
+  "target": "docs-service",
+  "summary": "PostgreSQL refused the user or password.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": {
+    "id": "postgres_access_denied",
+    "message": "PostgreSQL refused the user or password.",
+    "hint": "Check the user and the password file, then run the command again."
+  },
+  "retryable": false,
+  "result": {}
+}

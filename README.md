@@ -56,6 +56,12 @@ uv run keystonectl --root <directory> service apply <package>
 
 `service install` is another name for `service apply`. `package lint` is another name for `lint`.
 
+## Install through chat
+
+Agents install services by following [`skills/keystonectl/`](skills/keystonectl/SKILL.md). Copy that directory into the agent's skills directory on the host where keystone-mcp runs.
+
+The agent runs `keystonectl` with `--json`, asks one question at a time, and takes a secret only as a path to a mode 600 file. It does not run Docker, edit compose files, or edit the RBAC policy. Recommended roles are handed to the `keystone-policy-admin` skill from keystone-mcp 0.5.0, which applies them after an administrator confirms. Without that skill, the agent shows the same `{role, allow}` list and the policy path for the administrator to apply.
+
 ## JSON
 
 Pass `--json` for one JSON document on stdout. The document matches `schemas/output.schema.json`.
