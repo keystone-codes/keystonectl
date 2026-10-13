@@ -434,7 +434,7 @@ Asks `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_REMOVE`. Drops the lock entry. A pac
 
     keystonectl service upgrade <name>[@version]
 
-Moves a package to a newer catalog version. A remote service is `not_package`: it has no package; use `add-remote` to change its url.
+Moves a package to a newer catalog version. The command takes the installed service name only (`file-mcp`, not `source/file-mcp`); after confirmation it applies using the lock entry's catalog source. A remote service is `not_package`: it has no package; use `add-remote` to change its url.
 
 ```json
 {
@@ -783,7 +783,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | not_ejected | 3 | false | service adopt only takes back a fragment that was ejected. |
 | not_implemented | 1 | false | service apply has no deploy step in this build. Use service plan to preview. |
 | not_package | 3 | false | A remote service has no package; use add-remote to change its url. |
-| package_ambiguous | 2 | false | Pass the package as source/name. |
+| package_ambiguous | 2 | false | Pass the package as source/name (for example `local/file-mcp`). `service upgrade` does this from the lock when the same name exists in more than one catalog. |
 | package_not_found | 3 | false | Check the name, or add the catalog with keystonectl catalog add. |
 | path_outside_root | 3 | false | Keep registry, snapshot, and policy files inside the deployment root. |
 | policy_breaks | 3 | false | Fix the policy, or install a version whose tools the policy already allows. |
