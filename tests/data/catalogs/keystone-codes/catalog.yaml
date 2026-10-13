@@ -1,0 +1,50 @@
+schema_version: 1
+name: keystone-codes
+description: Keystone Codes service catalog
+packages:
+  file-mcp:
+    kind: service
+    summary: Upload and download links for large files.
+    source: https://example.com/keystone-codes/file-mcp.git
+    versions:
+      - version: 1.0.0
+        ref: v1.0.0
+        keystone_mcp: ">=0.5.0,<2.0"
+  docs-service:
+    kind: service
+    summary: Document search behind an MCP facade.
+    source: https://example.com/keystone-codes/docs-service.git
+    versions:
+      - version: 1.0.0
+        ref: v1.0.0
+        keystone_mcp: ">=0.5.0,<2.0"
+  minio:
+    kind: resource
+    summary: S3-compatible object storage.
+    source: https://example.com/keystone-codes/minio.git
+    provides:
+      kind: s3
+      version: 1
+    versions:
+      - version: 1.0.0
+        ref: v1.0.0
+  postgres:
+    kind: resource
+    summary: PostgreSQL for packages that need postgres/v1.
+    source: https://example.com/keystone-codes/postgres.git
+    provides:
+      kind: postgres
+      version: 1
+    versions:
+      - version: 1.0.0
+        ref: v1.0.0
+bundles:
+  minimal:
+    description: file-mcp only
+    packages:
+      - file-mcp
+  docs:
+    description: docs-service after file-mcp
+    packages:
+      - docs-service
+      - file-mcp

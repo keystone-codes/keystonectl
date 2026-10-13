@@ -616,6 +616,41 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "service adopt only takes back a fragment that was ejected.",
         ),
         _e(
+            "bundle_not_found",
+            3,
+            False,
+            "The bundle is not in any configured catalog.",
+            "Check the name, or add the catalog with keystonectl catalog add.",
+        ),
+        _e(
+            "requires_cycle",
+            3,
+            False,
+            "The bundle's requires dependencies contain a cycle.",
+            "Remove the cycle in the package manifests and run the command again.",
+        ),
+        _e(
+            "remote_url_mismatch",
+            3,
+            False,
+            "The URL does not match the registry entry being adopted.",
+            "Pass the URL already stored in keystonectl/upstreams.yaml.",
+        ),
+        _e(
+            "not_package",
+            3,
+            False,
+            "A remote service has no package.",
+            "A remote service has no package; use add-remote to change its url.",
+        ),
+        _e(
+            "priority_taken",
+            3,
+            False,
+            "That source priority is already used.",
+            "Pick another --priority. Priority only affects listing order.",
+        ),
+        _e(
             "public_ip_unknown",
             3,
             True,
@@ -856,6 +891,37 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "policy_rows_orphaned",
             "Policy rows still match tools this service no longer publishes.",
             "Delete these policy rows. The tool names stay reserved until you do.",
+        ),
+        _w(
+            "remote_without_identity",
+            "This remote service has no bearer or identity secret.",
+            "Catalog packages must check the assertion. Here that check is yours.",
+        ),
+        _w(
+            "remote_tools_not_in_snapshot",
+            "Live tools are missing from the catalog snapshot.",
+            "Run keystonectl service add-remote again with --tools.",
+        ),
+        _w(
+            "remote_tools_unknown",
+            "Policy rows for this namespace are checked only while the service is up.",
+            "Start the service on the keystone-mcp-upstreams network and run check again.",
+        ),
+        _w(
+            "remote_unreachable",
+            "The remote URL did not answer from the keystone-mcp-upstreams network.",
+            "keystone-mcp will keep retrying; make sure the service is on the "
+            "keystone-mcp-upstreams network.",
+        ),
+        _w(
+            "package_name_shadowed",
+            "A package name now exists in more than one catalog.",
+            "Install it by full name source/name.",
+        ),
+        _w(
+            "bundle_name_shadowed",
+            "A bundle name now exists in more than one catalog.",
+            "Install it by full name source/name.",
         ),
     ]
 )

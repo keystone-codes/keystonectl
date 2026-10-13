@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -84,6 +84,7 @@ class Context:
     custom_dir: Path | None = None
     cron_file: Path | None = None
     handshake: Any = None
+    assume_installed: frozenset[str] = field(default_factory=frozenset)
     action_log: list[dict[str, str]] = field(default_factory=list)
     skip_actions: set[str] = field(default_factory=set)
     chosen_port: int | None = None
@@ -492,7 +493,11 @@ def _validate_manifest(ctx: Context) -> Resolution | None:
             ctx.extra_warnings.append(
                 warning("builtin_list_may_be_stale", WARNINGS["builtin_list_may_be_stale"].action)
             )
-    missing = missing_requires(ctx.manifest, ctx.lock)
+    missing = [
+        name
+        for name in missing_requires(ctx.manifest, ctx.lock)
+        if name not in ctx.assume_installed
+    ]
     if missing:
         return Resolution(
             error_id="requires_missing",
@@ -523,6 +528,7 @@ def run_service(
     custom_dir: Path | None = None,
     cron_file: Path | None = None,
     handshake: Any = None,
+    assume_installed: Collection[str] | None = None,
 ) -> Result:
     command = f"service {verb}"
     ctx = Context(
@@ -544,6 +550,7 @@ def run_service(
         custom_dir=custom_dir,
         cron_file=cron_file,
         handshake=handshake,
+        assume_installed=frozenset(assume_installed or ()),
     )
     steps = build_steps()
     plans: list[StepPlan] = []

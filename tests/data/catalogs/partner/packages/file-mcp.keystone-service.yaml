@@ -1,0 +1,59 @@
+# fictional digest
+schema_version: 1
+kind: service
+name: file-mcp
+version: "2.0.0"
+publisher: keystone-codes
+summary: Partner build of file links.
+homepage: https://github.com/keystone-codes/file-mcp
+compat:
+  keystone_mcp: ">=0.5.0,<2"
+  contracts:
+    - upstream-registry/1
+    - identity-assertion/1
+mcp:
+  container: mcp
+  namespace: files
+  tools:
+    - create_upload_url
+    - get_download_link
+    - get_file_info
+  critical:
+    - create_upload_url
+    - get_download_link
+  bearer_env: FILE_MCP_BEARER_TOKEN
+identity:
+  signed_assertion: required
+  secret_env: FILE_MCP_IDENTITY_SECRET
+  audience_env: FILE_MCP_REGISTRY_NAME
+needs:
+  - kind: s3
+    version: 1
+    bind_env:
+      endpoint: FILE_MCP_S3_ENDPOINT
+      region: FILE_MCP_S3_REGION
+      bucket: FILE_MCP_S3_BUCKET
+      access_key: FILE_MCP_S3_ACCESS_KEY
+      secret_key: FILE_MCP_S3_SECRET_KEY
+      path_style: FILE_MCP_S3_PATH_STYLE
+public_paths:
+  - /u/
+  - /d/
+public_base_url_env: FILE_MCP_PUBLIC_BASE_URL
+recommended_policy: policy.example.yaml
+containers:
+  mcp:
+    # fictional digest
+    image: "ghcr.io/keystone-codes/file-mcp:1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    port: 8081
+    env:
+      - name: FILE_MCP_MAX_BYTES
+        description: Maximum accepted upload size, in bytes.
+      - name: FILE_MCP_LINK_TTL_SECONDS
+        description: Lifetime of a signed upload or download link.
+    secrets:
+      - name: FILE_MCP_SIGNING_SECRET
+        generate:
+          bytes: 48
+    healthcheck:
+      path: /healthz

@@ -1,0 +1,17 @@
+schema_version: 1
+name: partner
+description: Partner service catalog
+packages:
+  file-mcp:
+    kind: service
+    summary: Partner build of file links.
+    source: https://example.com/partner/file-mcp.git
+    versions:
+      - version: 2.0.0
+        ref: v2.0.0
+        keystone_mcp: ">=0.5.0,<2.0"
+bundles:
+  minimal:
+    description: Partner file-mcp only
+    packages:
+      - file-mcp

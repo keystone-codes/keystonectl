@@ -394,6 +394,73 @@ def _dump_sources(sources: list[Source]) -> str:
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
 
 
+def _source_invalid(url: str, problems: list[str], warnings: list[dict[str, str]]) -> Result:
+    spec = ERRORS["source_invalid"]
+    message = "; ".join(problems) if problems else spec.title
+    return Result(
+        code=spec.code,
+        command="catalog add",
+        summary=spec.title,
+        target=url,
+        warnings=warnings,
+        error={"id": spec.id, "message": message, "hint": spec.action},
+        result={"problems": problems},
+    )
+
+
+def _english_list(names: list[str]) -> str:
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} and {names[1]}"
+    return ", ".join(names[:-1]) + f", and {names[-1]}"
+
+
+def _name_conflicts(
+    root: Path,
+    existing: list[Source],
+    new_name: str,
+    document: Mapping[str, Any],
+) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    """Warn when the new catalog reuses a package or bundle name."""
+
+    try:
+        cached = load_cached_catalogs(root, existing)
+    except CatalogError:
+        cached = {}
+    package_owners: dict[str, list[str]] = {}
+    bundle_owners: dict[str, list[str]] = {}
+    for source in existing:
+        catalog = cached.get(source.name)
+        if not isinstance(catalog, dict):
+            continue
+        packages = catalog.get("packages") if isinstance(catalog.get("packages"), dict) else {}
+        bundles = catalog.get("bundles") if isinstance(catalog.get("bundles"), dict) else {}
+        for name in packages:
+            package_owners.setdefault(str(name), []).append(source.name)
+        for name in bundles:
+            bundle_owners.setdefault(str(name), []).append(source.name)
+    warnings: list[dict[str, str]] = []
+    conflicts: list[dict[str, Any]] = []
+    new_packages = document.get("packages") if isinstance(document.get("packages"), dict) else {}
+    new_bundles = document.get("bundles") if isinstance(document.get("bundles"), dict) else {}
+    for kind, owners, names in (
+        ("package", package_owners, new_packages),
+        ("bundle", bundle_owners, new_bundles),
+    ):
+        warning_id = "package_name_shadowed" if kind == "package" else "bundle_name_shadowed"
+        for name in names:
+            previous = owners.get(str(name), [])
+            if not previous:
+                continue
+            sources = [*previous, new_name]
+            full = " or ".join(f"{source}/{name}" for source in sources)
+            message = f"{name} now exists in {_english_list(sources)}; install it as {full}."
+            warnings.append(warning(warning_id, message))
+            conflicts.append({"kind": kind, "name": str(name), "sources": sources})
+    return warnings, conflicts
+
+
 def add_source(
     root: Path,
     url: str,
@@ -444,7 +511,9 @@ def add_source(
                 warnings=warnings,
             )
         chosen_ref = tag
-        warnings.append(warning("catalog_ref_chosen", f"Selected catalog ref {tag}."))
+        warnings.append(
+            warning("catalog_ref_chosen", f"No --ref given; using the newest tag {tag}.")
+        )
     try:
         tree, _commit = fetch_tree(runner, url, chosen_ref)
     except FetchError as exc:
@@ -463,26 +532,10 @@ def add_source(
         document = load_catalog(catalog_path) if catalog_path.is_file() else None
     except CatalogError as exc:
         shutil_rmtree(tree)
-        spec = ERRORS["catalog_invalid"]
-        return Result(
-            code=spec.code,
-            command=command,
-            summary=spec.title,
-            target=url,
-            error={"id": spec.id, "message": "; ".join(exc.messages), "hint": spec.action},
-            warnings=warnings,
-        )
+        return _source_invalid(url, exc.messages, warnings)
     if document is None:
         shutil_rmtree(tree)
-        spec = ERRORS["catalog_invalid"]
-        return Result(
-            code=spec.code,
-            command=command,
-            summary=spec.title,
-            target=url,
-            error={"id": spec.id, "message": "catalog.yaml is missing.", "hint": spec.action},
-            warnings=warnings,
-        )
+        return _source_invalid(url, ["catalog.yaml is missing."], warnings)
     chosen_name = name or str(document.get("name"))
     sources_path = Path(root) / "sources.yaml"
     if sources_path.is_file():
@@ -501,21 +554,27 @@ def add_source(
             )
     else:
         existing = list(DEFAULT_SOURCES)
-    if any(source.name == chosen_name or source.url == url for source in existing):
+    name_taken = any(source.name == chosen_name for source in existing)
+    url_taken = any(source.url == url for source in existing)
+    if name_taken or url_taken:
         shutil_rmtree(tree)
         spec = ERRORS["source_exists"]
+        hint = "use --name to pick another one" if name_taken else spec.action
+        message = spec.title
+        if name_taken:
+            message = f"A source named {chosen_name} is already configured. {hint}."
         return Result(
             code=spec.code,
             command=command,
             summary=spec.title,
             target=url,
-            error={"id": spec.id, "message": spec.title, "hint": spec.action},
+            error={"id": spec.id, "message": message, "hint": hint},
             warnings=warnings,
         )
     chosen_priority = priority if priority is not None else _default_priority(existing)
-    if priority is not None and any(source.priority == priority for source in existing):
+    if any(source.priority == chosen_priority for source in existing):
         shutil_rmtree(tree)
-        spec = ERRORS["source_invalid"]
+        spec = ERRORS["priority_taken"]
         return Result(
             code=spec.code,
             command=command,
@@ -523,7 +582,7 @@ def add_source(
             target=url,
             error={
                 "id": spec.id,
-                "message": f"sources: two sources share priority {priority}",
+                "message": f"Priority {chosen_priority} is already used.",
                 "hint": spec.action,
             },
             warnings=warnings,
@@ -548,6 +607,8 @@ def add_source(
             error={"id": spec.id, "message": "; ".join(problems), "hint": spec.action},
             warnings=warnings,
         )
+    shadowed, conflicts = _name_conflicts(root, existing, chosen_name, document)
+    warnings.extend(shadowed)
     if sources_path.is_file():
         backup = Path(str(sources_path) + ".bak")
         backup.write_bytes(sources_path.read_bytes())
@@ -555,6 +616,8 @@ def add_source(
     sources_path.write_text(_dump_sources(updated), encoding="utf-8")
     sources_path.chmod(0o600)
     replace_tree(tree, catalog_cache(root, chosen_name))
+    packages = document.get("packages") if isinstance(document.get("packages"), dict) else {}
+    bundles = document.get("bundles") if isinstance(document.get("bundles"), dict) else {}
     return Result(
         code=0,
         command=command,
@@ -569,7 +632,15 @@ def add_source(
             }
         ],
         changes=1,
-        result={"name": chosen_name, "url": url, "ref": chosen_ref, "priority": chosen_priority},
+        result={
+            "name": chosen_name,
+            "url": url,
+            "ref": chosen_ref,
+            "priority": chosen_priority,
+            "packages": len(packages),
+            "bundles": list(bundles),
+            "conflicts": conflicts,
+        },
     )
 
 
