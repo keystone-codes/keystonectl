@@ -38,7 +38,7 @@ services:
       DOCS_API_URL: http://api:8000
     networks:
       docs-service-internal: {aliases: [mcp]}
-      docs-service-upstreams: {}
+      docs-service-upstreams: {aliases: [docs-service]}
     depends_on:
       docs-service-migrate: {condition: service_completed_successfully}
     healthcheck:

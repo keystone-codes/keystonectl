@@ -233,7 +233,10 @@ def render_fragment(
             lines.append(f"      {yaml_scalar(f'{name}-resources')}: {{}}")
         if joins_upstreams(manifest, role):
             uses_upstreams = True
-            lines.append(f"      {yaml_scalar(f'{name}-upstreams')}: {{}}")
+            alias = yaml_scalar(name)
+            lines.append(
+                f"      {yaml_scalar(f'{name}-upstreams')}: {{aliases: [{alias}]}}"
+            )
         if not init and inits:
             lines.append("    depends_on:")
             for init_role in inits:

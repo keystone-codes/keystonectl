@@ -4,56 +4,34 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from keystonectl.generate.docker import UPSTREAMS_NETWORK, facade_probe_host, facade_probe_plan
+import yaml
+
+from keystonectl.generate.compose import render_fragment
+from keystonectl.generate.docker import facade_probe_url
+from keystonectl.generate.registry import registry_url
+
+PACKAGES = Path(__file__).resolve().parent / "data" / "packages"
 
 
-def test_facade_probe_host_reads_public_base_url(tmp_path: Path) -> None:
-    root = tmp_path
-    (root / "packages").mkdir()
-    (root / "packages" / "file-mcp.env").write_text(
-        "FILE_MCP_PUBLIC_BASE_URL=https://files.e2e.test\n", encoding="utf-8"
-    )
-    manifest = {
-        "name": "file-mcp",
-        "public_paths": ["/u/"],
-        "public_base_url_env": "FILE_MCP_PUBLIC_BASE_URL",
-    }
-    assert facade_probe_host(root, manifest) == "files.e2e.test"
+def _manifest() -> dict:
+    document = yaml.safe_load((PACKAGES / "file-mcp" / "keystone-service.yaml").read_text())
+    document.pop("needs", None)
+    return document
 
 
-def test_facade_probe_host_absent_without_public_paths(tmp_path: Path) -> None:
-    root = tmp_path
-    (root / "packages").mkdir()
-    (root / "packages" / "file-mcp.env").write_text(
-        "FILE_MCP_PUBLIC_BASE_URL=https://files.e2e.test\n", encoding="utf-8"
-    )
-    manifest = {"name": "file-mcp", "public_base_url_env": "FILE_MCP_PUBLIC_BASE_URL"}
-    assert facade_probe_host(root, manifest) is None
+def test_facade_probe_url_uses_package_alias() -> None:
+    manifest = _manifest()
+    assert facade_probe_url(manifest, 8081, "/healthz") == "http://file-mcp:8081/healthz"
 
 
-def test_facade_probe_plan_uses_public_domain_in_request_url(tmp_path: Path) -> None:
-    root = tmp_path
-    (root / "packages").mkdir()
-    (root / "packages" / "file-mcp.env").write_text(
-        "FILE_MCP_PUBLIC_BASE_URL=https://files.e2e.test\n", encoding="utf-8"
-    )
-    manifest = {
-        "name": "file-mcp",
-        "public_paths": ["/u/"],
-        "public_base_url_env": "FILE_MCP_PUBLIC_BASE_URL",
-    }
-    inspected = {
-        "NetworkSettings": {
-            "Networks": {UPSTREAMS_NETWORK: {"IPAddress": "172.21.0.5"}},
-        }
-    }
-    url, extra = facade_probe_plan(
-        root,
-        manifest,
-        service="file-mcp-mcp",
-        port=8081,
-        healthz="/healthz",
-        inspected=inspected,
-    )
-    assert url == "http://files.e2e.test:8081/healthz"
-    assert extra == ["--add-host", "files.e2e.test:172.21.0.5"]
+def test_registry_and_probe_hosts_match() -> None:
+    manifest = _manifest()
+    probe = facade_probe_url(manifest, 8081, "/healthz")
+    registry = registry_url(manifest)
+    assert probe.startswith("http://file-mcp:")
+    assert registry.startswith("http://file-mcp:")
+
+
+def test_upstreams_network_alias_on_mcp_container() -> None:
+    text = render_fragment(_manifest(), {})
+    assert "file-mcp-upstreams: {aliases: [file-mcp]}" in text

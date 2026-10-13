@@ -152,7 +152,7 @@ In the generated compose file a container becomes the service `<package>-<role>`
 
 A package with more than one container gets a bridge network `ks-pkg-<package>`. Containers on it reach each other by role name (`http://api:8000`). Other packages are not on that network. The bridge is an ordinary bridge, not an internal network: the package is kept off `keystone-mcp-upstreams`, and it can still open outbound connections (an external API, an external S3 endpoint). The installer creates the networks.
 
-Only `mcp.container` joins `keystone-mcp-upstreams`. Only that container receives the bearer and the assertion secret. The registry URL is `http://<package>-<mcp.container>:<port><mcp.path>`.
+Only `mcp.container` joins `keystone-mcp-upstreams` with a network alias equal to the package name. Only that container receives the bearer and the assertion secret. The registry URL is `http://<package>:<port><mcp.path>`.
 
 `provides.container` is reachable by consumers as `<package>-<role>` on the external bridge `keystone-resources`. A consumer joins that network only with the roles listed in `needs[].containers` (by default, every container of a package that declares the need, including `init`). A provider that has no `mcp` block is not attached to `keystone-mcp-upstreams`.
 
