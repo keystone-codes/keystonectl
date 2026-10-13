@@ -1,0 +1,78 @@
+# fictional digest
+schema_version: 1
+kind: service
+name: docs-service
+version: "1.0.0"
+publisher: keystone-codes
+summary: Document search behind an MCP facade, with its own API.
+compat:
+  keystone_mcp: ">=0.5.0,<2"
+  contracts:
+    - upstream-registry/1
+    - identity-assertion/1
+mcp:
+  container: mcp
+  namespace: docs
+  tools:
+    - search_docs
+    - read_page
+  bearer_env: DOCS_MCP_BEARER
+identity:
+  signed_assertion: required
+  secret_env: DOCS_IDENTITY_SECRET
+  audience_env: DOCS_REGISTRY_NAME
+needs:
+  - kind: postgres
+    version: 1
+    bind_env:
+      url: DOCS_DATABASE_URL
+    extensions:
+      - pgcrypto
+    containers:
+      - migrate
+      - api
+  - kind: s3
+    version: 1
+    bind_env:
+      endpoint: DOCS_S3_ENDPOINT
+      region: DOCS_S3_REGION
+      bucket: DOCS_S3_BUCKET
+      access_key: DOCS_S3_ACCESS_KEY
+      secret_key: DOCS_S3_SECRET_KEY
+      path_style: DOCS_S3_PATH_STYLE
+    containers:
+      - api
+containers:
+  migrate:
+    # fictional digest
+    image: "ghcr.io/example/docs-service:1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    init: true
+    command:
+      - docs-service
+      - migrate
+  api:
+    # fictional digest
+    image: "ghcr.io/example/docs-service:1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    port: 8000
+    volumes:
+      - name: cache
+        path: /var/cache/docs
+    secrets:
+      - name: DOCS_INTERNAL_TOKEN
+        generate:
+          bytes: 32
+    healthcheck:
+      path: /healthz
+  mcp:
+    # fictional digest
+    image: "ghcr.io/example/docs-service:1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    port: 8081
+    env:
+      - name: DOCS_API_URL
+        default: "http://api:8000"
+    secrets:
+      - name: DOCS_INTERNAL_TOKEN
+        generate:
+          bytes: 32
+    healthcheck:
+      path: /healthz

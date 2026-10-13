@@ -151,13 +151,16 @@ def test_text_mode_same_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
 def test_apply_without_deploy_step_not_implemented(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """A deploy step exists now. The seeded clone is not a valid package manifest."""
+
     seed_catalog(tmp_path)
+    monkeypatch.setattr("keystonectl.cli.build_runner", git_runner)
     monkeypatch.setenv("KEYSTONE_SETUP_KEYSTONE_MCP_VERSION", "0.5.0")
     code, document = _json(
         capsys, ["--json", "--root", str(tmp_path), "service", "apply", "file-mcp"]
     )
-    assert code == 1
-    assert document["error"]["id"] == "not_implemented"
+    assert code == 3
+    assert document["error"]["id"] == "manifest_invalid"
     assert document["changes"] == 0
 
 
