@@ -118,6 +118,10 @@ docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d
 
 Why things are the way they are: [ADR 0006](docs/adr/0006-keystonectl-is-a-separate-product.md).
 
+## Verification
+
+`scripts/e2e.sh` runs the release checks against a real keystone-mcp: the open example and the keystone-deploy MCP layout. Flags, scenarios, and how to read the JSONL report are in [scripts/e2e/README.md](scripts/e2e/README.md). The manual VM and stand protocol, with an empty result column until someone runs it, is [docs/release-checklist.md](docs/release-checklist.md).
+
 ## Compatibility
 
 The `keystonectl` version is independent of keystone-mcp. Service packages declare supported

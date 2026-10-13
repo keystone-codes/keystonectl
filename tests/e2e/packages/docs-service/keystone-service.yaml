@@ -1,0 +1,86 @@
+# Executable stand-in for the docs-service example. Images are foreign and pinned
+# by digest: postgres:16-alpine from the postgres provider package, and the
+# published hello-upstream image. This package has no image of its own.
+schema_version: 1
+kind: service
+name: docs-service
+version: "1.0.0"
+publisher: e2e
+summary: Docs API stand-in that uses a shared Postgres and a second S3 bucket.
+compat:
+  keystone_mcp: ">=0.5.0,<2.0"
+  contracts:
+    - upstream-registry/1
+    - identity-assertion/1
+mcp:
+  container: mcp
+  transport: http
+  path: /mcp
+  healthz: /healthz
+  namespace: docs
+  bearer_env: HELLO_BEARER_TOKEN
+  tools:
+    - greet
+    - search
+    - whoami
+identity:
+  signed_assertion: required
+  secret_env: HELLO_IDENTITY_SECRET
+  audience_env: HELLO_IDENTITY_AUDIENCE
+needs:
+  - kind: postgres
+    version: 1
+    bind_env:
+      url: DOCS_DATABASE_URL
+      host: PGHOST
+      port: PGPORT
+      database: PGDATABASE
+      user: PGUSER
+      password: PGPASSWORD
+      sslmode: PGSSLMODE
+    containers:
+      - migrate
+      - api
+  - kind: s3
+    version: 1
+    bind_env:
+      endpoint: DOCS_S3_ENDPOINT
+      region: DOCS_S3_REGION
+      bucket: DOCS_S3_BUCKET
+      access_key: DOCS_S3_ACCESS_KEY
+      secret_key: DOCS_S3_SECRET_KEY
+      path_style: DOCS_S3_PATH_STYLE
+    containers:
+      - api
+containers:
+  migrate:
+    # postgres:16-alpine from postgres-resource v1.0.0
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    init: true
+    command:
+      - sh
+      - -c
+      - >-
+        psql "$DOCS_DATABASE_URL" -v ON_ERROR_STOP=1
+        -c "create table if not exists docs (id serial primary key, body text)"
+  api:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    command:
+      - sh
+      - -c
+      - "while sleep 3600; do :; done"
+    healthcheck:
+      command:
+        - sh
+        - -c
+        - psql -Atc "select count(*) from docs"
+      interval: 10s
+      start_period: 20s
+  mcp:
+    # ghcr.io/keystone-codes/hello-upstream:1.0.0 index, git c9dd693
+    image: ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337
+    port: 8081
+    healthcheck:
+      path: /healthz
+      interval: 10s
+      start_period: 10s

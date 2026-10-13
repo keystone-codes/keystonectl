@@ -1,0 +1,69 @@
+name: e2e
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "schemas/**"
+      - "nginx/**"
+      - "scripts/e2e*/**"
+      - "tests/e2e/**"
+      - "skills/**"
+      - ".github/workflows/e2e.yml"
+  workflow_dispatch:
+    inputs:
+      keystone_deploy_ref:
+        description: keystone-deploy commit (release/catalog)
+        required: false
+        default: dd4538167af85bf5842d88e43bca53748063879f
+      keystone_mcp_ref:
+        description: keystone-mcp commit (release/0.5.0)
+        required: false
+        default: 6b04a198101dac22815b17d5bcf55b0e1c6463d8
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        layout: [production-example, keystone-deploy]
+    env:
+      E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || 'dd4538167af85bf5842d88e43bca53748063879f' }}
+      E2E_KEYSTONE_MCP_REF: ${{ inputs.keystone_mcp_ref || '6b04a198101dac22815b17d5bcf55b0e1c6463d8' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Check the script
+        run: bash -n scripts/e2e.sh && shellcheck scripts/e2e.sh
+      - name: Log in to GHCR
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          if [[ -n "${GHCR_READ_TOKEN}" ]]; then
+            printf '%s' "${GHCR_READ_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          fi
+      - name: Run both storage and postgres modes
+        run: >-
+          scripts/e2e.sh
+          --layout ${{ matrix.layout }}
+          --profile ci
+          --storage both
+          --postgres both
+          --tls custom
+          --report e2e-${{ matrix.layout }}.jsonl
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-${{ matrix.layout }}
+          if-no-files-found: ignore
+          path: |
+            e2e-${{ matrix.layout }}.jsonl
+            e2e-diagnostics/
