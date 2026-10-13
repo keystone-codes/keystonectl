@@ -1669,3 +1669,64 @@ def _unique(items: list[str]) -> list[str]:
         seen.add(item)
         result.append(item)
     return result
+
+
+class Layout:
+    """Deployment paths. Appended by the installer skeleton; layout detection stays above."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    @property
+    def compose(self) -> Path:
+        for name in ("docker-compose.yml", "docker-compose.yaml", "compose.yaml", "compose.yml"):
+            candidate = self.root / name
+            if candidate.is_file():
+                return candidate
+        return self.root / "docker-compose.yml"
+
+    @property
+    def packages_compose(self) -> Path:
+        return self.root / "docker-compose.packages.yml"
+
+    @property
+    def packages_dir(self) -> Path:
+        return self.root / "packages"
+
+    @property
+    def keystonectl_dir(self) -> Path:
+        return self.root / "keystonectl"
+
+    @property
+    def upstreams(self) -> Path:
+        return self.keystonectl_dir / "upstreams.yaml"
+
+    @property
+    def snapshot(self) -> Path:
+        return self.keystonectl_dir / "catalog-snapshot.yaml"
+
+    @property
+    def env(self) -> Path:
+        return self.root / ".env"
+
+    @property
+    def lock(self) -> Path:
+        return self.root / "services.lock.yaml"
+
+    @property
+    def sources(self) -> Path:
+        return self.root / "sources.yaml"
+
+    @property
+    def cache(self) -> Path:
+        return self.root / ".keystonectl"
+
+    def policy_file(self) -> Path | None:
+        if not self.lock.is_file():
+            return None
+        loaded = yaml.safe_load(self.lock.read_text(encoding="utf-8"))
+        layout = loaded.get("layout") if isinstance(loaded, dict) else None
+        policy = layout.get("policy") if isinstance(layout, dict) else None
+        if isinstance(policy, dict) and isinstance(policy.get("file"), str):
+            return self.root / policy["file"]
+        return None

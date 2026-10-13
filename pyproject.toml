@@ -1,7 +1,7 @@
 [project]
 name = "keystonectl"
 version = "0.1.0"
-description = "Validate service packages that sit behind keystone-mcp"
+description = "Install and check services behind a Keystone MCP gateway"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 dependencies = [
@@ -10,7 +10,11 @@ dependencies = [
     "boto3>=1.34",
     "httpx>=0.27",
     "psycopg[binary]>=3.2",
+    "packaging>=24",
 ]
+
+[project.scripts]
+keystonectl = "keystonectl.cli:main"
 
 [dependency-groups]
 dev = [
@@ -26,8 +30,8 @@ build-backend = "hatchling.build"
 packages = ["src/keystonectl"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/keystonectl/schemas/service-package-v1.json" = "keystonectl/schemas/service-package-v1.json"
-"src/keystonectl/schemas/lock-v1.json" = "keystonectl/schemas/lock-v1.json"
+"src/keystonectl/schemas" = "keystonectl/schemas"
+"src/keystonectl/nginx/.gitkeep" = "keystonectl/nginx/.gitkeep"
 
 [tool.ruff]
 line-length = 100

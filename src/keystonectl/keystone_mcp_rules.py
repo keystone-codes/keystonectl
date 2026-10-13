@@ -9,7 +9,14 @@ check is ``keystone-mcp upstream validate`` at install time.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
+
 BUILTIN_TOOL_NAMES_VERSION = "0.5.0"
+
+# Same pattern and limit as keystone_mcp.upstream_registry.validate.
+_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$")
+MAX_REGISTRY_ENTRIES = 64
 
 BUILTIN_TOOL_NAMES: frozenset[str] = frozenset(
     {
@@ -56,4 +63,39 @@ def reserved_namespace_errors(ns: str) -> list[str]:
                 f"mcp.namespace: '{ns}' is reserved: published names {ns}_* "
                 f"can collide with keystone-mcp built-in tool {tool}"
             )
+    return errors
+
+
+def namespace_errors(namespaces: Sequence[str]) -> list[str]:
+    """Registry-wide namespace checks, copied from keystone-mcp 0.5.0.
+
+    Same three rules as ``keystone_mcp.upstream_registry.validate.namespace_errors``:
+    the core pattern, collisions with built-in tool names, and pairs where one
+    namespace starts with the other plus ``_``.
+    """
+    errors: list[str] = []
+    for ns in namespaces:
+        if not _NAMESPACE_RE.match(ns):
+            errors.append(
+                f"namespace {ns!r} must be 1-64 characters of A-Z, a-z, 0-9, "
+                "'_' or '-', not starting or ending with '_' or '-'"
+            )
+    for ns in namespaces:
+        prefix = f"{ns}_"
+        for builtin_name in sorted(BUILTIN_TOOL_NAMES):
+            if builtin_name.startswith(prefix):
+                errors.append(
+                    f"namespace {ns!r} is reserved: published names {ns}_* can "
+                    f"collide with built-in tool {builtin_name}"
+                )
+    distinct = sorted(set(namespaces))
+    for left in distinct:
+        for right in distinct:
+            if left == right:
+                continue
+            if right.startswith(f"{left}_"):
+                errors.append(
+                    f"namespaces {left!r} and {right!r} can publish the same tool name "
+                    f"({left}_x_y == {right}_y when {left} has a tool x_y); rename one of them"
+                )
     return errors
