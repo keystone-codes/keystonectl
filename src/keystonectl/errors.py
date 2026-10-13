@@ -396,6 +396,77 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Docker or the keystone-resources network is not available.",
             "Start Docker. The keystone-resources network is created when a service is deployed.",
         ),
+        _e(
+            "registry_name_taken",
+            3,
+            False,
+            "That registry name is already used by an entry keystonectl does not own.",
+            "Pick another package name, or remove the hand-written registry entry.",
+        ),
+        _e(
+            "registry_full",
+            3,
+            False,
+            "The upstream registry already has 64 entries.",
+            "Remove an entry that keystonectl does not manage, then run the command again.",
+        ),
+        _e(
+            "namespace_change_unsupported",
+            3,
+            False,
+            "The tool prefix of an installed service cannot be changed.",
+            "Run keystonectl service remove, then install the service again.",
+        ),
+        _e(
+            "policy_breaks",
+            3,
+            False,
+            "The catalog snapshot would make the current policy invalid.",
+            "Fix the policy, or install a version whose tools the policy already allows.",
+        ),
+        _e(
+            "compose_too_old",
+            3,
+            False,
+            "Docker Compose is older than 2.24.",
+            "Upgrade the Docker Compose plugin to 2.24 or newer.",
+        ),
+        _e(
+            "layout_invalid",
+            3,
+            False,
+            "keystone-mcp cannot see the registry, the snapshot, or the service network.",
+            "Run keystonectl init --adopt <root> and start compose with both files: "
+            "docker compose -f docker-compose.yml -f docker-compose.packages.yml.",
+        ),
+        _e(
+            "fragment_modified",
+            3,
+            False,
+            "A generated package fragment was edited by hand.",
+            "Move your changes into the override file, or eject the service.",
+        ),
+        _e(
+            "init_failed",
+            3,
+            False,
+            "An init container exited with an error.",
+            "Read the container log, fix the package, and run the command again.",
+        ),
+        _e(
+            "keystone_mcp_image_unavailable",
+            3,
+            True,
+            "The keystone-mcp image is not available.",
+            "Pull the image recorded in the lock, or pass --local and build it, then retry.",
+        ),
+        _e(
+            "service_unhealthy",
+            3,
+            True,
+            "A service container did not become healthy.",
+            "Read the container log and run the command again.",
+        ),
     ]
 )
 
@@ -509,6 +580,48 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "s3_lifecycle_unsupported",
             "Storage works, but old uploads will not be deleted automatically.",
             "The service still runs. Add a lifecycle rule on the bucket later if you need it.",
+        ),
+        _w(
+            "policy_check_skipped",
+            "The policy check was skipped.",
+            "Set KEYSTONE_MCP_RBAC_MODE to something other than off and point "
+            "KEYSTONE_MCP_RBAC_POLICY_PATH at a policy file.",
+        ),
+        _w(
+            "policy_already_inconsistent",
+            "The policy already has the same unmatched allow patterns.",
+            "The new snapshot does not add unmatched patterns. Fix the policy when you can.",
+        ),
+        _w(
+            "tools_unreachable",
+            "No role can call these tools yet.",
+            "Ask an administrator to add policy rows (see the recommended policy below).",
+        ),
+        _w(
+            "discovery_pending",
+            "keystone-mcp has not discovered this service yet.",
+            "keystone-mcp will try again on its own. Check keystonectl service status.",
+        ),
+        _w(
+            "validation_skipped_local",
+            "Upstream and policy checks were skipped because the local image is not built.",
+            "Build the keystone-mcp image, then run keystonectl service apply again.",
+        ),
+        _w(
+            "override_not_included",
+            "An override file exists but is not included.",
+            "Run keystonectl service apply <name> to include it.",
+        ),
+        _w(
+            "override_widens_access",
+            "The merged compose model gives a package service more access than the manifest.",
+            "This is the operator's choice. Review ports, privileges, and host mounts.",
+        ),
+        _w(
+            "tls_untrusted",
+            "The public certificate is not trusted by the system trust store.",
+            "The service answered. Install the certificate in the system trust store "
+            "if clients should trust it.",
         ),
     ]
 )
