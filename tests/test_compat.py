@@ -213,8 +213,9 @@ def test_compat_mismatch_warns(tmp_path: Path) -> None:
     text = (EXAMPLES / "file-mcp.keystone-service.yaml").read_text(encoding="utf-8")
     text = text.replace('keystone_mcp: ">=0.5.0,<2"', 'keystone_mcp: ">=0.5.0,<1.9"', 1)
     result = _plan(tmp_path, text)
-    assert result.code == 0, result.error
+    assert result.code == 2, result.error
     assert any(item["id"] == "compat_mismatch" for item in result.warnings)
+    assert any(item["var"] == "KEYSTONE_SETUP_RESOURCE_S3" for item in result.missing)
 
 
 def test_requires_missing(tmp_path: Path) -> None:
