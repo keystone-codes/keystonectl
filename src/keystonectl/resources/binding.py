@@ -33,6 +33,7 @@ from keystonectl.resources import INTERFACES, RESOURCE_NETWORK, UPSTREAMS_NETWOR
 from keystonectl.resources.postgres_probe import PgParams, probe_postgres
 from keystonectl.resources.provision import (
     consumer_ident,
+    consumer_secret_path,
     existing_consumer_secret,
     run_provision,
 )
@@ -204,6 +205,53 @@ def _provision_title(kind: str, package: str, provider: str, extensions: list[st
     ident = consumer_ident(package)
     listed = ", ".join(extensions) if extensions else "none"
     return f"Create database {ident} and user {ident} in {provider}, extensions: {listed}"
+
+
+def _env_with_saved_secret(
+    root: Path,
+    package: str,
+    manifest: Mapping[str, Any],
+    need: Mapping[str, Any],
+    kind: str,
+) -> dict[str, str]:
+    """Env the next apply should read, including a secret saved before a failed probe."""
+    merged = read_env(consumer_secret_path(root, package, kind))
+    merged.update(read_env(root / _env_relpath(package, manifest, need)))
+    return merged
+
+
+def _persist_consumer_secret(
+    ctx: Context,
+    *,
+    package: str,
+    manifest: Mapping[str, Any],
+    need: Mapping[str, Any],
+    kind: str,
+    values: Mapping[str, str],
+) -> None:
+    """Write the generated consumer secret before the probe.
+
+    provision.sh does not change a password it already set. The package env
+    file is written only after the probe succeeds, so the secret has to live
+    in its own mode 600 file or the next apply would generate a new one.
+    """
+    bind_env = need.get("bind_env") if isinstance(need.get("bind_env"), dict) else {}
+    bound = INTERFACES[kind].bind(values, bind_env)
+    secret_params = INTERFACES[kind].secret_params
+    kept: dict[str, str] = {}
+    for param, env_name in bind_env.items():
+        if param not in secret_params or not isinstance(env_name, str):
+            continue
+        value = bound.get(env_name)
+        if not value:
+            continue
+        kept[env_name] = value
+        ctx.secrets.register(value)
+    if not kept:
+        return
+    path = consumer_secret_path(ctx.root, package, kind)
+    upsert_env(path, kept)
+    path.parent.chmod(0o700)
 
 
 def _env_relpath(package: str, manifest: Mapping[str, Any], need: Mapping[str, Any]) -> str:
@@ -425,23 +473,41 @@ def _external_values(
             _fail(ctx, "postgres_url_invalid", str(exc))
             return None
         ctx.secrets.register(parsed_params.password)
+        host = parsed_params.host
+        port = str(parsed_params.port)
+        sslmode = parsed_params.sslmode
+        if bound is not None:
+            recorded = (
+                _bound_params(bound, "host"),
+                _bound_params(bound, "port"),
+                _bound_params(bound, "sslmode"),
+            )
+            if any(item is None for item in recorded) or recorded != (host, port, sslmode):
+                _fail(
+                    ctx,
+                    "postgres_address_mismatch",
+                    "PostgreSQL is already bound. Host, port, and sslmode from "
+                    "KEYSTONE_SETUP_POSTGRES_URL_FILE do not match the recorded "
+                    "address, so that address was not changed.",
+                )
+                return None
+            host, port, sslmode = recorded
         values.update(
             {
-                "host": parsed_params.host,
-                "port": str(parsed_params.port),
+                "host": host,
+                "port": port,
                 "database": parsed_params.database,
                 "user": parsed_params.user,
                 "password": parsed_params.password,
-                "sslmode": parsed_params.sslmode,
-                "url": url_value,
+                "sslmode": sslmode,
             }
         )
-        if parsed_params.sslmode in _INSECURE_SSL:
+        values["url"] = interface_url(values)
+        if sslmode in _INSECURE_SSL:
             work.warnings.append(
                 warning(
                     "postgres_plain_connection",
-                    "PostgreSQL sslmode is "
-                    f"{parsed_params.sslmode}; the connection is not verified.",
+                    f"PostgreSQL sslmode is {sslmode}; the connection is not verified.",
                 )
             )
         return values
@@ -1394,8 +1460,10 @@ def _apply_catalog(
     admin = _admin_values(ctx, provider_manifest)
     extensions = _extensions(need)
     ident = consumer_ident(package) if kind == "postgres" else package
-    env_path = ctx.root / _env_relpath(package, manifest, need)
-    secret = existing_consumer_secret(read_env(env_path), need.get("bind_env") or {})
+    secret = existing_consumer_secret(
+        _env_with_saved_secret(ctx.root, package, manifest, need, kind),
+        need.get("bind_env") or {},
+    )
     package_dir = package_cache(ctx.root, source, name, provider_package.version)
     if provider_package.path != ".":
         package_dir = package_dir / provider_package.path
@@ -1439,6 +1507,14 @@ def _apply_catalog(
         values.setdefault("sslmode", "disable")
         values.setdefault("database", ident)
         values.setdefault("user", ident)
+    _persist_consumer_secret(
+        ctx,
+        package=package,
+        manifest=manifest,
+        need=need,
+        kind=kind,
+        values=values,
+    )
     service_name = f"{name}-{provider_manifest['provides']['container']}"
     ip = (
         _container_ip(ctx, service_name)
