@@ -50,6 +50,11 @@ QUESTION_TEMPLATES: dict[str, Question] = {
         "file",
         secret=True,
     ),
+    "KEYSTONE_SETUP_SERVICE_{PKG}_NAMESPACE": Question(
+        "KEYSTONE_SETUP_SERVICE_{PKG}_NAMESPACE",
+        "Choose another prefix for {PKG}'s tools (letters, digits, '-' or '_').",
+        "text",
+    ),
     "KEYSTONE_SETUP_RESOURCE_S3": Question(
         "KEYSTONE_SETUP_RESOURCE_S3",
         "Where should the package keep files: in S3 storage you already have (external), "
