@@ -419,6 +419,7 @@ EOF
   fi
   rewrite_publish_port "$ROOT/docker-compose.yml"
   if ! docker compose --project-directory "$ROOT" -f "$ROOT/docker-compose.yml" up -d --wait; then
+    mkdir -p "$DIAG"
     docker compose --project-directory "$ROOT" -f "$ROOT/docker-compose.yml" logs keystone \
       >"$DIAG/keystone.log" 2>&1 || true
     fail prepare "the keystone container did not become healthy"
