@@ -650,8 +650,11 @@ export_file_public() {
 }
 
 curl_public() {
-  local code
-  curl --cacert "$WORK/tls/cert.pem" -fsS "https://${DOMAIN}/healthz" >/dev/null
+  local code rc=0
+  curl --cacert "$WORK/tls/cert.pem" -fsS "https://${DOMAIN}/healthz" >/dev/null || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    return 1
+  fi
   code="$(curl --cacert "$WORK/tls/cert.pem" -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/mcp")"
   [[ "$code" == "404" ]]
 }

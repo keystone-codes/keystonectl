@@ -1414,6 +1414,12 @@ def install_service(ctx: Context) -> None:
     )
     if _unchanged(ctx, manifest, fragment, namespace):
         ctx.rerun = True
+        entry = _service(ctx.lock, name)
+        if isinstance(entry, dict):
+            from keystonectl.public import stamp_lock_public
+
+            stamp_lock_public(ctx, manifest, entry)
+            save_lock(ctx.root / "services.lock.yaml", ctx.lock, now=ctx.clock())
         ctx.output_result = _result_body(
             ctx, manifest, namespace=namespace, registry_name=registry_name, discovery="unknown"
         )
