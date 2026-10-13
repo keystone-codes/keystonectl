@@ -9,10 +9,12 @@ from pathlib import Path
 import pytest
 import yaml
 
+from keystonectl.generate.docker import compose_prefix
 from keystonectl.layout import (
     Deployment,
     LayoutError,
     apply_init,
+    env_assigned_outside_managed_block,
     lock_errors,
     plan_init,
     render_packages_compose,
@@ -570,3 +572,24 @@ def test_managed_env_block(case: str) -> None:
         return
     with pytest.raises(ValueError):
         replace_managed_env_block("", {"FILE_MCP_SIGNING_SECRET": "nope"})
+
+
+def test_env_assigned_outside_managed_block() -> None:
+    outside = "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP=true\n"
+    inside = (
+        f"{START}\nKEYSTONE_MCP_UPSTREAM_FILES_BEARER=secret\n{END}\n"
+    )
+    assert env_assigned_outside_managed_block(outside, "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP")
+    assert not env_assigned_outside_managed_block(
+        inside, "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"
+    )
+
+
+def test_compose_prefix_passes_layout_profiles(tmp_path: Path) -> None:
+    layout = {
+        "compose_files": ["docker-compose.yml", "docker-compose.packages.yml"],
+        "profiles": ["keystone-mcp"],
+    }
+    prefix = compose_prefix(tmp_path, layout)
+    assert prefix[:4] == ["docker", "compose", "-f", str(tmp_path / "docker-compose.yml")]
+    assert prefix[-2:] == ["--profile", "keystone-mcp"]
