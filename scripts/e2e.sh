@@ -302,10 +302,11 @@ ensure_network() {
 
 compose() {
   # -f is relative to the current directory, not --project-directory.
-  docker compose --project-directory "$ROOT" \
-    -f "$ROOT/docker-compose.yml" \
-    -f "$ROOT/docker-compose.packages.yml" \
-    "$@"
+  local -a compose_files=(-f "$ROOT/docker-compose.yml")
+  if [[ -f "$ROOT/docker-compose.packages.yml" ]]; then
+    compose_files+=(-f "$ROOT/docker-compose.packages.yml")
+  fi
+  docker compose --project-directory "$ROOT" "${compose_files[@]}" "$@"
 }
 
 rewrite_publish_port() {
@@ -417,7 +418,11 @@ EOF
     patch -d "$ROOT" -p1 <"$patch"
   fi
   rewrite_publish_port "$ROOT/docker-compose.yml"
-  docker compose --project-directory "$ROOT" -f "$ROOT/docker-compose.yml" up -d --wait
+  if ! docker compose --project-directory "$ROOT" -f "$ROOT/docker-compose.yml" up -d --wait; then
+    docker compose --project-directory "$ROOT" -f "$ROOT/docker-compose.yml" logs keystone \
+      >"$DIAG/keystone.log" 2>&1 || true
+    fail prepare "the keystone container did not become healthy"
+  fi
   kc init --adopt "$ROOT"
   [[ "$KC_RC" -eq 0 ]] || fail prepare "init --adopt exited ${KC_RC}"
   local command
