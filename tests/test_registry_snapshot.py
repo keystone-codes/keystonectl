@@ -55,9 +55,9 @@ def test_registry_entry_added_others_preserved(tmp_path: Path) -> None:
     assert "file-mcp" in names
 
 
-def test_registry_url_uses_mcp_container_service_name() -> None:
+def test_registry_url_uses_package_network_alias() -> None:
     manifest = _load("file-mcp")
-    assert registry_url(manifest) == "http://file-mcp-mcp:8081/mcp"
+    assert registry_url(manifest) == "http://file-mcp:8081/mcp"
 
 
 def test_registry_backup_written(tmp_path: Path) -> None:

@@ -6,9 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
-from keystonectl.envfiles import read_env
 from keystonectl.runner import CommandResult, CommandRunner
 
 WIRED_DIR = "/etc/keystone-mcp/keystonectl"
@@ -36,65 +34,11 @@ except Exception as exc:
 """.strip()
 
 
-def facade_probe_host(root: Path, manifest: Mapping[str, Any]) -> str | None:
-    """Public hostname for in-network facade probes when a public base URL is configured."""
+def facade_probe_url(manifest: Mapping[str, Any], port: int, healthz: str) -> str:
+    """Health probe URL on ``keystone-mcp-upstreams`` (package network alias)."""
 
-    raw_paths = manifest.get("public_paths")
-    if not isinstance(raw_paths, list) or not raw_paths:
-        return None
-    env_name = manifest.get("public_base_url_env")
-    if not isinstance(env_name, str) or not env_name:
-        return None
-    from keystonectl.generate.placement import placement
-
-    value = read_env(root / placement(manifest).shared).get(env_name, "")
-    if not value:
-        return None
-    host = urlparse(value).hostname
-    return host if host else None
-
-
-def container_network_ip(inspected: Mapping[str, Any], network: str) -> str | None:
-    settings = inspected.get("NetworkSettings")
-    if not isinstance(settings, dict):
-        return None
-    networks = settings.get("Networks")
-    if not isinstance(networks, dict):
-        return None
-    for key, spec in networks.items():
-        if not isinstance(spec, dict):
-            continue
-        if key == network or key.endswith(f"_{network}") or network in key:
-            ip = spec.get("IPAddress")
-            if isinstance(ip, str) and ip:
-                return ip
-    spec = networks.get(network)
-    if isinstance(spec, dict):
-        ip = spec.get("IPAddress")
-        if isinstance(ip, str) and ip:
-            return ip
-    return None
-
-
-def facade_probe_plan(
-    root: Path,
-    manifest: Mapping[str, Any],
-    *,
-    service: str,
-    port: int,
-    healthz: str,
-    inspected: Mapping[str, Any],
-) -> tuple[str, list[str]]:
-    """Build the facade probe URL and any ``docker run --add-host`` arguments."""
-
-    default = f"http://{service}:{port}{healthz}"
-    domain = facade_probe_host(root, manifest)
-    if not domain:
-        return default, []
-    ip = container_network_ip(inspected, UPSTREAMS_NETWORK)
-    if not ip:
-        return default, []
-    return f"http://{domain}:{port}{healthz}", ["--add-host", f"{domain}:{ip}"]
+    package = str(manifest["name"])
+    return f"http://{package}:{port}{healthz}"
 
 
 def daemon_down(result: CommandResult) -> bool:

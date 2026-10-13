@@ -10,7 +10,7 @@ services:
     networks:
       file-mcp-internal: {aliases: [mcp]}
       file-mcp-resources: {}
-      file-mcp-upstreams: {}
+      file-mcp-upstreams: {aliases: [file-mcp]}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8081/healthz || curl -fsS -o /dev/null http://127.0.0.1:8081/healthz"]
       interval: 10s
