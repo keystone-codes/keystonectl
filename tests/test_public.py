@@ -19,6 +19,7 @@ from keystonectl.public import (
     _foreign_sites,
     _line_has_domain,
     choose_port,
+    fragment_ports,
     healthz_path,
     location_block,
     materialise_public_base_env,
@@ -344,6 +345,32 @@ def test_defer_public_sets_pending_placeholder(tmp_path: Path) -> None:
     assert env["FILE_MCP_PUBLIC_BASE_URL"] == PLACEHOLDER_URL
     fragment = (root / "packages" / "file-mcp.yml").read_text(encoding="utf-8")
     assert "127.0.0.1:476" not in fragment
+
+
+def test_defer_public_omits_port_until_public_ready(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path)
+    ctx.defer_public = True
+    ctx.lock = {"services": [{"name": "file-mcp", "public": {"state": "pending"}}]}
+    host_port, extra = fragment_ports(ctx, _manifest())
+    assert host_port is None
+    assert extra == ()
+
+
+def test_defer_public_keeps_recorded_port_when_public_ready(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path)
+    ctx.defer_public = True
+    port = 47600
+    ctx.lock = {
+        "services": [
+            {
+                "name": "file-mcp",
+                "public": {"state": "ready", "host_port": port, "domain": DOMAIN},
+            }
+        ]
+    }
+    host_port, extra = fragment_ports(ctx, _manifest())
+    assert host_port == port
+    assert DOMAIN in extra
 
 
 def test_host_port_allocated_and_stable(tmp_path: Path) -> None:
