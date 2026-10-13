@@ -799,7 +799,7 @@ scenario_rerun_no_questions() {
 }
 
 container_id() {
-  compose ps -q "$1"
+  compose ps -a -q "$1"
 }
 
 container_started() {
