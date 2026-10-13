@@ -1407,22 +1407,32 @@ def env_assigned_outside_managed_block(text: str, name: str) -> bool:
     return _env_assigns(outside, name)
 
 
+def managed_env_values(text: str) -> dict[str, str]:
+    """Return key=value pairs from the managed block in ``text``."""
+
+    start = text.find(_ENV_BLOCK_START)
+    if start < 0:
+        return {}
+    end = text.find(_ENV_BLOCK_END, start + len(_ENV_BLOCK_START))
+    if end < 0:
+        return {}
+    block = text[start + len(_ENV_BLOCK_START) : end]
+    found: dict[str, str] = {}
+    for line in block.splitlines():
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        found[key] = value
+    return found
+
+
 def drop_managed_env_keys(text: str, names: set[str]) -> str:
     """Remove named keys from the managed block. Other keys stay."""
 
     outside, rest = _split_managed_block(text)
     if rest is None:
         return text
-    start = text.find(_ENV_BLOCK_START)
-    end = text.find(_ENV_BLOCK_END, start)
-    block = text[start + len(_ENV_BLOCK_START) : end]
-    kept: dict[str, str] = {}
-    for line in block.splitlines():
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        if key not in names:
-            kept[key] = value
+    kept = {key: value for key, value in managed_env_values(text).items() if key not in names}
     if not kept:
         return outside + rest
     return outside + _render_env_block(kept) + rest
