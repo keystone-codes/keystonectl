@@ -9,6 +9,10 @@ packages and deployments, and gives agents a plan/apply interface.
 
 keystonectl does **not** install keystone-mcp itself and does **not** edit RBAC policy files.
 
+## What keystonectl writes
+
+`service apply` writes the package compose fragment, env files, `docker-compose.packages.yml` (the second `-f`), the upstream registry, the catalog snapshot, and the gateway names in `.env`. It does not edit `packages/<name>.override.yml` or the operator's `docker-compose.yml`. See [docs/generation.md](docs/generation.md).
+
 ## Install
 
 Preferred:

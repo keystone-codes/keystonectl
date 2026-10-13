@@ -527,6 +527,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             keystone_version=detection.version,
             lock=lock,
         )
+    elif args.command == "service" and args.service_command == "status":
+        assert root is not None
+        from keystonectl.generate.status import run_status
+
+        result = run_status(root, build_runner(), name=args.name, secrets=secrets)
     elif args.command == "service" and args.service_command == "list":
         assert root is not None
         result = _service_list(root, os.environ)
@@ -536,6 +541,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         from keystonectl.resources.binding import register_resources
 
         register_resources()
+        from keystonectl.generate.install import ComposeDeployer
+
         result = run_service(
             root,
             verb,
@@ -545,6 +552,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             sets=sets,
             environ=os.environ,
             interactive=interactive,
+            deployer=ComposeDeployer(),
         )
         if args.service_command == "install":
             result.command = "service install"
