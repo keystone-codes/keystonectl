@@ -257,6 +257,22 @@ def test_registry_not_installed_when_service_unhealthy(
     assert document["entries"] == []
 
 
+def test_keystone_force_recreated_when_gateway_env_written(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    box = DockerBox()
+    box.keystone_id = "cid\n"
+    result, runner, _box = apply_package(root, "file-mcp", {"file-mcp": _facade()}, box=box)
+    assert result.code == 0, result.error
+    service = "keystone"
+    assert any(
+        "up" in call.args
+        and "--no-deps" in call.args
+        and "--force-recreate" in call.args
+        and service in call.args
+        for call in runner.calls
+    )
+
+
 def test_keystone_up_when_its_wiring_changed(tmp_path: Path) -> None:
     root = tmp_path / "root"
     box = DockerBox()
