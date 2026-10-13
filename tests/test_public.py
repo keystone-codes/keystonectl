@@ -16,6 +16,8 @@ from keystonectl.output import SecretRegistry
 from keystonectl.plan import Context, run_service
 from keystonectl.public import (
     PLACEHOLDER_URL,
+    _foreign_sites,
+    _line_has_domain,
     choose_port,
     healthz_path,
     location_block,
@@ -194,6 +196,30 @@ def _publish(
         handshake=handshake,
     )
     return result, root, host, nginx
+
+
+def _apply_nginx(tmp_path: Path, nginx: Path, **overrides: str):
+    root, text, catalog = _installed(tmp_path)
+    _certs(tmp_path)
+    return run_service(
+        root,
+        "apply",
+        "file-mcp",
+        runner=Combo(runner_for({"file-mcp": text}, DockerBox(), catalog), Host()),
+        secrets=SecretRegistry(),
+        sets={},
+        environ=_env(**overrides),
+        interactive=False,
+        clock=lambda: CLOCK,
+        deployer=ComposeDeployer(),
+        http=_http(),
+        nginx_root=nginx,
+        le_live=tmp_path / "le",
+    )
+
+
+def _written_site(nginx: Path) -> Path:
+    return nginx / "sites-available" / "keystone-svc-file-mcp"
 
 
 def _ctx(tmp_path: Path) -> Context:
@@ -497,6 +523,143 @@ def test_takeover_regular_file_refused(tmp_path: Path) -> None:
     assert result.code == 3
     assert result.error["id"] == "domain_in_use"
     assert foreign.is_file()
+
+
+def test_foreign_site_skips_only_exact_own_name(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    enabled = nginx / "sites-enabled"
+    (enabled / "keystone-svc-file-mcp").write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    (enabled / "keystone-svc-file-mcp.conf").write_text(
+        f"server_name {DOMAIN};\n", encoding="utf-8"
+    )
+    (enabled / "keystone-svc-doc").write_text("server_name docs.example.com;\n", encoding="utf-8")
+    (enabled / "keystone-svc-docs").write_text("server_name docs.example.com;\n", encoding="utf-8")
+    ctx = _ctx(tmp_path)
+    ctx.nginx_root = nginx
+    file_mcp = [path.name for path, _kind in _foreign_sites(ctx, "file-mcp", DOMAIN)]
+    assert file_mcp == ["keystone-svc-file-mcp.conf"]
+    doc = [path.name for path, _kind in _foreign_sites(ctx, "doc", "docs.example.com")]
+    assert doc == ["keystone-svc-docs"]
+
+
+def test_server_name_match_is_case_insensitive_and_beats_wildcards() -> None:
+    domain = "files.example.com"
+    assert _line_has_domain("server_name Files.example.com;\n", domain)
+    assert _line_has_domain("server_name *.example.com;\n", domain)
+    assert _line_has_domain("server_name *.Example.COM;\n", domain)
+    assert _line_has_domain("server_name *.com;\n", domain)
+    assert _line_has_domain("server_name files.*;\n", domain)
+    assert _line_has_domain("server_name .example.com;\n", domain)
+    assert _line_has_domain("server_name example.org *.example.com;\n", domain)
+    assert _line_has_domain("server_name .example.com;\n", "example.com")
+    assert not _line_has_domain("server_name *.example.com;\n", "example.com")
+    assert not _line_has_domain("server_name *.other.com;\n", domain)
+    assert not _line_has_domain("server_name other.example.com;\n", domain)
+    assert not _line_has_domain("server_name files.example.org;\n", domain)
+
+
+def test_prefixed_symlink_asks_takeover(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "keystone-svc-file-mcp.conf"
+    available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "keystone-svc-file-mcp.conf"
+    link.symlink_to(available)
+    result = _apply_nginx(tmp_path, nginx)
+    assert result.code == 2
+    assert any(item["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER" for item in result.missing)
+    assert link.is_symlink()
+    assert not _written_site(nginx).exists()
+
+
+def test_prefixed_regular_file_is_domain_in_use(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    foreign = nginx / "sites-enabled" / "keystone-svc-file-mcp.conf"
+    foreign.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert foreign.is_file()
+    assert not _written_site(nginx).exists()
+
+
+def test_server_name_case_difference_is_domain_in_use(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    foreign = nginx / "sites-enabled" / "other.conf"
+    foreign.write_text("server_name Files.example.com;\n", encoding="utf-8")
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert foreign.is_file()
+    assert not _written_site(nginx).exists()
+
+
+def test_wildcard_server_name_is_domain_in_use(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    foreign = nginx / "conf.d" / "wild.conf"
+    foreign.write_text("server_name *.example.com;\n", encoding="utf-8")
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert foreign.is_file()
+    assert not _written_site(nginx).exists()
+
+
+def test_unrelated_server_name_does_not_block(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    foreign = nginx / "conf.d" / "other.conf"
+    foreign.write_text("server_name other.example.com *.other.com;\n", encoding="utf-8")
+    result = _apply_nginx(tmp_path, nginx)
+    assert result.code == 0, result.error
+    assert foreign.is_file()
+    assert _written_site(nginx).is_file()
+
+
+def test_unreadable_nginx_site_stops_before_writing(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    foreign = nginx / "sites-enabled" / "hidden.conf"
+    foreign.write_text("server_name other.example.com;\n", encoding="utf-8")
+    foreign.chmod(0)
+    try:
+        result = _apply_nginx(tmp_path, nginx)
+    finally:
+        foreign.chmod(0o644)
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert "could not read" in result.error["message"]
+    assert "other.example.com" not in result.error["message"]
+    assert not _written_site(nginx).exists()
+
+
+def test_takeover_stops_while_another_site_remains(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "aaa.conf"
+    available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "aaa.conf"
+    link.symlink_to(available)
+    regular = nginx / "conf.d" / "zzz.conf"
+    regular.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert link.is_symlink()
+    assert regular.is_file()
+    assert not _written_site(nginx).exists()
+
+
+def test_takeover_yes_removes_every_enabled_link(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    links: list[Path] = []
+    for name in ("aaa.conf", "zzz.conf"):
+        available = nginx / "sites-available" / name
+        available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+        link = nginx / "sites-enabled" / name
+        link.symlink_to(available)
+        links.append(link)
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 0, result.error
+    assert all(not link.exists() for link in links)
+    assert all((nginx / "sites-available" / link.name).is_file() for link in links)
+    assert _written_site(nginx).is_file()
 
 
 def test_tls_keep_skips_certbot(tmp_path: Path) -> None:
