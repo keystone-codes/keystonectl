@@ -410,8 +410,10 @@ def _compat_checks(
 
 def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result:
     from keystonectl.compose_gen import ensure_registered
+    from keystonectl.remote import ensure_remote_checks
 
     ensure_registered()
+    ensure_remote_checks()
     command = "check"
     env = dict(environ or {})
     paths = open_paths(root)
@@ -467,7 +469,11 @@ def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result
                 )
             )
             continue
-        checks.append(fn(context))
+        produced = fn(context)
+        if isinstance(produced, list):
+            checks.extend(item for item in produced if isinstance(item, dict))
+        elif isinstance(produced, dict):
+            checks.append(produced)
     errors = [item for item in checks if item["status"] == "error"]
     blocking = [item for item in errors if item["id"] != "keystone_mcp_version_unknown"]
     if missing and not blocking:

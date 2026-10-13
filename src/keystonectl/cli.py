@@ -10,6 +10,7 @@ from pathlib import Path
 
 from keystonectl import __version__
 from keystonectl.answers import AnswerError, parse_sets
+from keystonectl.bundles import add_bundle_parser
 from keystonectl.check import run_check
 from keystonectl.errors import ERRORS, explain
 from keystonectl.lint import render_text, run_lint
@@ -107,6 +108,7 @@ def build_parser() -> KeystoneParser:
     explain_cmd = sub.add_parser("explain", help="Explain an error or warning id")
     _add_common(explain_cmd)
     explain_cmd.add_argument("error_id")
+    add_bundle_parser(sub)
     return parser
 
 
@@ -389,6 +391,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"package {args.package_command}"
     if command == "catalog" and args.catalog_command:
         return f"catalog {args.catalog_command}"
+    if command == "bundle" and getattr(args, "bundle_command", None):
+        return f"bundle {args.bundle_command}"
     return command
 
 
@@ -614,6 +618,54 @@ def main(argv: Sequence[str] | None = None) -> int:
                 clock=clock,
                 json_mode=json_mode,
             )
+    elif args.command == "service" and args.service_command == "add-remote":
+        assert root is not None
+        from datetime import UTC, datetime
+
+        from keystonectl.remote import add_remote
+
+        result = add_remote(
+            root,
+            args.name,
+            args.url,
+            runner=build_runner(),
+            secrets=secrets,
+            sets=sets,
+            environ=os.environ,
+            interactive=interactive,
+            clock=lambda: datetime.now(UTC),
+            namespace=args.namespace,
+            tools=args.tools,
+            tool_prefix=args.tool_prefix,
+            include_prefixes=args.include_prefixes,
+            exclude_prefixes=args.exclude_prefixes,
+            strip_prefix=args.strip_prefix,
+            no_auth=bool(args.no_auth),
+            adopt_existing=bool(args.adopt_existing),
+        )
+    elif args.command == "bundle" and args.bundle_command in {"plan", "install"}:
+        assert root is not None
+        from datetime import UTC, datetime
+
+        from keystonectl.bundles import install_bundle
+        from keystonectl.compose_gen import ensure_registered
+        from keystonectl.generate.install import ComposeDeployer
+
+        ensure_registered()
+        result = install_bundle(
+            root,
+            args.ref,
+            plan_only=args.bundle_command == "plan",
+            runner=build_runner(),
+            secrets=secrets,
+            sets=sets,
+            environ=os.environ,
+            interactive=interactive,
+            clock=lambda: datetime.now(UTC),
+            deployer=ComposeDeployer(),
+            defer_public=bool(args.defer_public),
+            certbot_staging=bool(args.certbot_staging),
+        )
     else:
         result = _error("usage", command or "", "Unknown command.")
     if (
