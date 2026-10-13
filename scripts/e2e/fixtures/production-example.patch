@@ -1,0 +1,5 @@
+# Intentionally no diff.
+# Layout A (examples/production) needs no compose edit for layout v1.
+# A diff added here later is a one-time edit for the open example and a
+# candidate for the keystone-mcp 0.6 document. The e2e script applies this
+# file only when it contains a diff header.
