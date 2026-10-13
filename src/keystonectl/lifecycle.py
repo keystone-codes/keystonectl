@@ -271,6 +271,7 @@ def remove_service(
     entry = _entry(lock, name)
     if entry is None:
         return _error(command, name, "package_not_found", f"{name} is not installed.")
+    remote = entry.get("managed") == "remote"
     blocked = _confirm(
         command=command,
         target=name,
@@ -309,7 +310,7 @@ def remove_service(
     containers = entry.get("containers") if isinstance(entry.get("containers"), dict) else {}
     services = [str(spec.get("service")) for spec in containers.values() if isinstance(spec, dict)]
     fragment = root / "packages" / f"{name}.yml"
-    if services:
+    if services and not remote:
         run(
             runner,
             [
@@ -341,7 +342,8 @@ def remove_service(
     if override.is_file():
         kept.append(f"packages/{name}.override.yml")
     _rewrite_packages(root, lock, name)
-    run(runner, ["docker", "network", "rm", f"ks-pkg-{name}"], cwd=root)
+    if not remote:
+        run(runner, ["docker", "network", "rm", f"ks-pkg-{name}"], cwd=root)
     _drop_registry(root, entry)
     _drop_env_keys(root, entry)
     patterns = _allow_patterns(_policy_text(root, lock))
@@ -628,6 +630,13 @@ def upgrade_service(
     entry = _entry(lock, name)
     if entry is None:
         return _error(command, ref, "package_not_found", f"{name} is not installed.")
+    if entry.get("managed") == "remote":
+        return _error(
+            command,
+            ref,
+            "not_package",
+            "a remote service has no package; use add-remote to change its url",
+        )
     if entry.get("managed") == "generated":
         path = root / "packages" / f"{name}.yml"
         expected = entry.get("fragment_sha256")
@@ -916,6 +925,13 @@ def rollback_service(
     entry = _entry(lock, name)
     if entry is None:
         return _error(command, name, "package_not_found", f"{name} is not installed.")
+    if entry.get("managed") == "remote":
+        return _error(
+            command,
+            name,
+            "not_package",
+            "a remote service has no package; use add-remote to change its url",
+        )
     previous = entry.get("previous")
     fragment_bak = root / "packages" / f"{name}.yml.bak"
     if not isinstance(previous, dict) or not fragment_bak.is_file():
