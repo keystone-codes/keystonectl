@@ -71,6 +71,9 @@ class Context:
     manifest: dict[str, Any] | None = None
     manifest_sha256: str | None = None
     problems: list[dict[str, str]] = field(default_factory=list)
+    deployer: Any = None
+    probe_reports: dict[str, Any] = field(default_factory=dict)
+    halt_questions: list[Any] = field(default_factory=list)
 
 
 def register_step(step: Any, after: str | None = None) -> None:
@@ -222,6 +225,11 @@ class CompatStep:
     id = "compat"
 
     def plan(self, ctx: Context) -> StepPlan:
+        kind = ctx.resolved.kind if ctx.resolved is not None else None
+        if isinstance(ctx.manifest, dict) and ctx.manifest.get("kind"):
+            kind = str(ctx.manifest.get("kind"))
+        if kind == "resource":
+            return StepPlan()
         return StepPlan(
             actions=[
                 {"id": "compat", "title": "Check keystone-mcp compatibility", "status": "planned"}
@@ -288,7 +296,63 @@ def build_steps() -> list[Any]:
 
 
 def _has_deploy(steps: list[Any]) -> bool:
-    return any(step.id not in BUILTIN_STEP_IDS for step in steps)
+    """True when a later card registered the service deploy step.
+
+    The resources step binds storage. It does not deploy the service itself.
+    """
+    return any(
+        step.id not in BUILTIN_STEP_IDS and getattr(step, "is_service_deploy", True)
+        for step in steps
+    )
+
+
+def _bundle(
+    plans: list[StepPlan],
+) -> tuple[list[Question], list[dict[str, str]], list[dict[str, str]]]:
+    questions = _dedupe_questions([question for plan in plans for question in plan.questions])
+    warnings = [item for plan in plans for item in plan.warnings]
+    actions = [item for plan in plans for item in plan.actions]
+    return questions, warnings, actions
+
+
+def _manifest_ready(ctx: Context) -> bool:
+    package = ctx.resolved
+    if package is None:
+        return False
+    dest = package_cache(ctx.root, package.source_name, package.name, package.version)
+    relative = (
+        Path("keystone-service.yaml")
+        if package.path == "."
+        else Path(package.path) / "keystone-service.yaml"
+    )
+    return (dest / relative).is_file()
+
+
+def _replan_resources(ctx: Context, steps: list[Any], plans: list[StepPlan]) -> None:
+    for index, step in enumerate(steps):
+        if getattr(step, "id", None) == "resources":
+            plans[index] = step.plan(ctx)
+
+
+def _resource_actions(steps: list[Any], plans: list[StepPlan]) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    for step, plan in zip(steps, plans, strict=True):
+        if getattr(step, "id", None) == "resources":
+            found.extend(plan.actions)
+    return found
+
+
+def _failure_result(ctx: Context, command: str, warnings: list[dict[str, str]]) -> Result:
+    assert ctx.failure is not None
+    result = failure_result(ctx.failure, command=command, target=ctx.target)
+    result.warnings = warnings
+    if ctx.failure.error_id == "provision_failed":
+        result.retryable = bool(ctx.failure.result.get("retryable"))
+    if ctx.failure.error_id == "docker_unavailable":
+        result.retryable = True
+    if ctx.probe_reports:
+        result.result = {**result.result, "probes": ctx.probe_reports}
+    return result
 
 
 def _dedupe_questions(questions: list[Question]) -> list[Question]:
@@ -430,6 +494,7 @@ def run_service(
     environ: Mapping[str, str],
     interactive: bool,
     clock: Callable[[], datetime] | None = None,
+    deployer: Any = None,
 ) -> Result:
     command = f"service {verb}"
     ctx = Context(
@@ -442,6 +507,7 @@ def run_service(
         lock=load_lock(root / "services.lock.yaml"),
         clock=clock or (lambda: datetime.now(UTC)),
         target=target,
+        deployer=deployer,
     )
     steps = build_steps()
     plans: list[StepPlan] = []
@@ -509,15 +575,10 @@ def run_service(
         )
 
     installed = installed_service(ctx.lock, ctx.resolved.name)
-    if (
-        verb == "apply"
-        and not _has_deploy(steps)
-        and not (
-            installed
-            and installed.get("version") == ctx.resolved.version
-            and installed.get("commit")
-        )
-    ):
+    already = bool(
+        installed and installed.get("version") == ctx.resolved.version and installed.get("commit")
+    )
+    if verb == "apply" and not _has_deploy(steps) and not already and not _manifest_ready(ctx):
         return Result(
             code=1,
             command=command,
@@ -532,6 +593,7 @@ def run_service(
             changes=0,
         )
 
+    noted: list[dict[str, str]] = []
     if verb in {"plan", "apply"}:
         if not ctx.refresh_needed:
             error_id = _refresh(ctx)
@@ -566,10 +628,35 @@ def run_service(
                 retryable=spec.retryable,
             )
         problem = _validate_manifest(ctx)
-        warnings.extend(ctx.extra_warnings)
+        noted = list(ctx.extra_warnings)
         ctx.extra_warnings.clear()
         if problem is not None:
             return failure_result(problem, command=command, target=target)
+
+    _replan_resources(ctx, steps, plans)
+    questions, bundled, actions = _bundle(plans)
+    warnings = bundled + noted + list(ctx.extra_warnings)
+    ctx.extra_warnings.clear()
+    if questions:
+        return Result(
+            code=2,
+            command=command,
+            summary=missing_summary(len(questions)),
+            target=target,
+            actions=actions,
+            missing=[question.as_missing() for question in questions],
+            warnings=warnings,
+            changes=0,
+        )
+    if ctx.failure is not None:
+        return _failure_result(ctx, command, warnings)
+
+    resource_actions = _resource_actions(steps, plans)
+    needs_deployer = any(
+        action["id"] == "provider.deploy" and action["status"] == "planned"
+        for action in resource_actions
+    )
+    resource_work = any(action["status"] == "planned" for action in resource_actions)
 
     if verb == "plan":
         for action in actions:
@@ -586,8 +673,27 @@ def run_service(
             result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
         )
 
-    if verb == "apply" and not _has_deploy(steps):
-        if _same_install(ctx.lock, ctx.resolved, ctx.resolved.commit):
+    if verb == "apply" and needs_deployer and ctx.deployer is None:
+        return Result(
+            code=1,
+            command=command,
+            summary=ERRORS["not_implemented"].title,
+            target=target,
+            actions=actions,
+            warnings=warnings,
+            error={
+                "id": "not_implemented",
+                "message": ERRORS["not_implemented"].title,
+                "hint": ERRORS["not_implemented"].action,
+            },
+            changes=0,
+        )
+
+    if verb == "apply" and not _has_deploy(steps) and not resource_work:
+        bound_again = bool(
+            resource_actions and all(action["status"] == "unchanged" for action in resource_actions)
+        )
+        if bound_again or _same_install(ctx.lock, ctx.resolved, ctx.resolved.commit):
             for action in actions:
                 action["status"] = "unchanged"
             return Result(
@@ -615,17 +721,31 @@ def run_service(
 
     for step in steps:
         step.apply(ctx)
+        if ctx.halt_questions:
+            return Result(
+                code=2,
+                command=command,
+                summary=missing_summary(len(ctx.halt_questions)),
+                target=target,
+                actions=actions,
+                missing=[question.as_missing() for question in ctx.halt_questions],
+                warnings=warnings + list(ctx.extra_warnings),
+                changes=0,
+            )
         if ctx.failure is not None:
-            return failure_result(ctx.failure, command=command, target=target)
+            return _failure_result(ctx, command, warnings + list(ctx.extra_warnings))
     for action in actions:
         if action["status"] == "planned":
             action["status"] = "done"
+    result_body: dict[str, Any] = {"commit": ctx.resolved.commit, "version": ctx.resolved.version}
+    if ctx.probe_reports:
+        result_body["probes"] = ctx.probe_reports
     return Result(
         code=0,
         command=command,
         summary=f"Applied {ctx.resolved.name} {ctx.resolved.version}.",
         target=target,
         actions=actions,
-        warnings=warnings,
-        result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
+        warnings=warnings + list(ctx.extra_warnings),
+        result=result_body,
     )
