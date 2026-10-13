@@ -13,6 +13,8 @@ Examples: [catalog.yaml](examples/catalog.yaml), [sources.yaml](examples/sources
 
 A catalog names itself (`name`), optionally describes itself, lists **packages** (services and resource providers), and may define **bundles** (install sets of services).
 
+Why: [ADR 0001](../adr/0001-catalog-outside-core.md).
+
 | Field | Required | Meaning |
 |---|---|---|
 | `schema_version` | yes | integer `1` |

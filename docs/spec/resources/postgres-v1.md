@@ -62,6 +62,8 @@ should stay small (default guidance: ≤ 10 connections) because the server is s
 
 ## Catalog provider (`kind: resource`)
 
+Why: [ADR 0003](../../adr/0003-resources-as-interfaces.md).
+
 `provides: { kind: postgres, version: 1, container: <role> }` with
 `provision.per_consumer: database_and_user` runs a one-shot provision image on the
 `keystone-resources` network. Consumer parameters use `host` = `<package>-<provides.container>` (catalog
