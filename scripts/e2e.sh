@@ -583,7 +583,7 @@ prepare_layout() {
 issue_api_key() {
   local json
   compose exec -T "$KEYSTONE_SERVICE" \
-    keystone-mcp service-accounts add --name e2e --role administrator >/dev/null
+    keystone-mcp service-accounts add --name e2e --role agent >/dev/null
   json="$(compose exec -T "$KEYSTONE_SERVICE" \
     keystone-mcp keys issue --subject svc:e2e --label e2e --days 1)"
   printf '%s' "$json" | python3 -c 'import json,sys; data=json.load(sys.stdin); sys.stdout.write(data["key"])' \

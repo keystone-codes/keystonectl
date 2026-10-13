@@ -12,6 +12,10 @@ roles:
     description: "Hello tools only."
     allow:
       - "hello_*"
+  agent:
+    description: "Service-account access for the end-to-end client."
+    allow:
+      - "*"
 
 requires_human_identity: []
 critical_tools: []
