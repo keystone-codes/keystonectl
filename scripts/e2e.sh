@@ -600,6 +600,10 @@ status_file_mcp() {
 
 scenario_agent_path_missing() {
   local started before after
+  if [[ "$LAYOUT" == "keystone-deploy" && "$PROFILE" == "vm" ]]; then
+    skip agent_path_missing "setup.sh already installed bundle minimal"
+    return 0
+  fi
   started="$(date +%s)"
   snapshot_tree "$WORK/state/before-missing"
   kc bundle install minimal
@@ -1071,7 +1075,7 @@ scenario_external_s3() {
   jq_ error-id <"$WORK/log/kc.out" | has_prefix s3 || fail external_s3 "error is not an S3 failure"
   export KEYSTONE_SETUP_S3_SECRET_KEY_FILE="$WORK/secrets/s3-secret"
   run_answered service apply file-mcp || fail external_s3 "good secret exited ${KC_RC}"
-  jq_ warning-ids <"$WORK/log/kc.out" | has_line insecure_endpoint \
+  jq_ warning-ids <"$WORK/log/kc.out" | has_line s3_plain_http \
     || fail external_s3 "http warning missing"
   mcp_check files || fail external_s3 "files client failed"
   lockq resource s3 origin | has_line external || fail external_s3 "origin is not external"
@@ -1208,6 +1212,75 @@ scenario_partner_catalog() {
   pass partner_catalog "$started"
 }
 
+file_mcp_public_port() {
+  uv run --project "$REPO" python -c '
+import yaml, sys
+doc = yaml.safe_load(open(sys.argv[1]))
+for item in doc.get("services") or []:
+    if item.get("name") == "file-mcp":
+        port = int((item.get("public") or {}).get("host_port") or 0)
+        if 47600 <= port <= 47699:
+            print(port)
+            raise SystemExit(0)
+        raise SystemExit(1)
+raise SystemExit(1)
+' "$ROOT/services.lock.yaml"
+}
+
+start_manual_caddy() {
+  local port config pid attempt
+  # The production example Caddyfile is the file Caddy loads. The site serves
+  # only the public prefixes, with this run's domain and loopback port.
+  [[ -f "$ROOT/Caddyfile" ]] || return 1
+  if ! grep -q 'reverse_proxy' "$ROOT/Caddyfile"; then
+    return 1
+  fi
+  command -v caddy >/dev/null 2>&1 || return 1
+  port="$(file_mcp_public_port)" || return 1
+  case "$port" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  case "$DOMAIN" in
+    ''|*[!A-Za-z0-9.-]*) return 1 ;;
+  esac
+  config="$ROOT/Caddyfile"
+  cat >"$config" <<EOF
+{
+    admin off
+}
+
+${DOMAIN} {
+    handle /u/* {
+        reverse_proxy 127.0.0.1:${port}
+    }
+    handle /d/* {
+        reverse_proxy 127.0.0.1:${port}
+    }
+    handle /healthz {
+        reverse_proxy 127.0.0.1:${port}
+    }
+    handle {
+        respond 404
+    }
+}
+EOF
+  caddy run --config "$config" >"$WORK/log/caddy.log" 2>&1 &
+  pid="$!"
+  printf '%s\n' "$pid" >"$WORK/state/caddy.pid"
+  attempt=0
+  while [[ "$attempt" -lt 45 ]]; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 1
+    fi
+    if curl -fsS --max-time 2 "https://${DOMAIN}/healthz" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+    attempt="$((attempt + 1))"
+  done
+  return 1
+}
+
 install_manual_vhost() {
   local sample="$ROOT/.keystonectl/nginx/keystone-svc-file-mcp.conf"
   [[ -f "$sample" ]] || return 1
@@ -1263,22 +1336,14 @@ raise SystemExit(main())
     || fail tls_manual "error is not public_unreachable"
   [[ "$(jq_ retryable <"$WORK/log/kc.out")" == "true" ]] || fail tls_manual "not retryable"
   [[ "$(jq_ public-state <"$WORK/log/kc.out")" == "pending" ]] || fail tls_manual "public state is not pending"
-  uv run --project "$REPO" python -c '
-import yaml, sys
-doc = yaml.safe_load(open(sys.argv[1]))
-for item in doc.get("services") or []:
-    if item.get("name") == "file-mcp":
-        port = int((item.get("public") or {}).get("host_port") or 0)
-        raise SystemExit(0 if 47600 <= port <= 47699 else 1)
-raise SystemExit(1)
-' "$ROOT/services.lock.yaml" || fail tls_manual "loopback port is outside 47600-47699"
+  file_mcp_public_port >/dev/null \
+    || fail tls_manual "loopback port is outside 47600-47699"
   status_file_mcp || fail tls_manual "service is not running while public is pending"
   if [[ "$PROFILE" == "ci" ]]; then
     install_manual_vhost || fail tls_manual "could not install the sample vhost"
     export SSL_CERT_FILE="$WORK/tls/cert.pem"
   else
-    note "vm manual mode expects the operator to start Caddy from the example Caddyfile; this run does not start it"
-    return 0
+    start_manual_caddy || fail tls_manual "could not start Caddy"
   fi
   run_answered service apply file-mcp || fail tls_manual "second apply exited ${KC_RC}"
   [[ "$(jq_ public-state <"$WORK/log/kc.out")" == "ready" ]] || fail tls_manual "public state is not ready"
@@ -1318,7 +1383,7 @@ scenario_check_clean() {
   while IFS= read -r id; do
     [[ -n "$id" ]] || continue
     case "$id" in
-      tls_untrusted|insecure_endpoint|insecure_sslmode) ;;
+      tls_untrusted|s3_plain_http|postgres_plain_connection) ;;
       *) fail check_clean "unexpected warning ${id}" ;;
     esac
   done < <(jq_ warning-ids <"$WORK/log/kc.out")
@@ -1392,6 +1457,9 @@ diagnostics() {
   if [[ -n "$ROOT" && -f "$ROOT/docker-compose.yml" ]]; then
     compose logs --tail 100 >"$DIAG/compose.log" 2>&1 || true
   fi
+  if [[ -f "${WORK:-}/log/caddy.log" ]]; then
+    cp "$WORK/log/caddy.log" "$DIAG/caddy.log" 2>/dev/null || true
+  fi
   if command -v nginx >/dev/null 2>&1; then
     { sudo nginx -t || true; } >"$DIAG/nginx.txt" 2>&1
   fi
@@ -1416,6 +1484,13 @@ cleanup() {
       docker rm -f "$name" >/dev/null 2>&1 || true
     fi
   done
+  if [[ -f "${WORK:-}/state/caddy.pid" ]]; then
+    local caddy_pid
+    caddy_pid="$(cat "${WORK}/state/caddy.pid")"
+    if [[ -n "$caddy_pid" ]]; then
+      kill "$caddy_pid" >/dev/null 2>&1 || true
+    fi
+  fi
   if [[ -f "${WORK:-}/state/nginx-site" ]]; then
     sudo rm -f "$(cat "$WORK/state/nginx-site")" || true
     sudo nginx -s reload >/dev/null 2>&1 || true
@@ -1457,9 +1532,7 @@ main() {
   fi
   install_keystonectl
   prepare_layout
-  if [[ "$PROFILE" == "ci" ]]; then
-    issue_api_key
-  fi
+  issue_api_key
   if [[ -f "$ROOT/policy/rbac-policy.yaml" ]]; then
     POLICY_SHA="$(sha_file "$ROOT/policy/rbac-policy.yaml")"
   else
