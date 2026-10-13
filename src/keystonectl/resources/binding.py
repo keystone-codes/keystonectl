@@ -841,6 +841,16 @@ def _lock_containers(manifest: Mapping[str, Any]) -> dict[str, Any]:
     return rendered
 
 
+def _fragment_digest(root: Path | None, manifest: Mapping[str, Any], name: str) -> str:
+    from keystonectl.generate.compose import fragment_digest, render_fragment
+
+    if root is not None:
+        path = root / "packages" / f"{name}.yml"
+        if path.is_file():
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+    return fragment_digest(render_fragment(manifest, {}))
+
+
 def _ensure_service(
     lock: dict[str, Any],
     *,
@@ -851,6 +861,7 @@ def _ensure_service(
     env_files: list[str],
     resources: list[str],
     generated: list[str],
+    root: Path | None = None,
 ) -> dict[str, Any]:
     current = _service(lock, package.name)
     if current is None:
@@ -867,7 +878,7 @@ def _ensure_service(
             "manifest_sha256": package.manifest_sha256,
             "containers": _lock_containers(manifest),
             "fragment": f"packages/{package.name}.yml",
-            "fragment_sha256": _sha256_text(f"fragment\n{package.name}\n"),
+            "fragment_sha256": _fragment_digest(root, manifest, package.name),
             "registry_name": None,
             "namespace": None,
             "url": None,
@@ -1243,6 +1254,7 @@ def _commit_consumer(
             env_files=[f"packages/{provider_package.name}.env"],
             resources=[],
             generated=_generated_names(provider_manifest),
+            root=ctx.root,
         )
     _ensure_service(
         ctx.lock,
@@ -1253,6 +1265,7 @@ def _commit_consumer(
         env_files=[relpath],
         resources=[kind],
         generated=[],
+        root=ctx.root,
     )
     if kind == "s3":
         params = {
@@ -1381,7 +1394,11 @@ def _apply_catalog(
         if provider_manifest is None:
             return
         ctx.deployer.deploy(ctx, provider_package, role="resource")
+        if ctx.failure is not None:
+            return
         ctx.deployer.wait_healthy(ctx, name, timeout=120)
+        if ctx.failure is not None:
+            return
     else:
         provider_manifest = _fetch_package(ctx, provider_package)
         if provider_manifest is None:
@@ -1499,7 +1516,11 @@ def _apply_direct(ctx: Context, manifest: Mapping[str, Any]) -> None:
     installed = _service(ctx.lock, name)
     if installed is None or bound is None:
         ctx.deployer.deploy(ctx, ctx.resolved, role="resource")
+        if ctx.failure is not None:
+            return
         ctx.deployer.wait_healthy(ctx, name, timeout=120)
+        if ctx.failure is not None:
+            return
     kind = str(manifest["provides"]["kind"])
     host, port = _container_address(manifest)
     if kind == "s3":
@@ -1521,6 +1542,7 @@ def _apply_direct(ctx: Context, manifest: Mapping[str, Any]) -> None:
         env_files=[f"packages/{name}.env"],
         resources=[],
         generated=_generated_names(manifest),
+        root=ctx.root,
     )
     _upsert_resource(
         ctx.lock,

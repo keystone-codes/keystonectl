@@ -18,6 +18,23 @@ BUILTIN_TOOL_NAMES_VERSION = "0.5.0"
 _NAMESPACE_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$")
 MAX_REGISTRY_ENTRIES = 64
 
+# Same set as keystone_mcp.upstream_registry.validate._RESERVED_BEARER_ENV_NAMES
+# in keystone-mcp 0.5.0. An entry must not name one of these as bearer_env
+# or identity_secret_env.
+RESERVED_BEARER_ENV_NAMES: frozenset[str] = frozenset(
+    {
+        "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP",
+        "KEYSTONE_MCP_UPSTREAM_DISCOVERY_RETRIES",
+        "KEYSTONE_MCP_UPSTREAM_DISCOVERY_TIMEOUT",
+        "KEYSTONE_MCP_UPSTREAM_EGRESS_ALLOW_PRIVATE",
+        "KEYSTONE_MCP_UPSTREAM_REQUIRE_ALL",
+        "KEYSTONE_MCP_UPSTREAM_TOOL_TIMEOUTS",
+        "KEYSTONE_MCP_UPSTREAM_TOOL_TIMEOUT_SECONDS",
+    }
+)
+
+BEARER_ENV_RE = re.compile(r"^KEYSTONE_MCP_UPSTREAM_[A-Z0-9_]+$")
+
 BUILTIN_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "users_list",

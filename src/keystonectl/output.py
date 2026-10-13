@@ -107,6 +107,10 @@ def render_text(result: Result) -> str:
             lines.append(f"  {item['var']}: {item['question']}")
     else:
         lines.append(result.summary)
+    policy = result.result.get("recommended_policy") if isinstance(result.result, dict) else None
+    if isinstance(policy, dict) and policy.get("content"):
+        lines.append("Recommended policy rows (example only, not applied)")
+        lines.append(str(policy["content"]).rstrip("\n"))
     for warning in result.warnings:
         lines.append(f"warning {warning['id']}: {warning['message']}")
     for action in result.actions:
