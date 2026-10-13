@@ -1286,6 +1286,10 @@ def _fetch_package(ctx: Context, package: ResolvedPackage) -> dict[str, Any] | N
     if loaded is None:
         _fail(ctx, "manifest_invalid", f"{package.name} has no keystone-service.yaml.")
         return None
+    from keystonectl.generate.install import _reject_manifest
+
+    if _reject_manifest(ctx, loaded):
+        return None
     return loaded
 
 
@@ -1655,9 +1659,12 @@ class ResourcesStep:
             work = _decide_provider(ctx, manifest)
             if ctx.failure is not None:
                 return
-            if work.actions and all(item["status"] == "unchanged" for item in work.actions):
-                return
-            _apply_direct(ctx, manifest)
+            from keystonectl.generate.install import fragment_write_blocked
+
+            blocked = fragment_write_blocked(ctx, str(manifest.get("name") or ""))
+            unchanged = work.actions and all(item["status"] == "unchanged" for item in work.actions)
+            if blocked != "modified" and not unchanged:
+                _apply_direct(ctx, manifest)
         else:
             needs = manifest.get("needs") if isinstance(manifest.get("needs"), list) else []
             for need in needs:
