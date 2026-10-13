@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keystone.codes/schemas/catalog-v1.json",
+  "title": "Keystone services catalog",
+  "description": "catalog.yaml schema_version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "packages"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\n]+$"
+    },
+    "packages": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 500,
+      "propertyNames": {
+        "$ref": "#/$defs/packageNamePattern"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/package"
+      }
+    },
+    "bundles": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/catalogName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/bundle"
+      }
+    }
+  },
+  "$defs": {
+    "catalogName": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$"
+    },
+    "packageNamePattern": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9-]{1,38}[a-z0-9]$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "gitRef": {
+      "type": "string",
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+        },
+        {
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      ]
+    },
+    "sourceUrl": {
+      "type": "string",
+      "anyOf": [
+        {
+          "pattern": "^https://\\S+$"
+        },
+        {
+          "pattern": "^ssh://\\S+$"
+        },
+        {
+          "pattern": "^git@[A-Za-z0-9.-]+:\\S+$"
+        },
+        {
+          "pattern": "^file:///\\S+$"
+        }
+      ]
+    },
+    "packagePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,128}$"
+    },
+    "provides": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version"],
+      "properties": {
+        "kind": {
+          "enum": ["s3", "postgres"]
+        },
+        "version": {
+          "const": 1
+        }
+      }
+    },
+    "packageVersionService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "ref", "keystone_mcp"],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "ref": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "keystone_mcp": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "packageVersionResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "ref"],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "ref": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "keystone_mcp": false
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "versions"],
+      "properties": {
+        "kind": {
+          "enum": ["service", "resource"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\n]+$"
+        },
+        "source": {
+          "$ref": "#/$defs/sourceUrl"
+        },
+        "path": {
+          "$ref": "#/$defs/packagePath"
+        },
+        "provides": {
+          "$ref": "#/$defs/provides"
+        },
+        "versions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "resource"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["provides"],
+            "properties": {
+              "versions": {
+                "items": {
+                  "$ref": "#/$defs/packageVersionResource"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "kind": {
+                  "const": "resource"
+                }
+              },
+              "required": ["kind"]
+            }
+          },
+          "then": {
+            "properties": {
+              "provides": false,
+              "versions": {
+                "items": {
+                  "$ref": "#/$defs/packageVersionService"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "packages"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\n]+$"
+        },
+        "packages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/packageNamePattern"
+          }
+        }
+      }
+    }
+  }
+}

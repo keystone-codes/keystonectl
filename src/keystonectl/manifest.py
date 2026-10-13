@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 from jsonschema import Draft202012Validator
 
+from keystonectl.catalog import keystone_mcp_range_errors
 from keystonectl.keystone_mcp_rules import reserved_namespace_errors
 
 SCHEMA_PATH: Path = Path(__file__).resolve().parent / "schemas" / "service-package-v1.json"
@@ -343,6 +344,7 @@ def _semantic(document: dict[str, Any], report: _Report) -> None:
         _shared_secrets(containers, report)
     kind = document.get("kind")
     if kind == "service":
+        _compat_keystone_mcp(document.get("compat"), report)
         _semantic_service(document, report)
     elif kind == "resource":
         _semantic_resource(document, report)
@@ -588,6 +590,16 @@ def _critical_tools(mcp: dict[str, Any], report: _Report) -> None:
     for tool in critical:
         if isinstance(tool, str) and tool not in known:
             report.add("mcp.critical", f"mcp.critical: {tool} is not listed in mcp.tools")
+
+
+def _compat_keystone_mcp(compat: object, report: _Report) -> None:
+    if not isinstance(compat, dict):
+        return
+    spec = compat.get("keystone_mcp")
+    if not isinstance(spec, str):
+        return
+    for message in keystone_mcp_range_errors(spec):
+        report.add("compat.keystone_mcp", f"compat.keystone_mcp: {message}")
 
 
 def _contracts(compat: object, report: _Report) -> None:
