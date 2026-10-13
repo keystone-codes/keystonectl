@@ -409,6 +409,9 @@ def _compat_checks(
 
 
 def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result:
+    from keystonectl.compose_gen import ensure_registered
+
+    ensure_registered()
     command = "check"
     env = dict(environ or {})
     paths = open_paths(root)

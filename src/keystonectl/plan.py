@@ -74,6 +74,8 @@ class Context:
     deployer: Any = None
     probe_reports: dict[str, Any] = field(default_factory=dict)
     halt_questions: list[Any] = field(default_factory=list)
+    output_result: dict[str, Any] = field(default_factory=dict)
+    rerun: bool = False
 
 
 def register_step(step: Any, after: str | None = None) -> None:
@@ -282,6 +284,9 @@ def _builtin() -> list[Any]:
 
 
 def build_steps() -> list[Any]:
+    from keystonectl.compose_gen import ensure_registered
+
+    ensure_registered()
     steps = _builtin()
     for step, after in _EXTRAS:
         if after is None:
@@ -689,35 +694,39 @@ def run_service(
             changes=0,
         )
 
-    if verb == "apply" and not _has_deploy(steps) and not resource_work:
+    if verb == "apply" and not resource_work:
+        from keystonectl.generate.install import ComposeDeployer
+
+        real_deploy = isinstance(ctx.deployer, ComposeDeployer)
         bound_again = bool(
             resource_actions and all(action["status"] == "unchanged" for action in resource_actions)
         )
-        if bound_again or _same_install(ctx.lock, ctx.resolved, ctx.resolved.commit):
-            for action in actions:
-                action["status"] = "unchanged"
+        if not real_deploy:
+            if bound_again or _same_install(ctx.lock, ctx.resolved, ctx.resolved.commit):
+                for action in actions:
+                    action["status"] = "unchanged"
+                return Result(
+                    code=0,
+                    command=command,
+                    summary="Already installed.",
+                    target=target,
+                    actions=actions,
+                    warnings=warnings,
+                    changes=0,
+                    result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
+                )
             return Result(
-                code=0,
+                code=1,
                 command=command,
-                summary="Already installed.",
+                summary=ERRORS["not_implemented"].title,
                 target=target,
-                actions=actions,
-                warnings=warnings,
+                error={
+                    "id": "not_implemented",
+                    "message": ERRORS["not_implemented"].title,
+                    "hint": ERRORS["not_implemented"].action,
+                },
                 changes=0,
-                result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
             )
-        return Result(
-            code=1,
-            command=command,
-            summary=ERRORS["not_implemented"].title,
-            target=target,
-            error={
-                "id": "not_implemented",
-                "message": ERRORS["not_implemented"].title,
-                "hint": ERRORS["not_implemented"].action,
-            },
-            changes=0,
-        )
 
     for step in steps:
         step.apply(ctx)
@@ -734,12 +743,18 @@ def run_service(
             )
         if ctx.failure is not None:
             return _failure_result(ctx, command, warnings + list(ctx.extra_warnings))
-    for action in actions:
-        if action["status"] == "planned":
-            action["status"] = "done"
+    if ctx.rerun:
+        for action in actions:
+            action["status"] = "unchanged"
+    else:
+        for action in actions:
+            if action["status"] == "planned":
+                action["status"] = "done"
     result_body: dict[str, Any] = {"commit": ctx.resolved.commit, "version": ctx.resolved.version}
     if ctx.probe_reports:
         result_body["probes"] = ctx.probe_reports
+    result_body.update(ctx.output_result)
+    changes = 0 if ctx.rerun or all(action["status"] == "unchanged" for action in actions) else None
     return Result(
         code=0,
         command=command,
@@ -747,5 +762,6 @@ def run_service(
         target=target,
         actions=actions,
         warnings=warnings + list(ctx.extra_warnings),
+        changes=changes,
         result=result_body,
     )
