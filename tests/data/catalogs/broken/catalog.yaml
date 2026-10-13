@@ -1,0 +1,5 @@
+schema_version: 1
+name: broken
+description: This catalog does not match the schema
+packages:
+  broken-service: not-an-entry

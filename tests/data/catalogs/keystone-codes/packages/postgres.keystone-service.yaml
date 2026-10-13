@@ -1,0 +1,43 @@
+# fictional digest
+schema_version: 1
+kind: resource
+name: postgres
+version: "1.0.0"
+publisher: keystone-codes
+summary: PostgreSQL for packages that need postgres/v1.
+provides:
+  kind: postgres
+  version: 1
+  container: db
+provision:
+  per_consumer: database_and_user
+  # fictional digest
+  image: "postgres:16@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  script: provision.sh
+  admin_env:
+    user: POSTGRES_USER
+    password: POSTGRES_PASSWORD
+containers:
+  db:
+    # fictional digest
+    image: "postgres:16@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    port: 5432
+    env:
+      - name: POSTGRES_USER
+        default: postgres
+    secrets:
+      - name: POSTGRES_PASSWORD
+        generate:
+          bytes: 32
+    volumes:
+      - name: data
+        path: /var/lib/postgresql/data
+    healthcheck:
+      command:
+        - pg_isready
+        - -h
+        - 127.0.0.1
+        - -p
+        - "5432"
+        - -U
+        - postgres
