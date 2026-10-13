@@ -74,6 +74,31 @@ def test_remove_requires_confirmation(tmp_path: Path) -> None:
     assert result.missing[0]["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE"
 
 
+def test_remove_restarts_keystone_when_registry_dropped(tmp_path: Path) -> None:
+    root = _install(tmp_path)
+    restarts: list[tuple[str, ...]] = []
+
+    def watch(args, **_kwargs):
+        body = list(args)
+        if len(body) >= 2 and body[0] == "docker" and body[1] == "compose":
+            if "restart" in body:
+                restarts.append(tuple(body))
+            if "ps" in body and "--status" in body and "running" in body:
+                return CommandResult(tuple(args), 0, "keystone-id\n", "")
+            if "ps" in body and "--format" in body and "json" in body:
+                row = '{"Service":"keystone","State":"running","Health":"healthy"}'
+                return CommandResult(tuple(args), 0, row + "\n", "")
+        return CommandResult(tuple(args), 0, "", "")
+
+    result = _remove(
+        root,
+        sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE": "yes"},
+        runner=FakeCommandRunner([([], watch)]),
+    )
+    assert result.code == 0, result.error
+    assert any("restart" in call and "keystone" in call for call in restarts)
+
+
 def test_remove_all_containers_before_fragment(tmp_path: Path) -> None:
     root = _install(tmp_path)
     fragment = root / "packages" / "file-mcp.yml"
