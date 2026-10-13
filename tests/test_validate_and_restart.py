@@ -257,6 +257,35 @@ def test_registry_not_installed_when_service_unhealthy(
     assert document["entries"] == []
 
 
+def test_service_plan_reports_no_changes_after_apply(tmp_path: Path) -> None:
+    from keystonectl.generate.install import ComposeDeployer
+    from keystonectl.output import SecretRegistry
+    from keystonectl.plan import run_service
+    from tests.support.deploylab import CLOCK, DockerBox, runner_for
+
+    root = tmp_path / "root"
+    applied, _runner, _box = apply_package(root, "file-mcp", {"file-mcp": _facade()})
+    assert applied.code == 0, applied.error
+    catalog = (root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml").read_text()
+    text = _facade()
+    plan = run_service(
+        root,
+        "plan",
+        "file-mcp",
+        runner=runner_for({"file-mcp": text}, DockerBox(), catalog),
+        secrets=SecretRegistry(),
+        sets={},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=False,
+        clock=lambda: CLOCK,
+        deployer=ComposeDeployer(),
+        defer_public=True,
+    )
+    assert plan.code == 0, plan.error
+    assert plan.changes == 0
+    assert all(action["status"] != "planned" for action in plan.actions)
+
+
 def test_keystone_force_recreated_when_gateway_env_written(tmp_path: Path) -> None:
     root = tmp_path / "root"
     box = DockerBox()

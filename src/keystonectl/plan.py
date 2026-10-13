@@ -702,10 +702,18 @@ def run_service(
     resource_work = any(action["status"] == "planned" for action in resource_actions)
 
     if verb == "plan":
-        for action in actions:
-            if action["id"] == "fetch" and ctx.resolved and ctx.resolved.commit:
-                action["title"] = _download_title(ctx.resolved)
-                action["status"] = "planned"
+        from keystonectl.generate.install import service_install_would_rerun
+
+        would_rerun = service_install_would_rerun(ctx)
+        if would_rerun:
+            for action in actions:
+                if action.get("status") == "planned":
+                    action["status"] = "unchanged"
+        else:
+            for action in actions:
+                if action["id"] == "fetch" and ctx.resolved and ctx.resolved.commit:
+                    action["title"] = _download_title(ctx.resolved)
+                    action["status"] = "planned"
         return Result(
             code=0,
             command=command,
@@ -713,6 +721,7 @@ def run_service(
             target=target,
             actions=actions,
             warnings=warnings,
+            changes=0 if would_rerun else None,
             result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
         )
 
