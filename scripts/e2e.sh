@@ -138,9 +138,21 @@ pass() {
 }
 
 fail() {
-  local scenario="$1" reason="$2"
+  local scenario="$1" reason="$2" detail=""
+  if [[ -f "${WORK:-}/log/kc.out" ]]; then
+    detail="$(jq_ error-id <"$WORK/log/kc.out" || true)"
+    detail="${detail%%$'\n'*}"
+  fi
+  if [[ -n "$detail" ]]; then
+    reason="${reason}; ${detail}"
+  fi
   printf 'FAIL %s/%s: %s\n' "$LAYOUT" "$scenario" "$reason" >&2
   report_line "$scenario" "fail" "0" "$reason"
+  if [[ -n "${DIAG:-}" && -f "${WORK:-}/log/kc.out" ]]; then
+    mkdir -p "$DIAG"
+    cp "$WORK/log/kc.out" "$DIAG/command.json" || true
+    cp "$WORK/log/kc.err" "$DIAG/command.err" 2>/dev/null || true
+  fi
   diagnostics || true
   cleanup || true
   exit 1
@@ -1522,6 +1534,9 @@ diagnostics() {
   mkdir -p "$DIAG"
   chmod 700 "$DIAG"
   if [[ -d "${WORK:-}/log" ]]; then
+    # Later kc calls replace kc.out. Keep the command that just failed.
+    cp "$WORK/log/kc.out" "$DIAG/command.json" 2>/dev/null || true
+    cp "$WORK/log/kc.err" "$DIAG/command.err" 2>/dev/null || true
     kc service status || true
     cp "$WORK/log/kc.out" "$DIAG/status.json" 2>/dev/null || true
     kc check || true
