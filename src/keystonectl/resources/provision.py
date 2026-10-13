@@ -17,6 +17,8 @@ from keystonectl.output import SecretRegistry
 from keystonectl.runner import CommandRunner
 
 RESOURCE_NETWORK = "keystone-resources"
+# password, secret_key, and url are never taken from provision.sh stdout.
+_STDOUT_DROPPED = frozenset({"extensions", "url", "password", "secret_key"})
 
 
 @dataclass
@@ -32,6 +34,11 @@ class ProvisionResult:
 def consumer_ident(package: str) -> str:
     """Postgres database and user: package name with '-' replaced by '_'."""
     return package.replace("-", "_")
+
+
+def consumer_secret_path(root: Path, package: str, kind: str) -> Path:
+    """Mode 600 env snippet that keeps a generated consumer secret across a failed probe."""
+    return Path(root) / ".keystonectl" / "secrets" / f"{package}.{kind}.env"
 
 
 def existing_consumer_secret(
@@ -226,7 +233,7 @@ def run_provision(
         secret_path = out_dir / f"{consumer}.secret"
         written = secret_path.read_text(encoding="utf-8") if secret_path.is_file() else chosen
         secrets.register(written)
-        values = {key: str(value) for key, value in payload.items() if key != "extensions"}
+        values = {key: str(value) for key, value in payload.items() if key not in _STDOUT_DROPPED}
         if kind == "s3":
             values["secret_key"] = written
         else:
