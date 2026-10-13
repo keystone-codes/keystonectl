@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keystone.codes/schemas/sources-v1.json",
+  "title": "Keystone catalog sources",
+  "description": "sources.yaml schema_version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sources"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  },
+  "$defs": {
+    "catalogName": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$"
+    },
+    "gitRef": {
+      "type": "string",
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+        },
+        {
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      ]
+    },
+    "sourceUrl": {
+      "type": "string",
+      "anyOf": [
+        {
+          "pattern": "^https://\\S+$"
+        },
+        {
+          "pattern": "^ssh://\\S+$"
+        },
+        {
+          "pattern": "^git@[A-Za-z0-9.-]+:\\S+$"
+        },
+        {
+          "pattern": "^file:///\\S+$"
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url", "ref", "priority"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/catalogName"
+        },
+        "url": {
+          "$ref": "#/$defs/sourceUrl"
+        },
+        "ref": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    }
+  }
+}
