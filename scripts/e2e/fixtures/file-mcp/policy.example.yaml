@@ -1,0 +1,13 @@
+# Example only. The installer prints this file and never merges it into the policy.
+version: "2.0.0"
+default_deny: true
+roles:
+  files_user:
+    description: "Upload files and get download links for files this user uploaded."
+    allow:
+      - files_create_upload_url
+      - files_get_download_link
+      - files_get_file_info
+critical_tools:
+  - files_create_upload_url
+  - files_get_download_link
