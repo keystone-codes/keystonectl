@@ -405,14 +405,45 @@ def _domain_in_use(ctx: Context, package: str, domain: str) -> bool:
     return False
 
 
+class _UnreadableNginxSite(Exception):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(str(path))
+
+
+def _server_name_claims(token: str, domain: str) -> bool:
+    """Return whether this nginx server_name captures ``domain``.
+
+    Names compare case-insensitively. An exact name outranks a wildcard, so a
+    mask that matches the domain claims it too.
+    """
+
+    name = token.lower()
+    host = domain.lower()
+    if name == host:
+        return True
+    if name.startswith("*."):
+        suffix = name[1:]
+        return bool(suffix) and host.endswith(suffix) and len(host) > len(suffix)
+    if name.startswith(".") and name != ".":
+        bare = name[1:]
+        if host == bare:
+            return True
+        return bool(bare) and host.endswith(name) and len(host) > len(name)
+    if name.endswith(".*") and "*" not in name[:-2]:
+        prefix = name[:-1]
+        return bool(prefix) and host.startswith(prefix) and len(host) > len(prefix)
+    return False
+
+
 def _line_has_domain(text: str, domain: str) -> bool:
     for line in text.splitlines():
         match = _SERVER_NAME.match(line)
         if not match:
             continue
-        names = match.group(1).split()
-        if domain in names:
-            return True
+        for token in match.group(1).split():
+            if _server_name_claims(token, domain):
+                return True
     return False
 
 
@@ -424,14 +455,14 @@ def _foreign_sites(ctx: Context, package: str, domain: str) -> list[tuple[Path, 
         if not directory.is_dir():
             continue
         for path in sorted(directory.iterdir()):
-            if path.name.startswith(ours):
-                continue
-            if path.name.startswith("."):
+            if path.name == ours or path.name.startswith("."):
                 continue
             try:
+                if path.is_dir():
+                    continue
                 text = path.read_text(encoding="utf-8")
-            except OSError:
-                continue
+            except (OSError, UnicodeError) as exc:
+                raise _UnreadableNginxSite(path) from exc
             if not _line_has_domain(text, domain):
                 continue
             if directory == conf_d or not path.is_symlink():
@@ -559,40 +590,63 @@ def _sample(
 
 
 def _takeover(ctx: Context, package: str, domain: str) -> bool:
-    foreign = _foreign_sites(ctx, package, domain)
+    try:
+        foreign = _foreign_sites(ctx, package, domain)
+    except _UnreadableNginxSite as exc:
+        _fail(
+            ctx,
+            "domain_in_use",
+            f"could not read {exc.path}, so {domain} cannot be checked",
+            hint="Make the nginx site readable and run the command again.",
+        )
+        return False
     if not foreign:
         return True
-    path, kind = foreign[0]
     answer = _lookup(ctx, package, "TAKEOVER")
+    served = ", ".join(path.name for path, _kind in foreign)
     if answer is None:
         ctx.halt_questions.append(
             Question(
                 pkg_var(package, "TAKEOVER"),
-                f"{domain} is already served by {path.name}. Take it over?",
+                f"{domain} is already served by {served}. Take it over?",
                 "choice",
                 choices=("yes", "no"),
             )
         )
         return False
     if answer != "yes":
-        _fail(ctx, "domain_in_use", f"{domain} is already served by {path.name}")
+        _fail(ctx, "domain_in_use", f"{domain} is already served by {served}")
         return False
-    if kind != "link":
-        _fail(
-            ctx,
-            "domain_in_use",
-            f"{path} is a regular file. Remove it by hand before keystonectl can use {domain}.",
-        )
+    blockers = [item for item in foreign if item[1] != "link"]
+    if blockers:
+        if len(blockers) == 1:
+            message = (
+                f"{blockers[0][0]} is a regular file. "
+                f"Remove it by hand before keystonectl can use {domain}."
+            )
+        else:
+            listed = ", ".join(str(path) for path, _kind in blockers)
+            message = (
+                f"{listed} are regular files. "
+                f"Remove them by hand before keystonectl can use {domain}."
+            )
+        _fail(ctx, "domain_in_use", message)
         return False
-    target = str(path.resolve()) if path.is_symlink() else ""
-    removed = _tls(ctx)._run(["rm", str(path)])
-    if removed.returncode != 0:
-        _fail(ctx, "domain_in_use", removed.stderr or f"could not disable {path.name}")
-        return False
+    first_name = ""
+    first_target = ""
+    for index, (path, _kind) in enumerate(foreign):
+        target = str(path.resolve()) if path.is_symlink() else ""
+        removed = _tls(ctx)._run(["rm", str(path)])
+        if removed.returncode != 0:
+            _fail(ctx, "domain_in_use", removed.stderr or f"could not disable {path.name}")
+            return False
+        if index == 0:
+            first_name = path.name
+            first_target = target
     _remember(ctx, package, "TAKEOVER", "yes")
-    if target:
-        _remember(ctx, package, "TOOK_OVER_TARGET", target)
-    _write_public(ctx, package, took_over=path.name)
+    if first_target:
+        _remember(ctx, package, "TOOK_OVER_TARGET", first_target)
+    _write_public(ctx, package, took_over=first_name)
     return True
 
 
