@@ -83,6 +83,10 @@ These fields are rejected on a resource.
 | `public_base_url_env` | yes if `public_paths` is set; forbidden otherwise | variable that receives `https://<service domain>`. Every long-running container gets it. The value is not a secret | |
 | `recommended_policy` | no, and only when `mcp` is set | `^(?!/)(?!.*\.\.)[A-Za-z0-9._/-]{1,128}\.ya?ml$`. An example policy file inside the package. The installer prints it and does not merge it | |
 
+`requires` orders installation only; services do not call each other on a person's behalf. The
+facade verifies `X-Keystone-Identity` with `identity.secret_env` and checks `aud` against
+`identity.audience_env` (the registry entry name). Why: [ADR 0002](../adr/0002-handoff-through-agent-and-signed-link.md).
+
 `needs[]`:
 
 | Field | Required | Constraints | Default |
@@ -176,6 +180,8 @@ The manifest has nowhere to put a host-level setting. That is deliberate: the sa
 
 `compose.yaml` in the package repository is allowed for the author's development loop. The installer does not read it.
 
+Why: [ADR 0004](../adr/0004-compose-generated-from-manifest.md).
+
 ## Image requirements
 
 - The process listens on `0.0.0.0:<port>` where `<port>` is the manifest `port`. Nothing is published on the host by the manifest.
@@ -204,6 +210,8 @@ The installer records the file list in the deployment lock. Secret values never 
 ## Operator layer
 
 An operator changes how a generated package is launched by editing `packages/<name>.override.yml`, or by running `service eject` and taking the fragment over. That is installer behavior, not a field of this manifest.
+
+Why: [ADR 0005](../adr/0005-operator-freedom-override-eject-adopt.md).
 
 ## Format versions
 
