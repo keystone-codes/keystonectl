@@ -15,10 +15,9 @@ CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catal
 # file-mcp 1.0.0, git f2928bf. hello-upstream 1.0.0, git c9dd693.
 FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0"
 HELLO_IMAGE="ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337"
-# Foreign images from the v1.0.0 package manifests (not GHCR).
-# minio-resource d82243a: RELEASE.2025-09-07T16-13-09Z and mc RELEASE.2025-08-13T08-35-41Z.
-MINIO_IMAGE="minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
-MC_IMAGE="minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
+# minio-resource: official RELEASE.2025-09-07 and mc RELEASE.2025-08-13, packaged for GHCR.
+MINIO_IMAGE="ghcr.io/keystone-codes/minio-server@sha256:af8333b0a5e9209abbb677c546b595dec87b45a227f33a2757b60e7d0ec5717f"
+MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:63ba7ba9b7ba59af56cb52d9052eb385cce4e8531b40d6b43639c9e7e514c97f"
 # postgres-resource 7953f7a: postgres:16-alpine 16.15-alpine3.24.
 PG_IMAGE="postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 # redis:7-alpine index, docker buildx imagetools inspect on 2026-10-13.
