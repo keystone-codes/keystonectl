@@ -553,9 +553,67 @@ def main(argv: Sequence[str] | None = None) -> int:
             environ=os.environ,
             interactive=interactive,
             deployer=ComposeDeployer(),
+            defer_public=bool(getattr(args, "defer_public", False)),
+            certbot_staging=bool(getattr(args, "certbot_staging", False)),
         )
         if args.service_command == "install":
             result.command = "service install"
+    elif args.command == "service" and args.service_command in {
+        "remove",
+        "upgrade",
+        "rollback",
+        "eject",
+        "adopt",
+    }:
+        assert root is not None
+        from datetime import UTC, datetime
+
+        from keystonectl.lifecycle import (
+            adopt_service,
+            eject_service,
+            remove_service,
+            rollback_service,
+            upgrade_service,
+        )
+
+        clock = lambda: datetime.now(UTC)
+        if args.service_command == "remove":
+            result = remove_service(
+                root,
+                args.name,
+                runner=build_runner(),
+                secrets=secrets,
+                sets=sets,
+                environ=os.environ,
+                interactive=interactive,
+                clock=clock,
+            )
+        elif args.service_command == "upgrade":
+            result = upgrade_service(
+                root,
+                args.ref,
+                runner=build_runner(),
+                secrets=secrets,
+                sets=sets,
+                environ=os.environ,
+                interactive=interactive,
+                clock=clock,
+            )
+        elif args.service_command == "rollback":
+            result = rollback_service(root, args.name, runner=build_runner(), clock=clock)
+        elif args.service_command == "eject":
+            result = eject_service(root, args.name, clock=clock)
+        else:
+            result = adopt_service(
+                root,
+                args.name,
+                runner=build_runner(),
+                sets=sets,
+                environ=os.environ,
+                interactive=interactive,
+                clock=clock,
+                json_mode=json_mode,
+            )
     else:
         result = _error("usage", command or "", "Unknown command.")
     if (
