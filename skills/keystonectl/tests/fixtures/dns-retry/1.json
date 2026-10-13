@@ -1,0 +1,18 @@
+{
+  "ok": false,
+  "code": 3,
+  "command": "service apply",
+  "target": "file-mcp",
+  "summary": "The domain does not point at this host.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": {
+    "id": "dns_mismatch",
+    "message": "files.example.com points at 203.0.113.10, not this host 203.0.113.5.",
+    "hint": "Update the A record or wait for DNS to propagate (often 1-10 min), then run apply again."
+  },
+  "retryable": true,
+  "result": {}
+}

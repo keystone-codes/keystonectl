@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service eject",
+  "target": "file-mcp",
+  "summary": "file-mcp is ejected.",
+  "actions": [
+    {
+      "id": "eject",
+      "title": "Stop generating packages/file-mcp.yml",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "managed": "ejected",
+    "operator_owns": [
+      "packages/file-mcp.yml"
+    ],
+    "keystonectl_keeps": [
+      "registry",
+      "snapshot",
+      "secrets",
+      "status"
+    ]
+  }
+}

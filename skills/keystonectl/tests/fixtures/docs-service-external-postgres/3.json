@@ -1,0 +1,37 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "service plan",
+  "target": "docs-service",
+  "summary": "2 answers are missing",
+  "actions": [],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_RESOURCE_POSTGRES",
+      "question": "Which PostgreSQL should the package use: a server you already have (external), or a new PostgreSQL on this server (catalog)?",
+      "kind": "choice",
+      "choices": [
+        "external",
+        "catalog"
+      ],
+      "default": null,
+      "secret": false
+    },
+    {
+      "var": "KEYSTONE_SETUP_POSTGRES_URL_FILE",
+      "question": "Path to a mode 600 file with a postgresql URL that includes sslmode.",
+      "kind": "file",
+      "choices": null,
+      "default": null,
+      "secret": true
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "docs-service",
+    "s3": "already-bound"
+  }
+}

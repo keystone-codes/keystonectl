@@ -1,0 +1,25 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "service remove",
+  "target": "file-mcp",
+  "summary": "1 answer is missing",
+  "actions": [],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE",
+      "question": "Remove file-mcp? Containers stop. Volumes, buckets, and the override stay.",
+      "kind": "confirm",
+      "choices": [
+        "yes"
+      ],
+      "default": null,
+      "secret": false
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {}
+}

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Fake keystonectl: one JSON fixture per call, plus a journal of arguments and answer names.
+set -eu
+
+scenario="${FAKE_SCENARIO:?}"
+fixtures="${FAKE_FIXTURES:?}"
+journal="${FAKE_JOURNAL:?}"
+counter="${FAKE_COUNTER:?}"
+
+if [[ -f "$counter" ]]; then
+  step="$(cat "$counter")"
+else
+  step=1
+fi
+printf '%s\n' "$((step + 1))" >"$counter"
+
+file="${fixtures}/${scenario}/${step}.json"
+if [[ ! -f "$file" ]]; then
+  printf 'missing fixture %s\n' "$file" >&2
+  exit 1
+fi
+
+export FAKE_STEP="$step"
+export FAKE_JOURNAL_PATH="$journal"
+python3 - "$@" <<'PY'
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+step = int(os.environ["FAKE_STEP"])
+journal = Path(os.environ["FAKE_JOURNAL_PATH"])
+env: dict[str, str] = {}
+files: dict[str, dict[str, object]] = {}
+for key, value in os.environ.items():
+    if not key.startswith("KEYSTONE_SETUP_"):
+        continue
+    env[key] = value
+    if not key.endswith("_FILE"):
+        continue
+    path = Path(value)
+    info: dict[str, object] = {"exists": path.is_file(), "mode": None, "sha256": None}
+    if path.is_file():
+        info["mode"] = format(path.stat().st_mode & 0o777, "o")
+        info["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    files[key] = info
+record = {"step": step, "argv": sys.argv[1:], "env": env, "files": files}
+with journal.open("a", encoding="utf-8") as handle:
+    handle.write(json.dumps(record, sort_keys=True) + "\n")
+PY
+
+code="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["code"])' "$file")"
+cat "$file"
+exit "$code"
