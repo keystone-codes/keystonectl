@@ -1,0 +1,41 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "service plan",
+  "target": "file-mcp",
+  "summary": "2 answers are missing",
+  "actions": [],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_RESOURCE_S3",
+      "question": "Where should the package keep files: in S3 storage you already have (external), or in a new MinIO on this server (catalog)?",
+      "kind": "choice",
+      "choices": [
+        "external",
+        "catalog"
+      ],
+      "default": null,
+      "secret": false
+    },
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS",
+      "question": "How should file-mcp get a certificate?",
+      "kind": "choice",
+      "choices": [
+        "certbot",
+        "custom",
+        "manual"
+      ],
+      "default": null,
+      "secret": false
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "file-mcp",
+    "version": "1.0.0"
+  }
+}

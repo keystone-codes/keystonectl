@@ -1,0 +1,52 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service apply",
+  "target": "file-mcp",
+  "summary": "Installed file-mcp 1.0.0.",
+  "actions": [
+    {
+      "id": "deploy",
+      "title": "Install file-mcp 1.0.0",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [
+    {
+      "id": "tools_unreachable",
+      "message": "No role can call these tools yet."
+    }
+  ],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "version": "1.0.0",
+    "namespace": "files",
+    "tools": [
+      "files_create_upload_url",
+      "files_get_download_link",
+      "files_get_file_info"
+    ],
+    "critical_tools": [
+      "files_create_upload_url",
+      "files_get_download_link"
+    ],
+    "resources": [
+      {
+        "kind": "s3",
+        "mode": "catalog",
+        "package": "minio"
+      }
+    ],
+    "public": {
+      "domain": "files.example.com",
+      "tls": "certbot"
+    },
+    "recommended_policy": {
+      "path": "policy.example.yaml",
+      "content": "version: \"2.0.0\"\ndefault_deny: true\nroles:\n  files_user:\n    allow:\n      - files_create_upload_url\n      - files_get_download_link\n      - files_get_file_info\n"
+    }
+  }
+}
