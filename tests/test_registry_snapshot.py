@@ -111,6 +111,7 @@ def test_registry_name_taken_by_foreign_entry(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 3
     assert result.error["id"] == "registry_name_taken"
@@ -150,6 +151,7 @@ def test_namespace_collision_asks(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 2
     assert result.missing[0]["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_NAMESPACE"
@@ -194,6 +196,7 @@ def test_namespace_pair_collision(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 2
 
@@ -227,6 +230,7 @@ def test_env_name_normalization_collision(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 2
 
@@ -281,6 +285,7 @@ def test_registry_full(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 3
     assert result.error["id"] == "registry_full"
@@ -360,6 +365,7 @@ def test_snapshot_created_when_missing(tmp_path: Path) -> None:
         interactive=False,
         clock=lambda: datetime(2026, 10, 13, tzinfo=UTC),
         deployer=ComposeDeployer(),
+        defer_public=True,
     )
     assert result.code == 0, result.error
     assert (root / "keystonectl" / "catalog-snapshot.yaml").is_file()
