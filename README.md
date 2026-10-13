@@ -96,7 +96,7 @@ docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d
 - [S3 resource interface](docs/spec/resources/s3-v1.md)
 - [Postgres resource interface](docs/spec/resources/postgres-v1.md)
 - [Deployment layout](docs/spec/deployment-layout.md)
-- [Architecture decisions](docs/adr/)
+- [Architecture decisions](docs/adr/README.md)
 - [CLI reference](docs/cli.md)
 - [Environment variables](docs/resources.md)
 
