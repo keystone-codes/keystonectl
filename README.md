@@ -59,3 +59,5 @@ docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d
 ```
 
 `init --adopt` prints that command. Without the second file, keystone-mcp does not see the registry, the snapshot, or the service network.
+
+Why things are the way they are: [docs/adr/README.md](docs/adr/README.md). Why: [ADR 0006](docs/adr/0006-keystonectl-is-a-separate-product.md).
