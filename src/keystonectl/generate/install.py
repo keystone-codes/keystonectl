@@ -70,6 +70,7 @@ from keystonectl.keystone_mcp_rules import MAX_REGISTRY_ENTRIES
 from keystonectl.layout import (
     LayoutError,
     env_assigned_outside_managed_block,
+    managed_env_values,
     replace_managed_env_block,
 )
 from keystonectl.lock import save_lock, utc_now
@@ -531,8 +532,10 @@ def _write_root_env(ctx: Context, values: Mapping[str, str], undo: _Undo) -> Non
     path = ctx.root / ".env"
     undo.remember(path)
     existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+    merged = dict(managed_env_values(existing))
+    merged.update(values)
     try:
-        rendered = replace_managed_env_block(existing, values)
+        rendered = replace_managed_env_block(existing, merged)
     except (ValueError, OSError, LayoutError) as exc:
         code = getattr(exc, "code", "env_name_conflict")
         _fail(ctx, code if code in ERRORS else "env_name_conflict", str(exc))
