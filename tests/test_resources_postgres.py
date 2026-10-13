@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from keystonectl.envfiles import read_env
 from keystonectl.resources.postgres_probe import PgParams, build_url
+from keystonectl.resources.provision import consumer_secret_path, existing_consumer_secret
+from tests.support import mode
 from tests.support.resources import (
     PG_PASSWORD,
     Lab,
@@ -177,6 +181,154 @@ def test_catalog_provider_probed_with_require_isolation(
     assert result.code == 0, result.error
     postgres_calls = [item for item in calls if item[0] == "postgres"]
     assert postgres_calls[0][2]["require_isolation"] is True
+
+
+NOTES_BIND = {
+    "host": "NOTES_PG_HOST",
+    "port": "NOTES_PG_PORT",
+    "database": "NOTES_PG_DATABASE",
+    "user": "NOTES_PG_USER",
+    "password": "NOTES_PG_PASSWORD",
+    "sslmode": "NOTES_PG_SSLMODE",
+}
+
+
+def _capture_provision_secrets(lab: Lab) -> list[str]:
+    seen: list[str] = []
+    updated = []
+    for prefix, outcome in lab.runner.rules:
+        if tuple(prefix) != ("docker",):
+            updated.append((prefix, outcome))
+            continue
+
+        def wrapped(args, _outcome=outcome, **kwargs):
+            if tuple(args[:2]) == ("docker", "run"):
+                out = next(
+                    str(item)[: -len(":/out")] for item in args if str(item).endswith(":/out")
+                )
+                consumer = list(args)[list(args).index("--consumer") + 1]
+                text = (Path(out) / f"{consumer}.secret").read_text(encoding="utf-8")
+                seen.append(text)
+                assert all(text not in str(arg) for arg in args)
+            return _outcome(args, **kwargs)
+
+        updated.append((prefix, wrapped))
+    lab.runner.rules = updated
+    return seen
+
+
+def _postgres_resource(lab: Lab) -> dict:
+    document = yaml.safe_load((lab.root / "services.lock.yaml").read_text(encoding="utf-8"))
+    return next(item for item in document.get("resources") or [] if item.get("kind") == "postgres")
+
+
+def test_failed_probe_keeps_consumer_secret_for_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_scripted_probe(
+        monkeypatch,
+        "postgres",
+        [pg_report(exit_code=1, code="auth_failed"), pg_report()],
+    )
+    lab = Lab(tmp_path, standard_manifests())
+    seen = _capture_provision_secrets(lab)
+    failed = lab.apply("notes-mcp", environ={"KEYSTONE_SETUP_RESOURCE_POSTGRES": "catalog"})
+    assert failed.code == 3
+    assert failed.error is not None
+    assert failed.error["id"] == "postgres_access_denied"
+    assert seen
+    secret = seen[0]
+    env_path = lab.root / "packages" / "notes-mcp.env"
+    assert not env_path.exists()
+    secret_path = consumer_secret_path(lab.root, "notes-mcp", "postgres")
+    assert mode(secret_path) == 0o600
+    assert existing_consumer_secret(read_env(secret_path), NOTES_BIND) == secret
+    lock_text = (lab.root / "services.lock.yaml").read_text(encoding="utf-8")
+    assert secret not in lock_text
+    assert secret not in json.dumps(failed.to_dict())
+    resources = [
+        item
+        for item in yaml.safe_load(lock_text).get("resources") or []
+        if item.get("kind") == "postgres"
+    ]
+    assert all(
+        "notes-mcp" not in [c.get("service") for c in item.get("consumers") or []]
+        for item in resources
+    )
+
+    again = lab.apply("notes-mcp", environ={"KEYSTONE_SETUP_RESOURCE_POSTGRES": "catalog"})
+    assert again.code == 0, again.error
+    assert seen[1] == secret
+    assert read_env(env_path)["NOTES_PG_PASSWORD"] == secret
+    resource = _postgres_resource(lab)
+    assert any(item.get("service") == "notes-mcp" for item in resource["consumers"])
+    saved = (lab.root / "services.lock.yaml").read_text(encoding="utf-8")
+    assert secret not in saved
+    assert secret not in json.dumps(again.to_dict())
+
+
+def test_second_url_cannot_retarget_shared_postgres(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    first = lab.apply("notes-mcp", environ=lab.pg_answers())
+    assert first.code == 0, first.error
+    original = _postgres_resource(lab)["params"]
+    assert original == {"host": "db.example", "port": 5432, "sslmode": "require"}
+
+    other_password = "other-password-value-0123456789ab"
+    bad = build_url(
+        PgParams(
+            host="other.example",
+            port=5433,
+            database="otherdb",
+            user="other",
+            password=other_password,
+            sslmode="disable",
+        )
+    )
+    refused = lab.apply(
+        "url-mcp",
+        environ={"KEYSTONE_SETUP_POSTGRES_URL_FILE": lab.url_file(bad)},
+    )
+    assert refused.code == 3
+    assert refused.error is not None
+    assert refused.error["id"] == "postgres_address_mismatch"
+    assert other_password not in refused.error["message"]
+    assert other_password not in json.dumps(refused.to_dict())
+    kept = _postgres_resource(lab)
+    assert kept["params"] == original
+    assert [item["service"] for item in kept["consumers"]] == ["notes-mcp"]
+    assert not (lab.root / "packages" / "url-mcp.env").exists()
+
+    good_password = "good-password-value-0123456789abcd"
+    good = build_url(
+        PgParams(
+            host="db.example",
+            port=5432,
+            database="librarydb",
+            user="library",
+            password=good_password,
+            sslmode="require",
+        )
+    )
+    accepted = lab.apply(
+        "url-mcp",
+        environ={"KEYSTONE_SETUP_POSTGRES_URL_FILE": lab.url_file(good)},
+    )
+    assert accepted.code == 0, accepted.error
+    resource = _postgres_resource(lab)
+    assert resource["params"] == original
+    consumer = next(item for item in resource["consumers"] if item["service"] == "url-mcp")
+    assert consumer["database"] == "librarydb"
+    assert consumer["user"] == "library"
+    assert "password" not in consumer
+    lock_text = (lab.root / "services.lock.yaml").read_text(encoding="utf-8")
+    assert other_password not in lock_text
+    assert good_password not in lock_text
+    assert PG_PASSWORD not in lock_text
+    assert good_password not in json.dumps(accepted.to_dict())
 
 
 def test_sslmode_disable_warns_for_external(tmp_path: Path) -> None:
