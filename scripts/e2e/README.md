@@ -4,7 +4,7 @@
 
 ## Machine
 
-Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name and port 80 for certbot. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
+Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name and port 80 for certbot. Manual TLS on that profile starts Caddy from the production example Caddyfile and does not use sudo; if Caddy does not start, that scenario fails. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
 
 Port 8080 must be free. If it is not, pass `--publish-port` with a free loopback port. The script rewrites only its own copy of the compose file and records that as a note in the report.
 
@@ -33,13 +33,13 @@ scripts/e2e.sh --layout production-example --profile ci --storage both --postgre
 ## Layouts
 
 - **production-example** copies `examples/production` from keystone-mcp `6b04a198101dac22815b17d5bcf55b0e1c6463d8` and adopts it. The one-time patch is `scripts/e2e/fixtures/production-example.patch`. That file has no diff. An empty diff means the open example needs no one-time edit: `init --adopt` already adds the second compose file and the upstream network.
-- **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `dd4538167af85bf5842d88e43bca53748063879f`. CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend.
+- **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `dd4538167af85bf5842d88e43bca53748063879f`. CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend. That profile skips `agent_path_missing` because setup already installed the minimal bundle.
 
 Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upstream are GHCR digests. MinIO, mc, Postgres, and Redis are the foreign digests from the package manifests (Redis from `docker buildx imagetools inspect`).
 
 ## Scenarios
 
-1. `bundle install` with no answers exits 2 and changes nothing.
+1. `bundle install` with no answers exits 2 and changes nothing. The keystone-deploy VM profile skips this scenario because `setup.sh` already installed the minimal bundle.
 2. Install file-mcp and MinIO, upload and download 1 MiB.
 3. The policy file hash is unchanged; recommended roles are in the install JSON.
 4. A second plan asks nothing and changes nothing.
@@ -51,8 +51,8 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 10. Point file-mcp at an external S3 (`ks-cat-e2e-external-s3`, alias `e2e-external-s3`).
 11. Point docs-service at an external Postgres (`ks-cat-e2e-external-pg`).
 12. A second catalog source; an ambiguous name asks for a choice.
-13. On the open example, manual TLS: the first apply is retryable `public_unreachable`, then the sample vhost is installed and apply reaches ready. Certbot is the VM profile only.
-14. `check` allows `tls_untrusted`, `insecure_endpoint`, and `insecure_sslmode`. Any other warning fails.
+13. On the open example, manual TLS: the first apply is retryable `public_unreachable`. The CI profile installs the sample nginx vhost. The VM profile starts Caddy from the production example Caddyfile with the public-paths site, then apply reaches ready. Certbot is a separate VM scenario.
+14. `check` allows `tls_untrusted`, `s3_plain_http`, and `postgres_plain_connection`. Any other warning fails.
 15. The deployment has none of the forbidden names (`EXTERNAL_APIS`, `docker-compose.external.yml`, `FILE_API_URL`, a git-built keystone-mcp image).
 
 ## Report
