@@ -30,4 +30,6 @@ Global flags apply to every command. `init` and `lint` do not search for a deplo
 
 `<ref>` is `name`, `name@X.Y.Z`, `source/name`, or `source/name@X.Y.Z`.
 
+`service plan` and `service apply` ask where each `needs` entry should live. Answer `KEYSTONE_SETUP_RESOURCE_S3` or `KEYSTONE_SETUP_RESOURCE_POSTGRES` with `external` or `catalog`. Secret values are read from mode 600 files (`*_FILE`); `--set` refuses those names. See `docs/resources.md`.
+
 Later commands (`service status`, `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `add-remote`, `bundle install`) are added by their own modules through `register(subparsers)`.
