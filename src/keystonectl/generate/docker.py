@@ -108,6 +108,29 @@ def service_networks(service: Mapping[str, Any]) -> set[str]:
     return set()
 
 
+def _network_resolves_to_upstreams(
+    config: Mapping[str, Any], network_key: str
+) -> bool:
+    if network_key == UPSTREAMS_NETWORK:
+        return True
+    top = config.get("networks")
+    if not isinstance(top, dict):
+        return False
+    spec = top.get(network_key)
+    if not isinstance(spec, dict):
+        return False
+    name = spec.get("name")
+    return isinstance(name, str) and name == UPSTREAMS_NETWORK
+
+
+def service_on_upstreams_network(
+    config: Mapping[str, Any], service: Mapping[str, Any]
+) -> bool:
+    return any(
+        _network_resolves_to_upstreams(config, key) for key in service_networks(service)
+    )
+
+
 def layout_problems(config: Mapping[str, Any], layout: Mapping[str, Any]) -> list[str]:
     service_name = str(layout.get("keystone_service") or "")
     services = config.get("services") if isinstance(config.get("services"), dict) else {}
@@ -124,7 +147,7 @@ def layout_problems(config: Mapping[str, Any], layout: Mapping[str, Any]) -> lis
         problems.append(f"KEYSTONE_MCP_RBAC_CATALOG_SNAPSHOT is not {snapshot}")
     if not _has_keystonectl_volume(service):
         problems.append(f"no volume mounts the deployment keystonectl directory at {WIRED_DIR}")
-    if UPSTREAMS_NETWORK not in service_networks(service):
+    if not service_on_upstreams_network(config, service):
         problems.append(f"service is not on the {UPSTREAMS_NETWORK} network")
     return problems
 
