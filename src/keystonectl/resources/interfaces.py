@@ -38,7 +38,9 @@ def _render(kind: str, values: Mapping[str, str]) -> dict[str, str]:
             rendered["path_style"] = "true"
         elif path_style in {"0", "false", "False"}:
             rendered["path_style"] = "false"
-    if kind == "postgres" and "url" not in rendered:
+    if kind == "postgres":
+        # Built only from the parts. A script must not choose the URL: it can
+        # see the admin password and hide it in a url field.
         rendered["url"] = build_url(
             PgParams(
                 host=rendered.get("host", ""),

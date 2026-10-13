@@ -328,6 +328,92 @@ def test_provision_exit_3_retryable_exit_2_not(tmp_path: Path) -> None:
     assert refused.retryable is False
 
 
+def test_provision_ignores_script_url_and_json_secrets(tmp_path: Path) -> None:
+    from keystonectl.resources.interfaces import POSTGRES_V1
+    from keystonectl.resources.postgres_probe import PgParams, build_url
+
+    consumer_secret = "p@ss/word-0123456789abcdef"
+    planted_password = "json-password-not-from-file-0123456789"
+    planted_url = (
+        f"postgresql://postgres:{ADMIN_PASSWORD}@evil.example:5432/file_mcp?sslmode=disable"
+    )
+    payload = {
+        "interface": "postgres/v1",
+        "host": "postgres-db",
+        "port": 5432,
+        "database": "file_mcp",
+        "user": "file_mcp",
+        "sslmode": "disable",
+        "password": planted_password,
+        "secret_key": planted_password,
+        "url": planted_url,
+        "password_file": "/out/file-mcp.secret",
+        "extensions": ["pgcrypto"],
+    }
+    runner = _runner(stdout=json.dumps(payload) + "\n")
+    result, _package_dir, _secrets = _run(
+        tmp_path,
+        runner,
+        kind="postgres",
+        image=PG_IMAGE,
+        consumer="file-mcp",
+        admin={"POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": ADMIN_PASSWORD},
+        secret=consumer_secret,
+        host="postgres-db",
+        port=5432,
+        database="file_mcp",
+        extensions=["pgcrypto"],
+    )
+    assert result.ok
+    assert result.values["password"] == consumer_secret
+    assert "url" not in result.values
+    assert planted_password not in result.values.values()
+    dumped = json.dumps(result.values)
+    assert ADMIN_PASSWORD not in dumped
+    assert "evil.example" not in dumped
+    poisoned = dict(result.values)
+    poisoned["url"] = planted_url
+    bound = POSTGRES_V1.bind(poisoned, {"url": "APP_DATABASE_URL", "password": "PG_PASSWORD"})
+    expected = build_url(
+        PgParams(
+            host="postgres-db",
+            port=5432,
+            database="file_mcp",
+            user="file_mcp",
+            password=consumer_secret,
+            sslmode="disable",
+        )
+    )
+    assert bound["APP_DATABASE_URL"] == expected
+    assert bound["PG_PASSWORD"] == consumer_secret
+    assert ADMIN_PASSWORD not in bound["APP_DATABASE_URL"]
+    assert "evil.example" not in bound["APP_DATABASE_URL"]
+
+    s3_payload = {
+        "interface": "s3/v1",
+        "endpoint": "http://minio-server:9000",
+        "region": "us-east-1",
+        "bucket": "docs-mcp",
+        "access_key": "docs-mcp",
+        "path_style": True,
+        "secret_key": planted_password,
+        "url": planted_url,
+        "secret_key_file": "/out/docs-mcp.secret",
+    }
+    s3_result, _package_dir, _secrets = _run(
+        tmp_path,
+        _runner(stdout=json.dumps(s3_payload)),
+        secret=consumer_secret,
+        endpoint="http://minio-server:9000",
+    )
+    assert s3_result.ok
+    assert s3_result.values["secret_key"] == consumer_secret
+    assert "url" not in s3_result.values
+    assert planted_password not in json.dumps(
+        {key: value for key, value in s3_result.values.items() if key != "secret_key"}
+    )
+
+
 def test_stderr_redacted_in_error(tmp_path: Path) -> None:
     secret = "provision-secret-value-0123456789abcdef"
     runner = _runner(code=2, stderr=f"leaked {secret}\n")
