@@ -436,15 +436,30 @@ def _server_name_claims(token: str, domain: str) -> bool:
     return False
 
 
-def _line_has_domain(text: str, domain: str) -> bool:
+def _server_name_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
     for line in text.splitlines():
         match = _SERVER_NAME.match(line)
         if not match:
             continue
-        for token in match.group(1).split():
-            if _server_name_claims(token, domain):
-                return True
-    return False
+        tokens.extend(match.group(1).split())
+    return tokens
+
+
+def _line_has_domain(text: str, domain: str) -> bool:
+    return any(_server_name_claims(token, domain) for token in _server_name_tokens(text))
+
+
+def _site_limited_to_domain(text: str, domain: str) -> bool:
+    """A symlink may be removed only when the site serves this domain alone.
+
+    A wildcard, a suffix, or any extra name still means the domain is in use,
+    but deleting that symlink would stop every other name on the site.
+    """
+
+    tokens = _server_name_tokens(text)
+    host = domain.lower()
+    return bool(tokens) and all(token.lower() == host for token in tokens)
 
 
 def _foreign_sites(ctx: Context, package: str, domain: str) -> list[tuple[Path, str]]:
@@ -467,8 +482,10 @@ def _foreign_sites(ctx: Context, package: str, domain: str) -> list[tuple[Path, 
                 continue
             if directory == conf_d or not path.is_symlink():
                 kind = "file"
-            else:
+            elif _site_limited_to_domain(text, domain):
                 kind = "link"
+            else:
+                kind = "broad"
             found.append((path, kind))
     return found
 
@@ -589,6 +606,36 @@ def _sample(
     return path
 
 
+def _foreign_refusal(regular: list[Path], broad: list[Path], domain: str) -> str:
+    if regular and not broad:
+        if len(regular) == 1:
+            return (
+                f"{regular[0]} is a regular file. "
+                f"Remove it by hand before keystonectl can use {domain}."
+            )
+        listed = ", ".join(str(path) for path in regular)
+        return (
+            f"{listed} are regular files. Remove them by hand before keystonectl can use {domain}."
+        )
+    if broad and not regular:
+        if len(broad) == 1:
+            return (
+                f"{broad[0]} is not limited to {domain}. "
+                f"Narrow it by hand before keystonectl can use {domain}."
+            )
+        listed = ", ".join(str(path) for path in broad)
+        return (
+            f"{listed} are not limited to {domain}. "
+            f"Narrow them by hand before keystonectl can use {domain}."
+        )
+    listed = ", ".join(str(path) for path in (*broad, *regular))
+    return (
+        f"{listed} cannot be disabled automatically. "
+        f"Narrow sites that serve other names, and remove regular files, "
+        f"before keystonectl can use {domain}."
+    )
+
+
 def _takeover(ctx: Context, package: str, domain: str) -> bool:
     try:
         foreign = _foreign_sites(ctx, package, domain)
@@ -602,6 +649,13 @@ def _takeover(ctx: Context, package: str, domain: str) -> bool:
         return False
     if not foreign:
         return True
+    # Ask only when every match is a symlink limited to this domain. A broader
+    # site stays enabled; removing it would drop every other name it serves.
+    regular = [path for path, kind in foreign if kind == "file"]
+    broad = [path for path, kind in foreign if kind == "broad"]
+    if regular or broad:
+        _fail(ctx, "domain_in_use", _foreign_refusal(regular, broad, domain))
+        return False
     answer = _lookup(ctx, package, "TAKEOVER")
     served = ", ".join(path.name for path, _kind in foreign)
     if answer is None:
@@ -616,21 +670,6 @@ def _takeover(ctx: Context, package: str, domain: str) -> bool:
         return False
     if answer != "yes":
         _fail(ctx, "domain_in_use", f"{domain} is already served by {served}")
-        return False
-    blockers = [item for item in foreign if item[1] != "link"]
-    if blockers:
-        if len(blockers) == 1:
-            message = (
-                f"{blockers[0][0]} is a regular file. "
-                f"Remove it by hand before keystonectl can use {domain}."
-            )
-        else:
-            listed = ", ".join(str(path) for path, _kind in blockers)
-            message = (
-                f"{listed} are regular files. "
-                f"Remove them by hand before keystonectl can use {domain}."
-            )
-        _fail(ctx, "domain_in_use", message)
         return False
     first_name = ""
     first_target = ""

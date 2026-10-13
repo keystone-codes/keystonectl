@@ -593,6 +593,61 @@ def test_server_name_case_difference_is_domain_in_use(tmp_path: Path) -> None:
     assert not _written_site(nginx).exists()
 
 
+def test_wildcard_symlink_is_not_removed(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "wild.conf"
+    available.write_text("server_name *.example.com;\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "wild.conf"
+    link.symlink_to(available)
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert "Narrow it by hand" in result.error["message"]
+    assert link.is_symlink()
+    assert available.is_file()
+    assert "server_name *.example.com;" in available.read_text(encoding="utf-8")
+    assert not _written_site(nginx).exists()
+
+
+def test_suffix_symlink_is_not_removed(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "suffix.conf"
+    available.write_text("server_name .example.com;\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "suffix.conf"
+    link.symlink_to(available)
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert link.is_symlink()
+    assert not _written_site(nginx).exists()
+
+
+def test_takeover_yes_removes_case_insensitive_exact_symlink(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "other.conf"
+    available.write_text("server_name Files.example.com;\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "other.conf"
+    link.symlink_to(available)
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 0, result.error
+    assert not link.exists()
+    assert available.is_file()
+    assert _written_site(nginx).is_file()
+
+
+def test_symlink_with_another_name_is_not_removed(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "shared.conf"
+    available.write_text(f"server_name {DOMAIN} other.example.com;\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "shared.conf"
+    link.symlink_to(available)
+    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    assert result.code == 3
+    assert result.error["id"] == "domain_in_use"
+    assert link.is_symlink()
+    assert not _written_site(nginx).exists()
+
+
 def test_wildcard_server_name_is_domain_in_use(tmp_path: Path) -> None:
     nginx = _nginx(tmp_path)
     foreign = nginx / "conf.d" / "wild.conf"
