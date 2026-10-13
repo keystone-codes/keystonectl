@@ -116,6 +116,11 @@ def _env_values(manifest: Mapping[str, Any], entry: Mapping[str, Any], role: str
     return values
 
 
+def _path_health_shell(url: str) -> str:
+    py = f'python -c "import urllib.request; urllib.request.urlopen(\'{url}\')"'
+    return f"wget -q -O /dev/null {url} || curl -fsS -o /dev/null {url} || {py}"
+
+
 def _health(spec: Mapping[str, Any], *, port: int | None) -> list[str] | None:
     health = spec.get("healthcheck")
     if not isinstance(health, dict):
@@ -127,7 +132,7 @@ def _health(spec: Mapping[str, Any], *, port: int | None) -> list[str] | None:
         lines.append(f"      test: {yaml_flow(['CMD', *map(str, command)])}")
     elif isinstance(path, str) and path and port:
         url = f"http://127.0.0.1:{port}{path}"
-        shell = f"wget -q -O /dev/null {url} || curl -fsS -o /dev/null {url}"
+        shell = _path_health_shell(url)
         lines.append(f"      test: {yaml_flow(['CMD-SHELL', shell])}")
     else:
         return None
