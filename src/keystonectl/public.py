@@ -229,19 +229,33 @@ def install_questions(ctx: Context, manifest: Mapping[str, Any]) -> list[Questio
     return questions
 
 
+def materialise_public_base_env(ctx: Context, manifest: Mapping[str, Any]) -> dict[str, str]:
+    """Values for ``public_base_url_env`` before the first container start."""
+
+    if not public_paths(manifest):
+        return {}
+    env_name = manifest.get("public_base_url_env")
+    if not isinstance(env_name, str) or not env_name:
+        return {}
+    name = str(manifest["name"])
+    if ctx.defer_public:
+        from keystonectl.resources.binding import _service
+
+        current = _service(ctx.lock, name)
+        public = current.get("public") if isinstance(current, dict) else None
+        if isinstance(public, dict) and public.get("state") == "ready" and public.get("domain"):
+            return {}
+        return {env_name: PLACEHOLDER_URL}
+    domain = _lookup(ctx, name, "DOMAIN")
+    if domain and domain_error(domain) is None:
+        return {env_name: f"https://{domain}"}
+    return {}
+
+
 def deferred_env(ctx: Context, manifest: Mapping[str, Any]) -> dict[str, str]:
     if not ctx.defer_public or not public_paths(manifest):
         return {}
-    from keystonectl.resources.binding import _service
-
-    current = _service(ctx.lock, str(manifest["name"]))
-    public = current.get("public") if isinstance(current, dict) else None
-    if isinstance(public, dict) and public.get("state") == "ready" and public.get("domain"):
-        return {}
-    name = manifest.get("public_base_url_env")
-    if not isinstance(name, str) or not name:
-        return {}
-    return {name: PLACEHOLDER_URL}
+    return materialise_public_base_env(ctx, manifest)
 
 
 def ready_domains(ctx: Context, *, extra: str | None = None) -> list[str]:
