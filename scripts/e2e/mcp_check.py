@@ -31,9 +31,7 @@ def mcp_endpoint(base: str) -> str:
     text = base.strip()
     if not text.endswith("/"):
         text += "/"
-    if text.rstrip("/").endswith("/mcp"):
-        return text
-    return text + "mcp/"
+    return text
 
 
 def tool_names(tools: list[Any]) -> list[str]:

@@ -610,9 +610,32 @@ path.chmod(0o600)
 ' "$WORK/secrets/api-key" "$WORK/secrets/client.env"
 }
 
+mcp_check_fail_reason() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    doc = json.load(open(path, encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    print("mcp check did not write a report", end="")
+    raise SystemExit(0)
+for step in reversed(doc.get("steps") or []):
+    if step.get("ok") is False:
+        name = step.get("name") or "unknown"
+        err = step.get("error") or "failed"
+        print(f"{name}: {err}", end="")
+        raise SystemExit(0)
+if not doc.get("ok"):
+    print("mcp check failed", end="")
+PY
+}
+
 mcp_check() {
   local mode="$1" namespace="${2:-}"
   local cid image
+  MCP_CHECK_FAIL_REASON=""
   cid="$(compose ps -q "$KEYSTONE_SERVICE")"
   image="$(docker inspect --format '{{.Image}}' "$cid")"
   local -a args=(--keystone "http://127.0.0.1:${PUBLISH_PORT}/" --mode "$mode")
@@ -625,8 +648,12 @@ mcp_check() {
   docker run --rm --network host --env-file "$WORK/secrets/client.env" \
     -v "$HERE/e2e:/e2e:ro" -v "$WORK/tls:/tls:ro" --entrypoint python "$image" \
     /e2e/mcp_check.py "${args[@]}" >"$WORK/log/mcp.json"
-  python3 -c 'import json,sys; doc=json.load(open(sys.argv[1])); raise SystemExit(0 if doc.get("ok") else 1)' \
-    "$WORK/log/mcp.json"
+  if python3 -c 'import json,sys; doc=json.load(open(sys.argv[1])); raise SystemExit(0 if doc.get("ok") else 1)' \
+    "$WORK/log/mcp.json"; then
+    return 0
+  fi
+  MCP_CHECK_FAIL_REASON="$(mcp_check_fail_reason "$WORK/log/mcp.json")"
+  return 1
 }
 
 export_file_public() {
@@ -711,7 +738,7 @@ scenario_install_file_mcp_minio() {
   run_answered bundle install minimal || fail install_file_mcp_minio "bundle install exited ${KC_RC}"
   cp "$WORK/log/kc.out" "$WORK/log/install.json"
   curl_public || fail install_file_mcp_minio "public HTTP check failed"
-  mcp_check files || fail install_file_mcp_minio "files client failed"
+  mcp_check files || fail install_file_mcp_minio "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   status_file_mcp || fail install_file_mcp_minio "status is not ready"
   local warnings
   warnings="$(jq_ package-status file-mcp <"$WORK/log/kc.out")"
@@ -906,7 +933,7 @@ scenario_docs_service_postgres_provider() {
   if env_names "$migrate" | has_line DOCS_S3_BUCKET; then
     fail docs_service_postgres_provider "migrate has S3"
   fi
-  mcp_check hello docs || fail docs_service_postgres_provider "docs client failed"
+  mcp_check hello docs || fail docs_service_postgres_provider "docs client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   python3 -c '
 import pathlib, sys
 root = pathlib.Path(sys.argv[1])
@@ -986,7 +1013,7 @@ scenario_override_survives_upgrade() {
   file_hash="$(sha_file "$ROOT/packages/file-mcp.yml")"
   [[ "$new_fragment" == "$file_hash" && "$new_fragment" != "$old_fragment" ]] \
     || fail override_survives_upgrade "fragment hash did not move"
-  mcp_check files || fail override_survives_upgrade "files client failed"
+  mcp_check files || fail override_survives_upgrade "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass override_survives_upgrade "$started"
 }
 
@@ -1043,7 +1070,7 @@ scenario_eject_and_adopt() {
   hash="$(lockq service file-mcp fragment_sha256)"
   file_hash="$(sha_file "$ROOT/packages/file-mcp.yml")"
   [[ "$hash" == "$file_hash" ]] || fail eject_and_adopt "fragment hash does not match"
-  mcp_check files || fail eject_and_adopt "files client failed"
+  mcp_check files || fail eject_and_adopt "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass eject_and_adopt "$started"
 }
 
@@ -1069,10 +1096,10 @@ scenario_remove_and_reinstall() {
     fail remove_and_reinstall "nginx site is still enabled"
   fi
   [[ -f "$ROOT/packages/file-mcp.override.yml" ]] || fail remove_and_reinstall "override file was deleted"
-  mcp_check absent files || fail remove_and_reinstall "files tools are still present"
+  mcp_check absent files || fail remove_and_reinstall "files tools are still present (${MCP_CHECK_FAIL_REASON:-unknown})"
   export_file_public
   run_answered service apply file-mcp || fail remove_and_reinstall "reinstall exited ${KC_RC}"
-  mcp_check files || fail remove_and_reinstall "files client failed after reinstall"
+  mcp_check files || fail remove_and_reinstall "files client failed after reinstall (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass remove_and_reinstall "$started"
 }
 
@@ -1165,7 +1192,7 @@ scenario_external_s3() {
   run_answered service apply file-mcp || fail external_s3 "good secret exited ${KC_RC}"
   jq_ warning-ids <"$WORK/log/kc.out" | has_line s3_plain_http \
     || fail external_s3 "http warning missing"
-  mcp_check files || fail external_s3 "files client failed"
+  mcp_check files || fail external_s3 "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   lockq resource s3 origin | has_line external || fail external_s3 "origin is not external"
   if lockq resource s3 provider | has_prefix ""; then
     fail external_s3 "external s3 still names a provider"
@@ -1296,7 +1323,7 @@ scenario_partner_catalog() {
     || fail partner_catalog "partner choice missing"
   run_answered service apply e2e-partner/hello-upstream \
     || fail partner_catalog "hello apply exited ${KC_RC}"
-  mcp_check hello hello || fail partner_catalog "hello client failed"
+  mcp_check hello hello || fail partner_catalog "hello client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass partner_catalog "$started"
 }
 
@@ -1436,7 +1463,7 @@ raise SystemExit(main())
   run_answered service apply file-mcp || fail tls_manual "second apply exited ${KC_RC}"
   [[ "$(jq_ public-state <"$WORK/log/kc.out")" == "ready" ]] || fail tls_manual "public state is not ready"
   [[ "$(jq_ public-tls <"$WORK/log/kc.out")" == "manual" ]] || fail tls_manual "tls is not manual"
-  mcp_check files || fail tls_manual "files client failed"
+  mcp_check files || fail tls_manual "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass tls_manual "$started"
 }
 

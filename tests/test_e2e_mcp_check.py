@@ -38,9 +38,10 @@ def test_host_path_drops_the_token() -> None:
     assert "?" not in shown
 
 
-def test_mcp_endpoint_adds_the_mcp_path() -> None:
-    assert mcp_check.mcp_endpoint("http://127.0.0.1:8080/") == "http://127.0.0.1:8080/mcp/"
+def test_mcp_endpoint_keeps_the_given_path() -> None:
+    assert mcp_check.mcp_endpoint("http://127.0.0.1:8080/") == "http://127.0.0.1:8080/"
     assert mcp_check.mcp_endpoint("http://127.0.0.1:8080/mcp") == "http://127.0.0.1:8080/mcp/"
+    assert mcp_check.mcp_endpoint("http://127.0.0.1:8080") == "http://127.0.0.1:8080/"
 
 
 def test_files_round_trip_hides_urls() -> None:
