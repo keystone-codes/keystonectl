@@ -5,6 +5,8 @@ process. The tool does not install keystone-mcp and does not care whether the
 process arrived from a published compose file, from another product's setup, or
 later from Helm. It only needs this directory.
 
+Why: [ADR 0006](../adr/0006-keystonectl-is-a-separate-product.md).
+
 `layout_version` in `services.lock.yaml` is `1`. There is no migration to
 another layout in this release.
 
@@ -40,6 +42,8 @@ Paths are relative to the deployment root.
 
 keystonectl never modifies an operator file, and never modifies a registry or
 snapshot entry it does not own.
+
+Why: [ADR 0005](../adr/0005-operator-freedom-override-eject-adopt.md).
 
 ## How files are written
 
