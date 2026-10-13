@@ -356,6 +356,18 @@ def test_recommended_policy_and_critical_in_result(tmp_path: Path) -> None:
     assert result.result["recommended_policy"]["path"] == "policy.example.yaml"
 
 
+def test_changed_env_file_recreates_the_container(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    first, _runner, _box = apply_package(root, "file-mcp", {"file-mcp": _facade()})
+    assert first.code == 0, first.error
+    path = root / "packages" / "file-mcp.env"
+    path.write_text(path.read_text(encoding="utf-8") + "FILE_MCP_SIGNING_SECRET=rotated-value\n")
+    again, runner, _box = apply_package(root, "file-mcp", {"file-mcp": _facade()}, reset=False)
+    assert again.code == 0, again.error
+    assert again.changes != 0
+    assert any("--force-recreate" in call.args and "up" in call.args for call in runner.calls)
+
+
 def test_rerun_same_version_changes_zero(tmp_path: Path) -> None:
     root = tmp_path / "root"
     first, _runner, _box = apply_package(root, "file-mcp", {"file-mcp": _facade()})
