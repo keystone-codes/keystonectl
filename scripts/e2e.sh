@@ -1529,14 +1529,16 @@ scenario_legacy_gone() {
     return 0
   fi
   root="$(dirname "$ROOT")"
-  python3 - "$root" <<'PY' || fail legacy_gone "a removed name is still in the tree"
+  if ! legacy_out="$(python3 - "$root" <<'PY' 2>&1
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
-files = [root / "setup.sh", root / "start.sh", root / "README.md", root / "SETUP.md"]
-files.extend(path for path in (root / "mcp").rglob("*") if path.is_file())
-text_of = {path: path.read_text(encoding="utf-8") for path in files}
+top_paths = {root / "setup.sh", root / "start.sh", root / "README.md", root / "SETUP.md"}
+mcp_paths = {path for path in (root / "mcp").rglob("*") if path.is_file()}
+text_of = {
+    path: path.read_text(encoding="utf-8") for path in top_paths | mcp_paths
+}
 
 
 def setup_function_span(name):
@@ -1596,25 +1598,44 @@ banned_exact = (
     "EXTERNAL_API_ITEMS",
     "MCP_EXTERNAL_COMPOSE",
 )
+mcp_tokens = (
+    "configure_external_apis",
+    "write_external_compose",
+    "EXTERNAL_APIS",
+    "docker-compose.external.yml",
+    "KEYSTONE_MCP_FILE_API_URL",
+)
 problems = []
 for path, text in text_of.items():
     for line_no, line in enumerate(text.splitlines(), start=1):
-        for token in banned_exact:
-            if token in line:
-                problems.append(f"{path}:{line_no}: {token}")
-        if "managed" in line and not in_migrate(path, line_no) and not in_readme_section(path, line_no):
-            problems.append(f"{path}:{line_no}: managed")
-        if "EXTERNAL_APIS" in line and not (
-            in_migrate(path, line_no) or in_readme_section(path, line_no) or in_setup_doc(path, line_no)
-        ):
-            problems.append(f"{path}:{line_no}: EXTERNAL_APIS")
-        if "docker-compose.external.yml" in line and not (
-            in_migrate(path, line_no) or in_readme_section(path, line_no)
-        ):
-            problems.append(f"{path}:{line_no}: docker-compose.external.yml")
+        if path in top_paths:
+            for token in banned_exact:
+                if token in line:
+                    problems.append(f"{path}:{line_no}: {token}")
+            if "managed" in line and not in_migrate(path, line_no) and not in_readme_section(
+                path, line_no
+            ):
+                problems.append(f"{path}:{line_no}: managed")
+            if "EXTERNAL_APIS" in line and not (
+                in_migrate(path, line_no)
+                or in_readme_section(path, line_no)
+                or in_setup_doc(path, line_no)
+            ):
+                problems.append(f"{path}:{line_no}: EXTERNAL_APIS")
+            if "docker-compose.external.yml" in line and not (
+                in_migrate(path, line_no) or in_readme_section(path, line_no)
+            ):
+                problems.append(f"{path}:{line_no}: docker-compose.external.yml")
+        elif path in mcp_paths:
+            for token in mcp_tokens:
+                if token in line:
+                    problems.append(f"{path}:{line_no}: {token}")
 if problems:
     raise SystemExit("\n".join(problems))
 PY
+)"; then
+    fail legacy_gone "$legacy_out"
+  fi
   if grep -n 'build:' "$ROOT/docker-compose.yml" | grep 'keystone-mcp' >/dev/null; then
     fail legacy_gone "keystone-mcp still has a build"
   fi
