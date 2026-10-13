@@ -1031,7 +1031,7 @@ scenario_direct_edit_is_caught() {
   kc service upgrade file-mcp@1.0.0 || true
   [[ "$(jq_ error-id <"$WORK/log/kc.out")" == "fragment_modified" ]] \
     || fail direct_edit_is_caught "upgrade did not refuse"
-  run_answered service apply file-mcp || true
+  run_answered service apply e2e/file-mcp || true
   [[ "$(jq_ error-id <"$WORK/log/kc.out")" == "fragment_modified" ]] \
     || fail direct_edit_is_caught "apply did not refuse"
   grep -q e2e-marker "$ROOT/packages/file-mcp.yml" \
@@ -1058,7 +1058,7 @@ scenario_eject_and_adopt() {
   fi
   kc service status file-mcp
   [[ "$KC_RC" -eq 0 ]] || fail eject_and_adopt "status exited ${KC_RC}"
-  run_answered service apply file-mcp || fail eject_and_adopt "apply exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp || fail eject_and_adopt "apply exited ${KC_RC}"
   grep -q 'com.example.e2e: ejected' "$ROOT/packages/file-mcp.yml" \
     || fail eject_and_adopt "apply rewrote the ejected fragment"
   UPGRADE_ACCEPT="yes"
@@ -1099,7 +1099,7 @@ scenario_remove_and_reinstall() {
   [[ -f "$ROOT/packages/file-mcp.override.yml" ]] || fail remove_and_reinstall "override file was deleted"
   mcp_check absent files || fail remove_and_reinstall "files tools are still present (${MCP_CHECK_FAIL_REASON:-unknown})"
   export_file_public
-  run_answered service apply file-mcp || fail remove_and_reinstall "reinstall exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp || fail remove_and_reinstall "reinstall exited ${KC_RC}"
   mcp_check files || fail remove_and_reinstall "files client failed after reinstall (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass remove_and_reinstall "$started"
 }
@@ -1185,12 +1185,12 @@ scenario_external_s3() {
   export KEYSTONE_SETUP_S3_ACCESS_KEY_FILE="$WORK/secrets/s3-access"
   export KEYSTONE_SETUP_S3_SECRET_KEY_FILE="$WORK/secrets/s3-secret-bad"
   export_file_public
-  run_answered service apply file-mcp || true
+  run_answered service apply e2e/file-mcp || true
   [[ "$KC_RC" -eq 3 ]] || fail external_s3 "bad secret exited ${KC_RC}"
   [[ "$(jq_ retryable <"$WORK/log/kc.out")" == "false" ]] || fail external_s3 "bad secret is retryable"
   jq_ error-id <"$WORK/log/kc.out" | has_prefix s3 || fail external_s3 "error is not an S3 failure"
   export KEYSTONE_SETUP_S3_SECRET_KEY_FILE="$WORK/secrets/s3-secret"
-  run_answered service apply file-mcp || fail external_s3 "good secret exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp || fail external_s3 "good secret exited ${KC_RC}"
   jq_ warning-ids <"$WORK/log/kc.out" | has_line s3_plain_http \
     || fail external_s3 "http warning missing"
   mcp_check files || fail external_s3 "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
@@ -1322,6 +1322,8 @@ scenario_partner_catalog() {
     || fail partner_catalog "keystone-codes choice missing"
   jq_ missing-choices <"$WORK/log/kc.out" | has_line e2e-partner/file-mcp \
     || fail partner_catalog "partner choice missing"
+  kc service plan e2e/file-mcp || true
+  [[ "$KC_RC" -eq 0 ]] || fail partner_catalog "qualified plan exited ${KC_RC}"
   run_answered service apply e2e-partner/hello-upstream \
     || fail partner_catalog "hello apply exited ${KC_RC}"
   mcp_check hello hello || fail partner_catalog "hello client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
@@ -1461,7 +1463,7 @@ raise SystemExit(main())
   else
     start_manual_caddy || fail tls_manual "could not start Caddy"
   fi
-  run_answered service apply file-mcp || fail tls_manual "second apply exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp || fail tls_manual "second apply exited ${KC_RC}"
   [[ "$(jq_ public-state <"$WORK/log/kc.out")" == "ready" ]] || fail tls_manual "public state is not ready"
   [[ "$(jq_ public-tls <"$WORK/log/kc.out")" == "manual" ]] || fail tls_manual "tls is not manual"
   mcp_check files || fail tls_manual "files client failed (${MCP_CHECK_FAIL_REASON:-unknown})"
@@ -1482,7 +1484,7 @@ scenario_tls_certbot() {
   [[ "$KC_RC" -eq 0 ]] || fail tls_certbot "status exited ${KC_RC}"
   local before after
   before="$(wc -c </var/log/letsencrypt/letsencrypt.log || echo 0)"
-  run_answered service apply file-mcp || fail tls_certbot "repeat apply exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp || fail tls_certbot "repeat apply exited ${KC_RC}"
   after="$(wc -c </var/log/letsencrypt/letsencrypt.log || echo 0)"
   [[ "$before" == "$after" ]] || fail tls_certbot "certbot issued again"
   pass tls_certbot "$started"
