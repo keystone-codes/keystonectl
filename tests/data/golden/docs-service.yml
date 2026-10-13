@@ -24,7 +24,7 @@ services:
     depends_on:
       docs-service-migrate: {condition: service_completed_successfully}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/healthz || curl -fsS -o /dev/null http://127.0.0.1:8000/healthz"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/healthz || curl -fsS -o /dev/null http://127.0.0.1:8000/healthz || python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')\""]
       interval: 10s
       timeout: 5s
       start_period: 20s
@@ -42,7 +42,7 @@ services:
     depends_on:
       docs-service-migrate: {condition: service_completed_successfully}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8081/healthz || curl -fsS -o /dev/null http://127.0.0.1:8081/healthz"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8081/healthz || curl -fsS -o /dev/null http://127.0.0.1:8081/healthz || python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz')\""]
       interval: 10s
       timeout: 5s
       start_period: 20s
