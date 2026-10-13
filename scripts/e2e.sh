@@ -373,6 +373,37 @@ chown_policy() {
   fi
 }
 
+install_boot_policy() {
+  local dest="$ROOT/policy/rbac-policy.yaml"
+  mkdir -p "$ROOT/policy"
+  if [[ ! -f "$dest" ]]; then
+    cat >"$dest" <<'EOF'
+version: "1.0.0"
+default_deny: true
+roles:
+  administrator:
+    description: "Full access, including user administration."
+    allow:
+      - "*"
+requires_human_identity: []
+critical_tools: []
+EOF
+  fi
+  chown_policy "$ROOT/policy"
+}
+
+install_reader_policy() {
+  # The running server already loaded the boot policy. The file on disk is what
+  # the untouched-policy check reads. A restart before hello exists would refuse it.
+  if [[ "$(id -u)" -eq 0 ]]; then
+    cp "$HERE/e2e/fixtures/rbac-policy.yaml" "$ROOT/policy/rbac-policy.yaml"
+    chown 10001:10001 "$ROOT/policy/rbac-policy.yaml"
+  else
+    sudo cp "$HERE/e2e/fixtures/rbac-policy.yaml" "$ROOT/policy/rbac-policy.yaml"
+    sudo chown 10001:10001 "$ROOT/policy/rbac-policy.yaml"
+  fi
+}
+
 prepare_production_example() {
   local src="$WORK/src/keystone-mcp" stage="$WORK/stage"
   pin_clone "$KEYSTONE_MCP_URL" "$KEYSTONE_MCP_REF" "$src"
@@ -410,9 +441,8 @@ KEYSTONE_REDIS_PASSWORD=${redis}
 EOF
   umask 022
   chmod 600 "$ROOT/.env"
-  mkdir -p "$ROOT/policy"
-  cp "$HERE/e2e/fixtures/rbac-policy.yaml" "$ROOT/policy/rbac-policy.yaml"
-  chown_policy "$ROOT/policy"
+  # reader:hello_* is not in the catalog yet. Boot on the shipped policy.
+  install_boot_policy
   local patch="$HERE/e2e/fixtures/production-example.patch"
   if grep -q '^diff ' "$patch" || grep -q '^--- ' "$patch"; then
     patch -d "$ROOT" -p1 <"$patch"
@@ -424,6 +454,7 @@ EOF
       >"$DIAG/keystone.log" 2>&1 || true
     fail prepare "the keystone container did not become healthy"
   fi
+  install_reader_policy
   kc init --adopt "$ROOT"
   [[ "$KC_RC" -eq 0 ]] || fail prepare "init --adopt exited ${KC_RC}"
   local command
@@ -460,9 +491,8 @@ prepare_deploy_ci() {
   umask 022
   chmod 600 "$ROOT/.env"
   write_secret "$WORK/secrets/pg" "$pg"
-  mkdir -p "$ROOT/policy" "$ROOT/env"
-  cp "$HERE/e2e/fixtures/rbac-policy.yaml" "$ROOT/policy/rbac-policy.yaml"
-  chown_policy "$ROOT/policy"
+  mkdir -p "$ROOT/env"
+  install_boot_policy
   local example dest
   for example in "$ROOT"/env/*.env.example; do
     [[ -f "$example" ]] || continue
@@ -486,6 +516,7 @@ prepare_deploy_ci() {
   kc init --adopt "$ROOT"
   [[ "$(jq_ changes <"$WORK/log/kc.out")" == "0" ]] || fail prepare "second init changed files"
   compose --profile keystone-mcp up -d --wait keystone-mcp
+  install_reader_policy
   kc check
   [[ "$KC_RC" -eq 0 ]] || fail prepare "check after adopt exited ${KC_RC}"
   KEYSTONE_SERVICE="$(lockq layout-keystone-service)"
