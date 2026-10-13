@@ -6,13 +6,25 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
+from keystonectl.envfiles import read_env
 from keystonectl.runner import CommandResult, CommandRunner
 
 WIRED_DIR = "/etc/keystone-mcp/keystonectl"
 UPSTREAMS_NETWORK = "keystone-mcp-upstreams"
 RESOURCES_NETWORK = "keystone-resources"
 PROBE_CODE = "import sys,urllib.request; urllib.request.urlopen(sys.argv[1], timeout=4)"
+FACADE_PROBE_CODE = """
+import sys
+from urllib.request import Request, urlopen
+url = sys.argv[1]
+headers = {}
+if len(sys.argv) > 2 and sys.argv[2]:
+    headers["Host"] = sys.argv[2]
+with urlopen(Request(url, headers=headers), timeout=4) as response:
+    raise SystemExit(0 if response.status < 500 else 1)
+""".strip()
 METRICS_CODE = (
     "import urllib.request; "
     "print(urllib.request.urlopen('http://127.0.0.1:8080/metrics', timeout=4).read().decode())"
@@ -32,6 +44,24 @@ except URLError as exc:
 except Exception as exc:
     print(f"error:{type(exc).__name__}: {exc}")
 """.strip()
+
+
+def facade_probe_host(root: Path, manifest: Mapping[str, Any]) -> str | None:
+    """Host header for in-network facade probes when a public base URL is configured."""
+
+    raw_paths = manifest.get("public_paths")
+    if not isinstance(raw_paths, list) or not raw_paths:
+        return None
+    env_name = manifest.get("public_base_url_env")
+    if not isinstance(env_name, str) or not env_name:
+        return None
+    from keystonectl.generate.placement import placement
+
+    value = read_env(root / placement(manifest).shared).get(env_name, "")
+    if not value:
+        return None
+    host = urlparse(value).hostname
+    return host if host else None
 
 
 def daemon_down(result: CommandResult) -> bool:
