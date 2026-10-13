@@ -1,0 +1,128 @@
+"""Download a git tag or commit. Callers pass a CommandRunner; git never prompts."""
+
+from __future__ import annotations
+
+import hashlib
+import re
+import shutil
+import tempfile
+from pathlib import Path
+
+from keystonectl.runner import CommandResult, CommandRunner
+
+GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "/bin/true"}
+GIT_TIMEOUT = 60.0
+_SHA = re.compile(r"^[0-9a-f]{40}$")
+
+
+class FetchError(Exception):
+    def __init__(self, error_id: str, message: str) -> None:
+        super().__init__(message)
+        self.error_id = error_id
+        self.message = message
+
+
+def is_commit_sha(ref: str) -> bool:
+    return _SHA.fullmatch(ref) is not None
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _run(runner: CommandRunner, args: list[str], *, cwd: Path | None = None) -> CommandResult:
+    return runner.run(args, env=GIT_ENV, cwd=cwd, timeout=GIT_TIMEOUT)
+
+
+def _fail_result(result: CommandResult, action: str) -> FetchError:
+    detail = (result.stderr or result.stdout or action).strip()
+    return FetchError("source_unreachable", detail or action)
+
+
+def tag_on_remote(runner: CommandRunner, url: str, tag: str) -> None:
+    """Refuse when ``tag`` is not a tag. A branch of the same name is not a tag."""
+    result = _run(runner, ["git", "ls-remote", "--tags", url, f"refs/tags/{tag}"])
+    if result.returncode != 0:
+        raise _fail_result(result, "git ls-remote failed")
+    needle = f"refs/tags/{tag}"
+    for line in result.stdout.splitlines():
+        ref = line.split("\t", 1)[-1] if "\t" in line else ""
+        if ref == needle or ref == f"{needle}^{{}}":
+            return
+    raise FetchError("tag_not_found", f"Tag {tag} was not found at {url}.")
+
+
+def list_tags(runner: CommandRunner, url: str) -> str:
+    result = _run(runner, ["git", "ls-remote", "--tags", url])
+    if result.returncode != 0:
+        raise _fail_result(result, "git ls-remote failed")
+    return result.stdout
+
+
+def fetch_tree(runner: CommandRunner, url: str, ref: str) -> tuple[Path, str]:
+    """Clone ``ref`` into a new directory with ``.git`` removed. Return ``(path, commit)``."""
+    tmp = Path(tempfile.mkdtemp(prefix="keystonectl-"))
+    try:
+        commit = _materialize(runner, url, ref, tmp)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    git_dir = tmp / ".git"
+    if git_dir.exists():
+        shutil.rmtree(git_dir)
+    return tmp, commit
+
+
+def _materialize(runner: CommandRunner, url: str, ref: str, dest: Path) -> str:
+    if is_commit_sha(ref):
+        init = _run(runner, ["git", "init", str(dest)])
+        if init.returncode != 0:
+            raise _fail_result(init, "git init failed")
+        fetched = _run(runner, ["git", "fetch", "--depth", "1", url, ref], cwd=dest)
+        if fetched.returncode != 0:
+            raise _fail_result(fetched, "git fetch failed")
+        checkout = _run(runner, ["git", "checkout", "--detach", "FETCH_HEAD"], cwd=dest)
+        if checkout.returncode != 0:
+            raise _fail_result(checkout, "git checkout failed")
+    else:
+        tag_on_remote(runner, url, ref)
+        cloned = _run(
+            runner,
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                ref,
+                "--single-branch",
+                "-c",
+                "advice.detachedHead=false",
+                url,
+                str(dest),
+            ],
+        )
+        if cloned.returncode != 0:
+            raise _fail_result(cloned, "git clone failed")
+    parsed = _run(runner, ["git", "rev-parse", "HEAD"], cwd=dest)
+    if parsed.returncode != 0:
+        raise _fail_result(parsed, "git rev-parse failed")
+    commit = parsed.stdout.strip()
+    if not is_commit_sha(commit):
+        raise FetchError("source_unreachable", "git rev-parse did not return a commit.")
+    return commit
+
+
+def replace_tree(src: Path, dest: Path) -> None:
+    """Move ``src`` onto ``dest``. ``src`` is consumed."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    backup = dest.with_name(dest.name + ".replacing")
+    if backup.exists():
+        shutil.rmtree(backup)
+    if dest.exists():
+        dest.rename(backup)
+    src.rename(dest)
+    if backup.exists():
+        shutil.rmtree(backup)
