@@ -633,6 +633,24 @@ def _public_paths(document: dict[str, Any], mcp: dict[str, Any] | None, report: 
         )
     if container_set and not paths_set:
         report.add("public_container", "public_container requires public_paths")
+    if paths_set:
+        containers = document.get("containers")
+        if container_set:
+            _check_role(
+                containers,
+                "public_container",
+                document.get("public_container"),
+                report,
+                port=True,
+            )
+        elif mcp is not None:
+            _check_role(
+                containers,
+                "mcp.container",
+                mcp.get("container"),
+                report,
+                port=True,
+            )
     if not paths_set or mcp is None or not isinstance(raw_paths, list):
         return
     facade = mcp.get("container")

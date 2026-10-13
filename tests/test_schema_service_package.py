@@ -650,6 +650,31 @@ def test_public_paths_rules() -> None:
     assert manifest_errors(overlap) == ["public_paths[0]: overlaps mcp.path"]
 
 
+def test_public_container_role_unknown_init_or_portless_rejected() -> None:
+    unknown = _service()
+    unknown["public_container"] = "missing"
+    assert manifest_errors(unknown) == [
+        "public_container: 'missing' is not a container of this package"
+    ]
+
+    init_public = _multi()
+    init_public["public_paths"] = ["/static/"]
+    init_public["public_base_url_env"] = "DOCS_PUBLIC_BASE"
+    init_public["public_container"] = "migrate"
+    init_errors = manifest_errors(init_public)
+    assert "public_container: 'migrate' is an init container" in init_errors
+    assert "public_container: 'migrate' has no port" in init_errors
+
+    portless = _multi()
+    portless["public_paths"] = ["/static/"]
+    portless["public_base_url_env"] = "DOCS_PUBLIC_BASE"
+    portless["public_container"] = "api"
+    del portless["containers"]["api"]["port"]
+    portless_errors = manifest_errors(portless)
+    assert "public_container: 'api' has no port" in portless_errors
+    assert "containers.api.healthcheck.path requires containers.api.port" in portless_errors
+
+
 def test_provision_kind_mismatch_and_undeclared_admin_env_rejected() -> None:
     mismatch = _resource()
     mismatch["provision"]["per_consumer"] = "database_and_user"
