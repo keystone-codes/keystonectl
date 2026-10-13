@@ -784,8 +784,9 @@ scenario_docs_service_postgres_provider() {
   unset KEYSTONE_SETUP_RESOURCE_S3 || true
   run_answered service apply e2e/docs-service \
     || fail docs_service_postgres_provider "apply exited ${KC_RC}"
-  jq_ missing-vars <"$WORK/log/kc.out" | has_line KEYSTONE_SETUP_RESOURCE_S3 \
-    && fail docs_service_postgres_provider "S3 was asked again" || true
+  if jq_ missing-vars <"$WORK/log/kc.out" | has_line KEYSTONE_SETUP_RESOURCE_S3; then
+    fail docs_service_postgres_provider "S3 was asked again"
+  fi
   lockq resource postgres origin | has_line catalog \
     || fail docs_service_postgres_provider "postgres origin is not catalog"
   lockq service postgres role | has_line resource \
@@ -803,22 +804,28 @@ scenario_docs_service_postgres_provider() {
     || fail docs_service_postgres_provider "api is not healthy"
   network_names "$mcp" | has_line keystone-mcp-upstreams \
     || fail docs_service_postgres_provider "mcp is not on the upstream network"
-  network_names "$mcp" | has_line keystone-resources \
-    && fail docs_service_postgres_provider "mcp is on the resource network" || true
+  if network_names "$mcp" | has_line keystone-resources; then
+    fail docs_service_postgres_provider "mcp is on the resource network"
+  fi
   network_names "$api" | has_line ks-pkg-docs-service \
     || fail docs_service_postgres_provider "api is not on the package network"
   network_names "$api" | has_line keystone-resources \
     || fail docs_service_postgres_provider "api is not on the resource network"
-  network_names "$migrate" | has_line keystone-mcp-upstreams \
-    && fail docs_service_postgres_provider "migrate is on the upstream network" || true
+  if network_names "$migrate" | has_line keystone-mcp-upstreams; then
+    fail docs_service_postgres_provider "migrate is on the upstream network"
+  fi
   env_names "$mcp" | has_line HELLO_BEARER_TOKEN || fail docs_service_postgres_provider "mcp has no bearer"
-  env_names "$api" | has_line HELLO_BEARER_TOKEN \
-    && fail docs_service_postgres_provider "api has the bearer" || true
+  if env_names "$api" | has_line HELLO_BEARER_TOKEN; then
+    fail docs_service_postgres_provider "api has the bearer"
+  fi
   env_names "$migrate" | has_line PGHOST || fail docs_service_postgres_provider "migrate has no PGHOST"
-  env_names "$mcp" | has_line PGHOST && fail docs_service_postgres_provider "mcp has PGHOST" || true
+  if env_names "$mcp" | has_line PGHOST; then
+    fail docs_service_postgres_provider "mcp has PGHOST"
+  fi
   env_names "$api" | has_line DOCS_S3_BUCKET || fail docs_service_postgres_provider "api has no S3 bucket"
-  env_names "$migrate" | has_line DOCS_S3_BUCKET \
-    && fail docs_service_postgres_provider "migrate has S3" || true
+  if env_names "$migrate" | has_line DOCS_S3_BUCKET; then
+    fail docs_service_postgres_provider "migrate has S3"
+  fi
   mcp_check hello docs || fail docs_service_postgres_provider "docs client failed"
   python3 -c '
 import pathlib, sys
@@ -923,8 +930,9 @@ scenario_direct_edit_is_caught() {
     || fail direct_edit_is_caught "the fragment was rewritten"
   cp "$copy" "$ROOT/packages/file-mcp.yml"
   kc check
-  jq_ warning-ids <"$WORK/log/kc.out" | has_line fragment_modified \
-    && fail direct_edit_is_caught "fragment_modified remains" || true
+  if jq_ warning-ids <"$WORK/log/kc.out" | has_line fragment_modified; then
+    fail direct_edit_is_caught "fragment_modified remains"
+  fi
   pass direct_edit_is_caught "$started"
 }
 
@@ -937,8 +945,9 @@ scenario_eject_and_adopt() {
   lockq service file-mcp managed | has_line ejected || fail eject_and_adopt "lock is not ejected"
   printf '\n# com.example.e2e: ejected\n' >>"$ROOT/packages/file-mcp.yml"
   kc check
-  jq_ warning-ids <"$WORK/log/kc.out" | has_line fragment_modified \
-    && fail eject_and_adopt "ejected fragment was treated as a direct edit" || true
+  if jq_ warning-ids <"$WORK/log/kc.out" | has_line fragment_modified; then
+    fail eject_and_adopt "ejected fragment was treated as a direct edit"
+  fi
   kc service status file-mcp
   [[ "$KC_RC" -eq 0 ]] || fail eject_and_adopt "status exited ${KC_RC}"
   run_answered service apply file-mcp || fail eject_and_adopt "apply exited ${KC_RC}"
