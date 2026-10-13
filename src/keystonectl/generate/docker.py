@@ -15,16 +15,6 @@ WIRED_DIR = "/etc/keystone-mcp/keystonectl"
 UPSTREAMS_NETWORK = "keystone-mcp-upstreams"
 RESOURCES_NETWORK = "keystone-resources"
 PROBE_CODE = "import sys,urllib.request; urllib.request.urlopen(sys.argv[1], timeout=4)"
-FACADE_PROBE_CODE = """
-import sys
-from urllib.request import Request, urlopen
-url = sys.argv[1]
-headers = {}
-if len(sys.argv) > 2 and sys.argv[2]:
-    headers["Host"] = sys.argv[2]
-with urlopen(Request(url, headers=headers), timeout=4) as response:
-    raise SystemExit(0 if response.status < 500 else 1)
-""".strip()
 METRICS_CODE = (
     "import urllib.request; "
     "print(urllib.request.urlopen('http://127.0.0.1:8080/metrics', timeout=4).read().decode())"
@@ -47,7 +37,7 @@ except Exception as exc:
 
 
 def facade_probe_host(root: Path, manifest: Mapping[str, Any]) -> str | None:
-    """Host header for in-network facade probes when a public base URL is configured."""
+    """Public hostname for in-network facade probes when a public base URL is configured."""
 
     raw_paths = manifest.get("public_paths")
     if not isinstance(raw_paths, list) or not raw_paths:
@@ -62,6 +52,49 @@ def facade_probe_host(root: Path, manifest: Mapping[str, Any]) -> str | None:
         return None
     host = urlparse(value).hostname
     return host if host else None
+
+
+def container_network_ip(inspected: Mapping[str, Any], network: str) -> str | None:
+    settings = inspected.get("NetworkSettings")
+    if not isinstance(settings, dict):
+        return None
+    networks = settings.get("Networks")
+    if not isinstance(networks, dict):
+        return None
+    for key, spec in networks.items():
+        if not isinstance(spec, dict):
+            continue
+        if key == network or key.endswith(f"_{network}") or network in key:
+            ip = spec.get("IPAddress")
+            if isinstance(ip, str) and ip:
+                return ip
+    spec = networks.get(network)
+    if isinstance(spec, dict):
+        ip = spec.get("IPAddress")
+        if isinstance(ip, str) and ip:
+            return ip
+    return None
+
+
+def facade_probe_plan(
+    root: Path,
+    manifest: Mapping[str, Any],
+    *,
+    service: str,
+    port: int,
+    healthz: str,
+    inspected: Mapping[str, Any],
+) -> tuple[str, list[str]]:
+    """Build the facade probe URL and any ``docker run --add-host`` arguments."""
+
+    default = f"http://{service}:{port}{healthz}"
+    domain = facade_probe_host(root, manifest)
+    if not domain:
+        return default, []
+    ip = container_network_ip(inspected, UPSTREAMS_NETWORK)
+    if not ip:
+        return default, []
+    return f"http://{domain}:{port}{healthz}", ["--add-host", f"{domain}:{ip}"]
 
 
 def daemon_down(result: CommandResult) -> bool:
