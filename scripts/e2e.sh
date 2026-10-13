@@ -301,7 +301,11 @@ ensure_network() {
 }
 
 compose() {
-  docker compose --project-directory "$ROOT" -f docker-compose.yml -f docker-compose.packages.yml "$@"
+  # -f is relative to the current directory, not --project-directory.
+  docker compose --project-directory "$ROOT" \
+    -f "$ROOT/docker-compose.yml" \
+    -f "$ROOT/docker-compose.packages.yml" \
+    "$@"
 }
 
 rewrite_publish_port() {
@@ -413,7 +417,7 @@ EOF
     patch -d "$ROOT" -p1 <"$patch"
   fi
   rewrite_publish_port "$ROOT/docker-compose.yml"
-  docker compose --project-directory "$ROOT" -f docker-compose.yml up -d --wait
+  docker compose --project-directory "$ROOT" -f "$ROOT/docker-compose.yml" up -d --wait
   kc init --adopt "$ROOT"
   [[ "$KC_RC" -eq 0 ]] || fail prepare "init --adopt exited ${KC_RC}"
   local command
