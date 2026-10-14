@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import yaml
 
 from keystonectl.envfiles import read_env
 from keystonectl.resources import RESOURCE_NETWORK
+from keystonectl.resources.provision import consumer_secret_path, existing_consumer_secret
 from tests.support import mode
 from tests.support.resources import (
     ACCESS_KEY,
@@ -144,6 +146,93 @@ def test_docker_name_endpoint_checked_via_container_ip(
     assert result.code == 0, result.error
     assert calls[0][2]["connect_endpoint"] == "http://10.0.0.8:9000"
     assert result.result["probes"]["s3"]["checked_via"] == "http://10.0.0.8:9000"
+
+
+FILE_BIND = {
+    "endpoint": "FILE_MCP_S3_ENDPOINT",
+    "region": "FILE_MCP_S3_REGION",
+    "bucket": "FILE_MCP_S3_BUCKET",
+    "access_key": "FILE_MCP_S3_ACCESS_KEY",
+    "secret_key": "FILE_MCP_S3_SECRET_KEY",
+    "path_style": "FILE_MCP_S3_PATH_STYLE",
+}
+
+
+def _capture_provision_secrets(lab: Lab) -> list[str]:
+    seen: list[str] = []
+    updated = []
+    for prefix, outcome in lab.runner.rules:
+        if tuple(prefix) != ("docker",):
+            updated.append((prefix, outcome))
+            continue
+
+        def wrapped(args, _outcome=outcome, **kwargs):
+            if tuple(args[:2]) == ("docker", "run"):
+                out = next(
+                    str(item)[: -len(":/out")] for item in args if str(item).endswith(":/out")
+                )
+                consumer = list(args)[list(args).index("--consumer") + 1]
+                text = (Path(out) / f"{consumer}.secret").read_text(encoding="utf-8")
+                assert all(text not in str(arg) for arg in args)
+                # provision.sh requires a trailing newline (POSIX read at EOF), but
+                # _read_secret() strips it before the secret reaches callers. Compare
+                # the same way the production code does.
+                seen.append(text.rstrip("\n"))
+            return _outcome(args, **kwargs)
+
+        updated.append((prefix, wrapped))
+    lab.runner.rules = updated
+    return seen
+
+
+def _s3_resource(lab: Lab) -> dict:
+    document = yaml.safe_load((lab.root / "services.lock.yaml").read_text(encoding="utf-8"))
+    return next(item for item in document.get("resources") or [] if item.get("kind") == "s3")
+
+
+def test_failed_probe_keeps_consumer_secret_for_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_scripted_probe(
+        monkeypatch,
+        "s3",
+        [s3_report(exit_code=1, code="auth_failed"), s3_report()],
+    )
+    lab = Lab(tmp_path, standard_manifests())
+    seen = _capture_provision_secrets(lab)
+    failed = lab.apply("file-mcp", environ={"KEYSTONE_SETUP_RESOURCE_S3": "catalog"})
+    assert failed.code == 3
+    assert failed.error is not None
+    assert failed.error["id"] == "s3_access_denied"
+    assert seen
+    secret = seen[0]
+    env_path = lab.root / "packages" / "file-mcp.env"
+    assert not env_path.exists()
+    secret_path = consumer_secret_path(lab.root, "file-mcp", "s3")
+    assert mode(secret_path) == 0o600
+    assert existing_consumer_secret(read_env(secret_path), FILE_BIND) == secret
+    lock_text = (lab.root / "services.lock.yaml").read_text(encoding="utf-8")
+    assert secret not in lock_text
+    assert secret not in json.dumps(failed.to_dict())
+    resources = [
+        item
+        for item in yaml.safe_load(lock_text).get("resources") or []
+        if item.get("kind") == "s3"
+    ]
+    assert all(
+        "file-mcp" not in [c.get("service") for c in item.get("consumers") or []]
+        for item in resources
+    )
+
+    again = lab.apply("file-mcp", environ={"KEYSTONE_SETUP_RESOURCE_S3": "catalog"})
+    assert again.code == 0, again.error
+    assert seen[1] == secret
+    assert read_env(env_path)["FILE_MCP_S3_SECRET_KEY"] == secret
+    resource = _s3_resource(lab)
+    assert any(item.get("service") == "file-mcp" for item in resource["consumers"])
+    saved = (lab.root / "services.lock.yaml").read_text(encoding="utf-8")
+    assert secret not in saved
+    assert secret not in json.dumps(again.to_dict())
 
 
 def test_plain_http_warns(tmp_path: Path) -> None:
