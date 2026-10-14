@@ -105,6 +105,10 @@ if [[ -z "$KEYSTONECTL_SPEC" ]]; then
     KEYSTONECTL_SPEC="pypi:0.1.0"
   fi
 fi
+if [[ "$KEYSTONECTL_SPEC" == pypi:* ]]; then
+  echo "pass --keystonectl <wheel or checkout>: ${KEYSTONECTL_SPEC#pypi:} is not on PyPI yet" >&2
+  exit 1
+fi
 
 want_storage() { [[ "$STORAGE" == "$1" || "$STORAGE" == "both" ]]; }
 want_postgres() { [[ "$POSTGRES" == "$1" || "$POSTGRES" == "both" ]]; }
@@ -345,6 +349,22 @@ install_keystonectl() {
   command -v keystonectl >/dev/null
 }
 
+ensure_self_signed_cert() {
+  # Shared by the CI host and the manual-vhost scenario (both profiles): a
+  # self-signed certificate good enough for keystonectl's reachability probe,
+  # which only checks that TLS answers, not that the chain is trusted.
+  if [[ -f "$WORK/tls/cert.pem" ]]; then
+    return 0
+  fi
+  mkdir -p "$WORK/tls"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+    -subj "/CN=${DOMAIN}" \
+    -addext "subjectAltName=DNS:${DOMAIN}" \
+    -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1
+  chmod 600 "$WORK/tls/key.pem"
+  chmod 644 "$WORK/tls/cert.pem"
+}
+
 prepare_host() {
   if ! command -v nginx >/dev/null 2>&1; then
     sudo apt-get update
@@ -355,13 +375,7 @@ prepare_host() {
     printf '%s\n' "$line" | sudo tee -a /etc/hosts >/dev/null
     printf '%s\n' "$line" >"$WORK/state/hosts-line"
   fi
-  mkdir -p "$WORK/tls"
-  openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
-    -subj /CN=files.e2e.test \
-    -addext subjectAltName=DNS:files.e2e.test \
-    -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1
-  chmod 600 "$WORK/tls/key.pem"
-  chmod 644 "$WORK/tls/cert.pem"
+  ensure_self_signed_cert
 }
 
 write_sources() {
@@ -466,7 +480,6 @@ KEYSTONE_MCP_SUPERADMIN_EMAIL=admin@example.com
 KEYSTONE_MCP_ENABLED_LOGIN_METHODS=api_key
 KEYSTONE_MCP_PRIMARY_LOGIN_METHOD=api_key
 KEYSTONE_MCP_UPSTREAMS_PATH=/etc/keystone-mcp/upstreams.yaml
-KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP=true
 KEYSTONE_MCP_UPSTREAM_EGRESS_ALLOW_PRIVATE=true
 KEYSTONE_MCP_METRICS_ENABLED=true
 KEYSTONE_PG_PASSWORD=${pg}
@@ -749,6 +762,18 @@ scenario_install_file_mcp_minio() {
   fi
   lockq resource s3 origin | has_line catalog || fail install_file_mcp_minio "s3 origin is not catalog"
   lockq service minio role | has_line resource || fail install_file_mcp_minio "minio is not a resource"
+  if [[ "$LAYOUT" == "production-example" ]]; then
+    # .env does not set this ahead of time on this layout; keystonectl must add
+    # it to the managed block itself once an upstream needs plain HTTP.
+    python3 -c '
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+start = text.find("# >>> keystonectl: managed block, do not edit >>>")
+end = text.find("# <<< keystonectl <<<")
+block = text[start:end] if start >= 0 and end > start else ""
+raise SystemExit(0 if "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP" in block else 1)
+' "$ROOT/.env" || fail install_file_mcp_minio "keystonectl did not set ALLOW_INSECURE_HTTP in the managed block"
+  fi
   pass install_file_mcp_minio "$started"
 }
 
@@ -1359,73 +1384,23 @@ raise SystemExit(1)
 ' "$ROOT/services.lock.yaml"
 }
 
-start_manual_caddy() {
-  local port config pid attempt
-  # The production example Caddyfile is the file Caddy loads. The site serves
-  # only the public prefixes, with this run's domain and loopback port.
-  [[ -f "$ROOT/Caddyfile" ]] || return 1
-  if ! grep -q 'reverse_proxy' "$ROOT/Caddyfile"; then
-    return 1
-  fi
-  command -v caddy >/dev/null 2>&1 || return 1
-  port="$(file_mcp_public_port)" || return 1
-  case "$port" in
-    ''|*[!0-9]*) return 1 ;;
-  esac
-  case "$DOMAIN" in
-    ''|*[!A-Za-z0-9.-]*) return 1 ;;
-  esac
-  config="$ROOT/Caddyfile"
-  cat >"$config" <<EOF
-{
-    admin off
-}
-
-${DOMAIN} {
-    handle /u/* {
-        reverse_proxy 127.0.0.1:${port}
-    }
-    handle /d/* {
-        reverse_proxy 127.0.0.1:${port}
-    }
-    handle /healthz {
-        reverse_proxy 127.0.0.1:${port}
-    }
-    handle {
-        respond 404
-    }
-}
-EOF
-  caddy run --config "$config" >"$WORK/log/caddy.log" 2>&1 &
-  pid="$!"
-  printf '%s\n' "$pid" >"$WORK/state/caddy.pid"
-  attempt=0
-  while [[ "$attempt" -lt 45 ]]; do
-    if ! kill -0 "$pid" 2>/dev/null; then
-      return 1
-    fi
-    if curl -fsS --max-time 2 "https://${DOMAIN}/healthz" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 2
-    attempt="$((attempt + 1))"
-  done
-  return 1
-}
-
 install_manual_vhost() {
+  # Used on both profiles: a host nginx vhost serving the self-signed
+  # certificate from ensure_self_signed_cert, so keystonectl's reachability
+  # probe for the "manual" TLS mode finds something answering on 443.
+  ensure_self_signed_cert
   local sample="$ROOT/.keystonectl/nginx/keystone-svc-file-mcp.conf"
   [[ -f "$sample" ]] || return 1
   local dest="/etc/nginx/sites-available/keystone-svc-file-mcp"
   sudo cp "$sample" "$dest"
   sudo python3 -c '
 import pathlib, sys
-path, cert, key = sys.argv[1:]
+path, domain, cert, key = sys.argv[1:]
 text = pathlib.Path(path).read_text()
-text = text.replace("/etc/ssl/keystone/files.e2e.test/fullchain.pem", cert)
-text = text.replace("/etc/ssl/keystone/files.e2e.test/privkey.pem", key)
+text = text.replace(f"/etc/ssl/keystone/{domain}/fullchain.pem", cert)
+text = text.replace(f"/etc/ssl/keystone/{domain}/privkey.pem", key)
 pathlib.Path(path).write_text(text)
-' "$dest" "$WORK/tls/cert.pem" "$WORK/tls/key.pem"
+' "$dest" "$DOMAIN" "$WORK/tls/cert.pem" "$WORK/tls/key.pem"
   sudo ln -sfn "$dest" /etc/nginx/sites-enabled/keystone-svc-file-mcp
   printf '%s\n' /etc/nginx/sites-enabled/keystone-svc-file-mcp >"$WORK/state/nginx-site"
   sudo nginx -t
@@ -1471,12 +1446,8 @@ raise SystemExit(main())
   file_mcp_public_port >/dev/null \
     || fail tls_manual "loopback port is outside 47600-47699"
   status_file_mcp || fail tls_manual "service is not running while public is pending"
-  if [[ "$PROFILE" == "ci" ]]; then
-    install_manual_vhost || fail tls_manual "could not install the sample vhost"
-    export SSL_CERT_FILE="$WORK/tls/cert.pem"
-  else
-    start_manual_caddy || fail tls_manual "could not start Caddy"
-  fi
+  install_manual_vhost || fail tls_manual "could not install the sample vhost"
+  export SSL_CERT_FILE="$WORK/tls/cert.pem"
   run_answered service apply e2e/file-mcp || fail tls_manual "second apply exited ${KC_RC}"
   [[ "$(jq_ public-state <"$WORK/log/kc.out")" == "ready" ]] || fail tls_manual "public state is not ready"
   [[ "$(jq_ public-tls <"$WORK/log/kc.out")" == "manual" ]] || fail tls_manual "tls is not manual"
@@ -1491,16 +1462,20 @@ scenario_tls_certbot() {
   fi
   local started issuer
   started="$(date +%s)"
+  cert_serial() {
+    echo | openssl s_client -connect "${DOMAIN}:443" -servername "$DOMAIN" 2>/dev/null \
+      | openssl x509 -noout -serial
+  }
   issuer="$(echo | openssl s_client -connect "${DOMAIN}:443" -servername "$DOMAIN" 2>/dev/null \
     | openssl x509 -noout -issuer)"
   [[ "$issuer" == *"Let's Encrypt"* ]] || fail tls_certbot "issuer is not Let's Encrypt"
   kc service status file-mcp
   [[ "$KC_RC" -eq 0 ]] || fail tls_certbot "status exited ${KC_RC}"
   local before after
-  before="$(wc -c </var/log/letsencrypt/letsencrypt.log || echo 0)"
+  before="$(cert_serial)"
   run_answered service apply e2e/file-mcp || fail tls_certbot "repeat apply exited ${KC_RC}"
-  after="$(wc -c </var/log/letsencrypt/letsencrypt.log || echo 0)"
-  [[ "$before" == "$after" ]] || fail tls_certbot "certbot issued again"
+  after="$(cert_serial)"
+  [[ -n "$before" && "$before" == "$after" ]] || fail tls_certbot "certbot issued a new certificate on re-apply"
   pass tls_certbot "$started"
 }
 
@@ -1690,9 +1665,6 @@ diagnostics() {
   if [[ -n "$ROOT" && -f "$ROOT/docker-compose.yml" ]]; then
     compose logs --tail 100 >"$DIAG/compose.log" 2>&1 || true
   fi
-  if [[ -f "${WORK:-}/log/caddy.log" ]]; then
-    cp "$WORK/log/caddy.log" "$DIAG/caddy.log" 2>/dev/null || true
-  fi
   if command -v nginx >/dev/null 2>&1; then
     { sudo nginx -t || true; } >"$DIAG/nginx.txt" 2>&1
   fi
@@ -1717,13 +1689,6 @@ cleanup() {
       docker rm -f "$name" >/dev/null 2>&1 || true
     fi
   done
-  if [[ -f "${WORK:-}/state/caddy.pid" ]]; then
-    local caddy_pid
-    caddy_pid="$(cat "${WORK}/state/caddy.pid")"
-    if [[ -n "$caddy_pid" ]]; then
-      kill "$caddy_pid" >/dev/null 2>&1 || true
-    fi
-  fi
   if [[ -f "${WORK:-}/state/nginx-site" ]]; then
     sudo rm -f "$(cat "$WORK/state/nginx-site")" || true
     sudo nginx -s reload >/dev/null 2>&1 || true
@@ -1787,8 +1752,8 @@ main() {
   scenario_external_s3
   scenario_external_postgres
   scenario_partner_catalog
-  scenario_tls_manual
   scenario_tls_certbot
+  scenario_tls_manual
   scenario_check_clean
   scenario_legacy_gone
   cleanup
