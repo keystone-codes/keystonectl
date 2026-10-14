@@ -463,15 +463,18 @@ def remove_service(
         ]
     lock["updated_by"] = f"keystonectl {__version__}"
     save_lock(root / "services.lock.yaml", lock, now=clock())
-    if not remote and entry.get("registry_name"):
-        if not _restart_keystone_after_registry_change(runner, root, layout):
-            return _error(
-                command,
-                name,
-                "service_unhealthy",
-                ERRORS["service_unhealthy"].title,
-                hint=ERRORS["service_unhealthy"].action,
-            )
+    if (
+        not remote
+        and entry.get("registry_name")
+        and not _restart_keystone_after_registry_change(runner, root, layout)
+    ):
+        return _error(
+            command,
+            name,
+            "service_unhealthy",
+            ERRORS["service_unhealthy"].title,
+            hint=ERRORS["service_unhealthy"].action,
+        )
     note = _OVERRIDE_NOTE.format(name=name) if override.is_file() else ""
     summary = f"Removed {name}."
     if note:

@@ -115,9 +115,7 @@ def service_networks(service: Mapping[str, Any]) -> set[str]:
     return set()
 
 
-def _network_resolves_to_upstreams(
-    config: Mapping[str, Any], network_key: str
-) -> bool:
+def _network_resolves_to_upstreams(config: Mapping[str, Any], network_key: str) -> bool:
     if network_key == UPSTREAMS_NETWORK:
         return True
     top = config.get("networks")
@@ -130,12 +128,8 @@ def _network_resolves_to_upstreams(
     return isinstance(name, str) and name == UPSTREAMS_NETWORK
 
 
-def service_on_upstreams_network(
-    config: Mapping[str, Any], service: Mapping[str, Any]
-) -> bool:
-    return any(
-        _network_resolves_to_upstreams(config, key) for key in service_networks(service)
-    )
+def service_on_upstreams_network(config: Mapping[str, Any], service: Mapping[str, Any]) -> bool:
+    return any(_network_resolves_to_upstreams(config, key) for key in service_networks(service))
 
 
 def layout_problems(config: Mapping[str, Any], layout: Mapping[str, Any]) -> list[str]:
