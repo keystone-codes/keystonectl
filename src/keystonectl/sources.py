@@ -23,7 +23,13 @@ from keystonectl.catalog import (
     url_errors,
 )
 from keystonectl.errors import ERRORS, WARNINGS
-from keystonectl.fetch import FetchError, fetch_tree, list_tags, replace_tree
+from keystonectl.fetch import (
+    FetchError,
+    describe_fetch_error,
+    fetch_tree,
+    list_tags,
+    replace_tree,
+)
 from keystonectl.output import Result, missing_summary
 from keystonectl.runner import CommandRunner
 
@@ -292,29 +298,30 @@ def resolve_package(
 
 def refresh_source(
     root: Path, source: Source, runner: CommandRunner
-) -> tuple[Path | None, dict[str, str] | None, str | None]:
-    """Update one catalog cache. Return ``(path, warning, error_id)``."""
+) -> tuple[Path | None, dict[str, str] | None, str | None, str | None]:
+    """Update one catalog cache. Return ``(path, warning, error_id, message)``."""
     dest = catalog_cache(root, source.name)
     cached = dest / "catalog.yaml"
     try:
         tree, _commit = fetch_tree(runner, source.url, source.ref)
     except FetchError as exc:
+        message = describe_fetch_error(f"Source {source.name}", exc)
         if cached.is_file() and exc.error_id == "source_unreachable":
-            return dest, warning("catalog_cached"), None
+            return dest, warning("catalog_cached"), None, None
         if cached.is_file() and exc.error_id == "tag_not_found":
-            return None, None, exc.error_id
-        return None, None, exc.error_id
+            return None, None, exc.error_id, message
+        return None, None, exc.error_id, message
     catalog_path = tree / "catalog.yaml"
     if not catalog_path.is_file():
         shutil_rmtree(tree)
-        return None, None, "catalog_invalid"
+        return None, None, "catalog_invalid", None
     try:
         load_catalog(catalog_path)
     except CatalogError:
         shutil_rmtree(tree)
-        return None, None, "catalog_invalid"
+        return None, None, "catalog_invalid", None
     replace_tree(tree, dest)
-    return dest, None, None
+    return dest, None, None, None
 
 
 def shutil_rmtree(path: Path) -> None:
@@ -334,19 +341,19 @@ def load_cached_catalogs(root: Path, sources: list[Source]) -> dict[str, dict[st
 
 def refresh_all(
     root: Path, sources: list[Source], runner: CommandRunner
-) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]], str | None]:
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]], str | None, str | None]:
     warnings: list[dict[str, str]] = []
     for source in sources:
-        _path, noted, error_id = refresh_source(root, source, runner)
+        _path, noted, error_id, message = refresh_source(root, source, runner)
         if error_id:
-            return {}, warnings, error_id
+            return {}, warnings, error_id, message
         if noted:
             warnings.append(noted)
     try:
         catalogs = load_cached_catalogs(root, sources)
     except CatalogError:
-        return {}, warnings, "catalog_invalid"
-    return catalogs, warnings, None
+        return {}, warnings, "catalog_invalid", None
+    return catalogs, warnings, None, None
 
 
 def newest_version_tag(ls_remote_output: str) -> str | None:
@@ -662,14 +669,14 @@ def list_catalogs(
             summary=spec.title,
             error={"id": spec.id, "message": "; ".join(exc.messages), "hint": spec.action},
         )
-    catalogs, warnings, error_id = refresh_all(root, sources, runner)
+    catalogs, warnings, error_id, message = refresh_all(root, sources, runner)
     if error_id:
         spec = ERRORS[error_id]
         return Result(
             code=spec.code,
             command=command,
             summary=spec.title,
-            error={"id": spec.id, "message": spec.title, "hint": spec.action},
+            error={"id": spec.id, "message": message or spec.title, "hint": spec.action},
             retryable=spec.retryable,
             warnings=warnings,
         )

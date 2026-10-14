@@ -20,7 +20,13 @@ from keystonectl.compat import (
     ranges_differ,
 )
 from keystonectl.errors import ERRORS, WARNINGS
-from keystonectl.fetch import FetchError, fetch_tree, replace_tree, sha256_file
+from keystonectl.fetch import (
+    FetchError,
+    describe_fetch_error,
+    fetch_tree,
+    replace_tree,
+    sha256_file,
+)
 from keystonectl.keystone_mcp_rules import BUILTIN_TOOL_NAMES_VERSION
 from keystonectl.lock import load_lock
 from keystonectl.manifest import manifest_errors
@@ -388,9 +394,15 @@ def _dedupe_questions(questions: list[Question]) -> list[Question]:
 
 
 def _refresh(ctx: Context) -> str | None:
-    catalogs, warnings, error_id = refresh_all(ctx.root, ctx.sources, ctx.runner)
+    catalogs, warnings, error_id, message = refresh_all(ctx.root, ctx.sources, ctx.runner)
     ctx.catalogs = catalogs
     ctx.extra_warnings.extend(warnings)
+    if error_id:
+        ctx.failure = Resolution(
+            error_id=error_id,
+            message=message or ERRORS[error_id].title,
+            hint=ERRORS[error_id].action,
+        )
     return error_id
 
 
@@ -403,6 +415,11 @@ def _fetch_package(ctx: Context) -> str | None:
     try:
         tree, commit = fetch_tree(ctx.runner, package.git_url, package.ref)
     except FetchError as exc:
+        ctx.failure = Resolution(
+            error_id=exc.error_id,
+            message=describe_fetch_error(f"Package {package.name}", exc),
+            hint=ERRORS[exc.error_id].action,
+        )
         return exc.error_id
     installed = installed_service(ctx.lock, package.name)
     if (
@@ -578,16 +595,9 @@ def run_service(
         warnings.extend(ctx.extra_warnings)
         ctx.extra_warnings.clear()
         if error_id:
-            spec = ERRORS[error_id]
-            return Result(
-                code=spec.code,
-                command=command,
-                summary=spec.title,
-                target=target,
-                warnings=warnings,
-                error={"id": spec.id, "message": spec.title, "hint": spec.action},
-                retryable=spec.retryable,
-            )
+            assert ctx.failure is not None
+            ctx.failure.warnings = [*warnings, *ctx.failure.warnings]
+            return failure_result(ctx.failure, command=command, target=target)
         resolve = ResolveStep()
         planned = resolve._resolve(ctx, [])
         questions = _dedupe_questions(planned.questions)
@@ -643,16 +653,9 @@ def run_service(
             warnings.extend(ctx.extra_warnings)
             ctx.extra_warnings.clear()
             if error_id:
-                spec = ERRORS[error_id]
-                return Result(
-                    code=spec.code,
-                    command=command,
-                    summary=spec.title,
-                    target=target,
-                    warnings=warnings,
-                    error={"id": spec.id, "message": spec.title, "hint": spec.action},
-                    retryable=spec.retryable,
-                )
+                assert ctx.failure is not None
+                ctx.failure.warnings = [*warnings, *ctx.failure.warnings]
+                return failure_result(ctx.failure, command=command, target=target)
             ResolveStep()._resolve(ctx, [])
             if ctx.failure is not None:
                 return failure_result(ctx.failure, command=command, target=target)

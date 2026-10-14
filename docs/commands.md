@@ -827,7 +827,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | source_unreachable | 3 | true | Check the network and the URL, then run the command again. |
 | sudo_required | 3 | false | Allow sudo -n for nginx and certbot, or answer TLS=manual. |
 | tag_moved | 3 | false | Refuse the move. Pin a commit, or upgrade on purpose with service upgrade. |
-| tag_not_found | 3 | false | The ref must be a tag or a 40-character commit. Branches are refused. |
+| tag_not_found | 3 | false | Check the ref in sources.yaml or catalog.yaml. For the default source, update keystonectl or add sources.yaml with a ref that exists. |
 | usage | 1 | false | Check the command and flags. Run keystonectl --help. |
 | version_not_found | 3 | false | Run keystonectl catalog list and pick a listed version. |
 | builtin_list_may_be_stale | warning | false | built-in tool names are known up to keystone-mcp 0.5.0; the final check is upstream validate during apply. |
