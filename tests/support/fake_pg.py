@@ -86,6 +86,18 @@ class FakePgConnection:
     rollback_calls: int = 0
     commit_calls: int = 0
     closed: bool = False
+    # Recorded after construction: every value the probe assigns to ``.autocommit``.
+    # psycopg 3 raises if autocommit is toggled while a transaction is open (INTRANS),
+    # so the probe must never touch this attribute after connecting.
+    autocommit_assignments: list[bool] = field(default_factory=list, repr=False)
+
+    def __post_init__(self) -> None:
+        self.autocommit_assignments = []
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "autocommit" and "autocommit_assignments" in self.__dict__:
+            self.autocommit_assignments.append(value)
+        super().__setattr__(name, value)
 
     def cursor(self) -> FakePgCursor:
         return FakePgCursor(
