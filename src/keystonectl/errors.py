@@ -689,6 +689,13 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "https on the public domain did not answer.",
             "Finish the proxy and certificate, then run apply again.",
         ),
+        _e(
+            "internal_error",
+            3,
+            False,
+            "An unexpected error occurred.",
+            "Report this with the command and the keystonectl version.",
+        ),
     ]
 )
 
