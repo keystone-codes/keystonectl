@@ -65,6 +65,15 @@ def _http_loopback_ok_external_down() -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
+def _http_loopback_down() -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if (request.url.host or "") in ("127.0.0.1", "localhost"):
+            raise httpx.ConnectError("down", request=request)
+        return httpx.Response(200, text="ok")
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
 class Host:
     def __init__(self) -> None:
         self.nginx_ok = True
@@ -925,6 +934,22 @@ def test_manual_mode_no_sudo_no_nginx_checks_https(tmp_path: Path) -> None:
     pending = load_lock(failed_root / "services.lock.yaml")["services"][0]["public"]
     assert pending["state"] == "pending"
     assert pending["last_error"] == "public_unreachable"
+
+
+def test_loopback_healthz_failure_blocks_publish(tmp_path: Path) -> None:
+    # The container passes docker's own healthcheck but never answers on the published
+    # loopback port (e.g. the app crashed after start). Apply must fail with a registry
+    # error id instead of reporting the service ready or hanging.
+    result, root, _host, _nginx = _publish(
+        tmp_path,
+        http=_http_loopback_down(),
+        environ=_env(KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS="manual"),
+        handshake=lambda _domain: {"notAfter": "Jan 10 08:00:00 2027 GMT"},
+    )
+    assert result.code == 3
+    assert result.error["id"] == "service_unhealthy"
+    lock = load_lock(root / "services.lock.yaml")["services"][0]
+    assert lock["public"]["state"] != "ready"
 
 
 def test_public_base_url_written_and_containers_recreated(tmp_path: Path) -> None:
