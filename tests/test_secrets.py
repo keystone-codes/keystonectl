@@ -224,6 +224,35 @@ def test_narrowed_generate_secret_leaves_the_shared_file(
         assert "HELLO_TOKEN" not in read_env(root / "packages" / relative.removeprefix("./"))
 
 
+def test_second_package_install_preserves_other_packages_managed_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch(monkeypatch)
+    root = tmp_path / "root"
+    file_document = yaml.safe_load((PACKAGES / "file-mcp" / "keystone-service.yaml").read_text())
+    file_document.pop("needs", None)
+    file_document["containers"]["mcp"].pop("env", None)
+    manifests = {"docs-service": _docs(), "file-mcp": yaml.safe_dump(file_document)}
+
+    result = apply_package(root, "docs-service", manifests)[0]
+    assert result.code == 0, result.error
+    env_path = root / ".env"
+    before = read_env(env_path)
+    docs_bearer = before["KEYSTONE_MCP_UPSTREAM_DOCS_BEARER"]
+    docs_identity = before["KEYSTONE_MCP_UPSTREAM_DOCS_IDENTITY_SECRET"]
+    # Content outside the managed block must survive the next install byte for byte.
+    outside_line = "OPERATOR_NOTE=keep-me\n"
+    env_path.write_text(env_path.read_text(encoding="utf-8") + outside_line, encoding="utf-8")
+
+    second = apply_package(root, "file-mcp", manifests, reset=False)[0]
+    assert second.code == 0, second.error
+    after = read_env(env_path)
+    assert after["KEYSTONE_MCP_UPSTREAM_DOCS_BEARER"] == docs_bearer
+    assert after["KEYSTONE_MCP_UPSTREAM_DOCS_IDENTITY_SECRET"] == docs_identity
+    assert "KEYSTONE_MCP_UPSTREAM_FILES_BEARER" in after
+    assert env_path.read_text(encoding="utf-8").endswith(outside_line)
+
+
 def test_no_secret_in_output_lock_or_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result, runner, _box = _apply(tmp_path, monkeypatch)
     assert result.code == 0, result.error
