@@ -28,6 +28,26 @@ jobs:
           else
             uv run --no-project --python 3.12 python scripts/check_version.py
           fi
+      - name: Check the default catalog ref exists on keystone-catalog
+        run: |
+          uv sync --frozen
+          uv run python <<'PY'
+          import subprocess
+          import sys
+
+          from keystonectl.catalog import DEFAULT_SOURCES
+
+          source = DEFAULT_SOURCES[0]
+          result = subprocess.run(
+              ["git", "ls-remote", "--exit-code", "--tags", source.url, f"refs/tags/{source.ref}"]
+          )
+          if result.returncode != 0:
+              print(
+                  f"default catalog ref {source.ref!r} is not a tag on {source.url}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
 
   test:
     needs: version-gate
