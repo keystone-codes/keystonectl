@@ -33,7 +33,7 @@ scripts/e2e.sh --layout production-example --profile ci --storage both --postgre
 ## Layouts
 
 - **production-example** copies `examples/production` from keystone-mcp `6b04a198101dac22815b17d5bcf55b0e1c6463d8` and adopts it. The one-time patch is `scripts/e2e/fixtures/production-example.patch`. That file has no diff. An empty diff means the open example needs no one-time edit: `init --adopt` already adds the second compose file and the upstream network.
-- **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `dd4538167af85bf5842d88e43bca53748063879f`. CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend. That profile skips `agent_path_missing` because setup already installed the minimal bundle.
+- **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `ffd719701f3bb0eb53bdd212447bcd43bbd07c43`. CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend. That profile skips `agent_path_missing` because setup already installed the minimal bundle.
 
 Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upstream are GHCR digests. MinIO, mc, Postgres, and Redis are the foreign digests from the package manifests (Redis from `docker buildx imagetools inspect`).
 
