@@ -763,6 +763,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | fragment_modified | 3 | false | Move your changes into the override file, or eject the service. |
 | incompatible_keystone_mcp | 3 | false | Choose a version whose range includes the running keystone-mcp, or upgrade it. |
 | init_failed | 3 | false | Read the container log, fix the package, and run the command again. |
+| internal_error | 3 | false | Report this with the command and the keystonectl version. |
 | key_mismatch | 3 | false | Point KEYSTONE_SETUP_SERVICE_<NAME>_KEY_PATH at the key for this certificate. |
 | key_not_pem | 3 | false | Replace KEYSTONE_SETUP_SERVICE_<NAME>_KEY_PATH with a PEM key. |
 | keystone_env_file_missing | 3 | false | Add env_file: .env to the keystone-mcp service. |

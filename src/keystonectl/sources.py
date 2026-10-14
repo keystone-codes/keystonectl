@@ -303,7 +303,7 @@ def refresh_source(
     dest = catalog_cache(root, source.name)
     cached = dest / "catalog.yaml"
     try:
-        tree, _commit = fetch_tree(runner, source.url, source.ref)
+        tree, _commit = fetch_tree(runner, source.url, source.ref, root)
     except FetchError as exc:
         message = describe_fetch_error(f"Source {source.name}", exc)
         if cached.is_file() and exc.error_id == "source_unreachable":
@@ -522,7 +522,7 @@ def add_source(
             warning("catalog_ref_chosen", f"No --ref given; using the newest tag {tag}.")
         )
     try:
-        tree, _commit = fetch_tree(runner, url, chosen_ref)
+        tree, _commit = fetch_tree(runner, url, chosen_ref, root)
     except FetchError as exc:
         spec = ERRORS[exc.error_id]
         return Result(
