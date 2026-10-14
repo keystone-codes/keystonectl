@@ -31,3 +31,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - test: consumer secret comparison after a failed probe
+- State-changing commands hold the lock for their whole run; a second process gets `busy`.
