@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (keystonectl 0.1, 2026-10-12).
+Accepted (keystonectl 0.1, 2026-10-12); revised 2026-10-14 before release.
 
 ## Context
 
@@ -20,9 +20,9 @@ included above the fragment; `check` may warn if override opens ports or adds pr
 is the operator's choice. (3) `service eject <name>` stops generating compose while registry,
 snapshot, secrets, and `status` continue; `service adopt <name>` returns to generated mode after
 confirmation. Fully custom compose uses `service add-remote`. The lock stores `fragment_sha256`;
-direct edits to the generated file make `check` and `upgrade` stop with guidance to move changes
-into override or eject. The same idea applies to the whole tree: `init --adopt` accepts an
-existing folder and does not rewrite operator-owned files.
+direct edits to the generated file are reported by `check` (`fragment_modified`) and stop `apply`
+and `upgrade` with guidance to move changes into override or eject. The same idea applies to the
+whole tree: `init --adopt` accepts an existing folder and does not rewrite operator-owned files.
 
 ## Consequences
 
