@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Public paths: loopback port, nginx vhost, certificate lifecycle, and `service remove`, `upgrade`, `rollback`, `eject`, and `adopt`.
 - Release gate verifies that the default catalog ref exists.
 - `SECURITY.md`.
+- Unexpected errors are reported as `internal_error` in JSON.
 
 ### Changed
 
@@ -34,3 +35,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - test: consumer secret comparison after a failed probe
 - State-changing commands hold the lock for their whole run; a second process gets `busy`.
+- Catalog and package fetches no longer fail with EXDEV when /tmp is a different file system.

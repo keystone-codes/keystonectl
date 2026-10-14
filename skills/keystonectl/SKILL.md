@@ -369,6 +369,7 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `dns_mismatch` | 3 | true | The domain does not point at this host. | Update the A record or wait for DNS to propagate (often 1-10 min), then run apply again. |
 | `certbot_failed` | 3 | true | certbot could not issue the certificate. | Check DNS, port 80, and /var/log/letsencrypt/letsencrypt.log, then run apply again. |
 | `public_unreachable` | 3 | true | https on the public domain did not answer. | Finish the proxy and certificate, then run apply again. |
+| `internal_error` | 3 | false | An unexpected error occurred. | Report this with the command and the keystonectl version. |
 
 ## Warnings
 

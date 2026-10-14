@@ -1253,7 +1253,7 @@ def _fetch_package(ctx: Context, package: ResolvedPackage) -> dict[str, Any] | N
         _fail(ctx, "package_not_found", f"Package {package.name} has no source.")
         return None
     try:
-        tree, commit = fetch_tree(ctx.runner, package.git_url, package.ref)
+        tree, commit = fetch_tree(ctx.runner, package.git_url, package.ref, ctx.root)
     except FetchError as exc:
         error_id = getattr(exc, "error_id", "source_unreachable")
         _fail(ctx, error_id, describe_fetch_error(f"Package {package.name}", exc))
