@@ -13,6 +13,7 @@ import pytest
 
 from keystonectl.resources import postgres_probe as probe
 from tests.support.fake_pg import (
+    FakePgConnection,
     auth_error_sqlstate,
     make_connect_factory,
     ok_responses,
@@ -47,6 +48,25 @@ def test_all_checks_ok_exit_0():
     assert report.exit_code == 0
     assert report.ok is True
     assert report.checks["isolation"] == "ok"
+
+
+def test_probe_never_toggles_autocommit():
+    # psycopg 3 raises if autocommit is assigned while a transaction is already open
+    # (INTRANS), which is the case here right after the version checks run. The probe's
+    # create-table/rollback dance must rely on the connection's default transaction mode
+    # instead of touching `.autocommit`.
+    created: list[FakePgConnection] = []
+    responses = ok_responses()
+
+    def factory(**kwargs):
+        conn = FakePgConnection(responses=responses, connect_kwargs=dict(kwargs))
+        created.append(conn)
+        return conn
+
+    report = probe.probe_postgres(GOOD, connect=factory, probe_id=PROBE_ID)
+    assert report.exit_code == 0, report.error
+    assert len(created) == 1
+    assert created[0].autocommit_assignments == []
 
 
 def test_missing_parameters_exit_2():
