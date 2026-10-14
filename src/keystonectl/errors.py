@@ -75,14 +75,15 @@ ERRORS: dict[str, ErrorSpec] = dict(
             1,
             False,
             "This command cannot apply changes yet.",
-            "service apply has no deploy step in this build. Use service plan to preview.",
+            "No deploy step is configured for this change. Run service plan to preview it.",
         ),
         _e(
             "package_ambiguous",
             2,
             False,
             "More than one catalog has this package.",
-            "Pass the package as source/name.",
+            "Pass the package as source/name, for example local/file-mcp. "
+            "service upgrade reads the source from the lock.",
         ),
         _e(
             "keystone_mcp_version_unknown",
@@ -486,7 +487,8 @@ ERRORS: dict[str, ErrorSpec] = dict(
             3,
             True,
             "The keystone-mcp image is not available.",
-            "Pull the image recorded in the lock, or pass --local and build it, then retry.",
+            "Pull the image recorded in the lock, or build it with your deployment's "
+            "own tooling, then retry.",
         ),
         _e(
             "service_unhealthy",
