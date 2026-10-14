@@ -580,9 +580,7 @@ def test_managed_env_block(case: str) -> None:
 
 def test_env_assigned_outside_managed_block() -> None:
     outside = "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP=true\n"
-    inside = (
-        f"{START}\nKEYSTONE_MCP_UPSTREAM_FILES_BEARER=secret\n{END}\n"
-    )
+    inside = f"{START}\nKEYSTONE_MCP_UPSTREAM_FILES_BEARER=secret\n{END}\n"
     assert env_assigned_outside_managed_block(outside, "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP")
     assert not env_assigned_outside_managed_block(
         inside, "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP"

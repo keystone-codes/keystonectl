@@ -16,8 +16,8 @@ from keystonectl.answers import Question, pkg_var
 from keystonectl.envfiles import read_env, upsert_env
 from keystonectl.errors import ERRORS, WARNINGS
 from keystonectl.plan import Context, StepPlan
-from keystonectl.sources import warning
 from keystonectl.runner import CommandResult
+from keystonectl.sources import warning
 from keystonectl.tls import Tls, TlsError
 
 PLACEHOLDER_URL = "https://public-domain-pending.invalid"

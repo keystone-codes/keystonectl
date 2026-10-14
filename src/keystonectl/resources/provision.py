@@ -98,8 +98,7 @@ def _read_secret(path: Path, fallback: str) -> str:
     if not path.is_file():
         return fallback
     text = path.read_text(encoding="utf-8")
-    if text.endswith("\n"):
-        text = text[:-1]
+    text = text.removesuffix("\n")
     return text
 
 
