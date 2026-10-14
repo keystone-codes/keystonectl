@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import textwrap
@@ -11,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from keystonectl.lock import LockError, empty_lock, hold_lock, load_lock, save_lock
-from tests.support import EXAMPLES, mode
+from tests.support import EXAMPLES, mode, write_empty_lock
 
 
 def test_roundtrip_full_example(tmp_path: Path) -> None:
@@ -111,3 +112,88 @@ def test_missing_file_is_empty_state(tmp_path: Path) -> None:
     assert document["services"] == []
     assert document["resources"] == []
     assert not (tmp_path / "services.lock.yaml").exists()
+
+
+def _hold_lock_externally(path: Path) -> subprocess.Popen:
+    """Start a subprocess that holds ``path``'s ``.lck`` file for the whole test."""
+    script = textwrap.dedent(
+        """\
+        import fcntl, os, sys, time
+        path = sys.argv[1] + ".lck"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        sys.stdout.write("held\\n")
+        sys.stdout.flush()
+        time.sleep(30)
+        """
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(path)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert process.stdout is not None
+    assert process.stdout.readline().strip() == "held"
+    return process
+
+
+def test_cli_service_apply_gets_busy_when_locked(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    write_empty_lock(root)
+    holder = _hold_lock_externally(root / "services.lock.yaml")
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "keystonectl",
+                "service",
+                "apply",
+                "file-mcp",
+                "--root",
+                str(root),
+                "--json",
+                "--non-interactive",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+    payload = json.loads(completed.stdout)
+    assert completed.returncode == 3
+    assert payload["code"] == 3
+    assert payload["error"]["id"] == "busy"
+    assert payload["retryable"] is True
+
+
+def test_cli_read_command_works_when_locked(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    write_empty_lock(root)
+    holder = _hold_lock_externally(root / "services.lock.yaml")
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "keystonectl",
+                "service",
+                "list",
+                "--root",
+                str(root),
+                "--json",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+    payload = json.loads(completed.stdout)
+    assert completed.returncode == 0
+    assert payload["code"] == 0
+    assert payload["error"] is None
