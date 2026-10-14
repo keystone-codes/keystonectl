@@ -413,7 +413,7 @@ def _fetch_package(ctx: Context) -> str | None:
     if not package.git_url or not package.ref:
         return "package_not_found"
     try:
-        tree, commit = fetch_tree(ctx.runner, package.git_url, package.ref)
+        tree, commit = fetch_tree(ctx.runner, package.git_url, package.ref, ctx.root)
     except FetchError as exc:
         ctx.failure = Resolution(
             error_id=exc.error_id,

@@ -358,7 +358,7 @@ def _read_manifest(root: Path, package: Any, runner: CommandRunner) -> dict[str,
     tree: Path | None = None
     if not path.is_file():
         try:
-            tree, _commit = fetch_tree(runner, package.git_url, package.ref)
+            tree, _commit = fetch_tree(runner, package.git_url, package.ref, root)
         except FetchError as exc:
             spec = ERRORS[exc.error_id]
             message = describe_fetch_error(f"Package {package.name}", exc)

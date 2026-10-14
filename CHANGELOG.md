@@ -33,3 +33,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - test: consumer secret comparison after a failed probe
 - State-changing commands hold the lock for their whole run; a second process gets `busy`.
+- Catalog and package fetches no longer fail with EXDEV when /tmp is a different file system.

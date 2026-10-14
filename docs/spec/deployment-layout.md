@@ -30,6 +30,7 @@ Paths are relative to the deployment root.
 | `services.lock.yaml`, and its `.bak` and `.lck` siblings (mode 600) | keystonectl | the install state. `.lck` is held for the whole state-changing command |
 | `sources.yaml` (mode 600) | keystonectl (`catalog add`); the operator may edit it | format is in [Catalog sources](catalog.md#sources). `init` does not create it |
 | `.keystonectl/` (mode 700) | keystonectl | catalog and package cache, `secrets/` (mode 700), and `tmp/`. Contains a `.gitignore` whose only line is `*` |
+| `.keystonectl/tmp/` (mode 700) | keystonectl | clones are built here and renamed into place on the same file system |
 | `.gitignore` | operator | created only when the file is absent, with the lines below |
 
 ```
