@@ -130,6 +130,10 @@ def _lookup(ctx: Context, package: str, suffix: str) -> str | None:
         return ctx.sets[var]
     if ctx.environ.get(var):
         return str(ctx.environ[var])
+    if suffix == "TAKEOVER":
+        # A takeover answer is good for one apply only; a "yes" remembered in
+        # the lock from an earlier run must not silence this question again.
+        return None
     from keystonectl.resources.binding import _service
 
     current = _service(ctx.lock, package)
@@ -698,6 +702,26 @@ def _foreign_refusal(regular: list[Path], broad: list[Path], domain: str) -> str
     )
 
 
+def _disabled_sites(ctx: Context, package: str) -> list[str]:
+    """Sites already disabled by a previous takeover, for this package.
+
+    Reads the current list, falling back to the single-site field written
+    before this field existed, so an older lock keeps restoring its site.
+    """
+
+    current = _service(ctx, package)
+    public = current.get("public") if isinstance(current, dict) else None
+    if not isinstance(public, dict):
+        return []
+    disabled = public.get("disabled_sites")
+    if isinstance(disabled, list):
+        return [item for item in disabled if isinstance(item, str) and item]
+    took_over = public.get("took_over")
+    if isinstance(took_over, str) and took_over:
+        return [took_over]
+    return []
+
+
 def _takeover(ctx: Context, package: str, domain: str) -> bool:
     try:
         foreign = _foreign_sites(ctx, package, domain)
@@ -724,17 +748,20 @@ def _takeover(ctx: Context, package: str, domain: str) -> bool:
         ctx.halt_questions.append(
             Question(
                 pkg_var(package, "TAKEOVER"),
-                f"{domain} is already served by {served}. Take it over?",
+                f"Site {served} serves {domain}. keystonectl will disable that site "
+                f"entirely: only the service paths and /healthz will answer on this "
+                f"name, everything else returns 404. Disable it?",
                 "choice",
                 choices=("yes", "no"),
+                default="no",
             )
         )
         return False
     if answer != "yes":
         _fail(ctx, "domain_in_use", f"{domain} is already served by {served}")
         return False
-    first_name = ""
     first_target = ""
+    disabled = _disabled_sites(ctx, package)
     for index, (path, _kind) in enumerate(foreign):
         target = str(path.resolve()) if path.is_symlink() else ""
         removed = _tls(ctx)._run(["rm", str(path)])
@@ -742,12 +769,16 @@ def _takeover(ctx: Context, package: str, domain: str) -> bool:
             _fail(ctx, "domain_in_use", removed.stderr or f"could not disable {path.name}")
             return False
         if index == 0:
-            first_name = path.name
             first_target = target
-    _remember(ctx, package, "TAKEOVER", "yes")
+        if path.name not in disabled:
+            disabled.append(path.name)
     if first_target:
         _remember(ctx, package, "TOOK_OVER_TARGET", first_target)
-    _write_public(ctx, package, took_over=first_name)
+    # The takeover answer itself is never remembered: a new foreign site on a
+    # later apply must ask again, even though a previous "yes" sits in the
+    # lock's answers. The list of disabled sites is what persists, so
+    # `service remove` can restore every one of them.
+    _write_public(ctx, package, disabled_sites=disabled, took_over=None)
     return True
 
 

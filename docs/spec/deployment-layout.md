@@ -346,7 +346,11 @@ empty. `env.files` contains only `packages/<name>.env`,
 `public.state` is `none`, `pending`, or `ready`. `ready` requires `domain`,
 `tls` (`keep`, `certbot`, `custom`, or `manual`), and `host_port` in
 47600–47699. The other `public` fields are the ones in the example.
-`dns` is `checked` or `skipped`.
+`dns` is `checked` or `skipped`. `disabled_sites` lists the nginx sites a
+takeover disabled, by file name; `service remove` restores all of them.
+`took_over` is the single-site field written before `disabled_sites`
+existed; a lock that still has it and no `disabled_sites` is valid, and
+keystonectl treats it as a one-item list.
 
 `resources[].kind` is unique and is `s3` or `postgres` (one provider per kind).
 `s3` params are `endpoint`, `region`, and `path_style`. `postgres` params are

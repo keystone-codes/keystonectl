@@ -235,7 +235,7 @@ Retell `problems` on status. They can include `container_missing`, `container_un
 | `KEYSTONE_SETUP_SERVICE_{PKG}_TLS` | Certificate: keep the one found (say the expiry), a free Let's Encrypt certificate, your own files, or you run the proxy and certificate (for example Caddy)? `keep`, `certbot`, `custom`, or `manual`. For `manual`, repeat the sample vhost path and say keystonectl will check the hostname over https. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_CERT_PATH`, `KEYSTONE_SETUP_SERVICE_{PKG}_KEY_PATH` | Where on the server are the certificate (full chain, PEM) and the key? Paths, not contents. |
 | `KEYSTONE_SETUP_TLS_EMAIL` | Which email should Let's Encrypt use for expiry reminders? |
-| `KEYSTONE_SETUP_SERVICE_{PKG}_TAKEOVER` | This hostname already serves another site on this server. Switch the service paths onto it? |
+| `KEYSTONE_SETUP_SERVICE_{PKG}_TAKEOVER` | Site <file> serves <domain>. keystonectl will disable that site entirely: only the service paths and /healthz will answer on this name, everything else returns 404. Disable it? |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_NAMESPACE` | The tool-name prefix is taken. Which prefix should be used instead? |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_REMOVE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_UPGRADE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_ADOPT` | Confirm only after you have retold the question and the consequences. `CONFIRM_REMOVE` and `CONFIRM_ADOPT` are `yes`. `CONFIRM_UPGRADE` is the target version. `eject` and `rollback` have no confirm variable. |
 | `package` (`kind: argument`) | This package name is in two catalogs. Which one? Repeat the command as `source/name`. |
