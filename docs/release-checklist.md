@@ -2,6 +2,8 @@
 
 Fill this in when a person runs the manual checks. The result column stays empty until that run. A CI report is not a substitute for sections A–H.
 
+The CI profile does not run keystone-deploy `setup.sh`; the partner path is proven only by section B.
+
 | Field | Value |
 |---|---|
 | keystonectl (PyPI) | not published; install from the checkout (`--profile ci` does this) |
@@ -11,13 +13,23 @@ Fill this in when a person runs the manual checks. The result column stays empty
 | keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.5.0` |
 | keystone-mcp commit | `6b04a198101dac22815b17d5bcf55b0e1c6463d8` (`release/0.5.0`) |
 | keystone-deploy commit | `dd4538167af85bf5842d88e43bca53748063879f` (`release/catalog`) |
-| keystone-catalog commit | `1bc59512acccbd30cfbd958f78b713b21a7276a2` (no `v1.0.0` tag; the script pins this SHA) |
+| keystone-catalog commit | tag `v1.0.0` = `1bc5951` |
 | file-mcp | `1.0.0` — `ghcr.io/keystone-codes/file-mcp@sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0` |
 | hello-upstream | `1.0.0` — `ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337` |
 | minio-resource / postgres-resource | git tag `v1.0.0`; images are the foreign digests in those manifests |
 | Package versions from the lock | |
 
 `scripts/e2e.sh --profile vm` is the command for sections A and B. It has not been run for this document. Do not mark a row from a CI log.
+
+## 0. Candidate commit
+
+Commit K is the candidate under test for every row below, including A–H. Fill in the link once each run exists; leave rows empty until then.
+
+| Check | Expected | Link |
+|---|---|---|
+| `ci` on commit K | green | |
+| Manual `e2e` workflow_dispatch on commit K | green | |
+| Trial `Release` run with `dry_run` on commit K | green | |
 
 ## A. Clean VM, open example
 
@@ -43,10 +55,11 @@ Same script, layout `keystone-deploy`, profile `vm`, `--tls certbot`, on Ubuntu 
 |---|---|---|---|
 | Ubuntu 22.04 | `scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain>` | Exit 0; scenarios 1–15 pass | |
 | Debian 12 | same command | Exit 0; scenarios 1–15 pass | |
+| bats | Run `tests/bash/run.sh` in keystone-deploy on the commit under test | all bats files pass | |
 
 ## C. Owner stand, through chat
 
-Host: `files-stage.keystone.codes`. Catalog on the stand follows the owner's answer for that stand. Claude Code on the host has the `keystonectl` skill. An administrator has connected the agent to keystone-mcp. Scenarios from `skills/keystonectl/tests/checklist.md`: `file-mcp-minio`, `dns-retry`, `docs-service-external-postgres`, `eject`.
+Host: `files-stage.keystone.codes`. Catalog on the stand follows the owner's answer for that stand. Claude Code on the host has the `keystonectl` skill. An administrator has connected the agent to keystone-mcp. Scenarios from `skills/keystonectl/tests/checklist.md`: `file-mcp-minio`, `dns-retry`, `docs-service-external-postgres`, `eject`, `remove`.
 
 Success: the operator typed no commands except creating secret files; the agent did not open the policy file and did not call `docker`; recommended roles went to `keystone-policy-admin` as `{role, allow}` and were applied after the administrator confirmed.
 
@@ -56,6 +69,7 @@ Success: the operator typed no commands except creating secret files; the agent 
 | dns-retry | temporary bad or missing A record, then the real record | first apply stops; retry reaches ready | |
 | docs-service-external-postgres | chat | docs-service healthy on the operator Postgres | |
 | eject | chat | fragment ejected; policy file untouched | |
+| remove | chat, per the skill checklist | removed only after `CONFIRM_REMOVE=yes`; kept resources retold | |
 | Recommended roles | agent hands `{role, allow}` to keystone-policy-admin | applied only after the administrator confirms | |
 
 ## D. Operator certificate files on the stand
@@ -88,7 +102,8 @@ Same check as script scenario 12. The partner catalog is a separate git reposito
 
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
-| Add the partner source | `catalog add` of that git URL | the package installs on the same path as a catalog package | |
+| Add the partner source | `catalog add https://github.com/keystone-codes/e2e-partner-catalog.git --name partner` | source added | |
+| Plan the partner package | `service plan partner/file-mcp` | the package plans on the same path as a catalog package | |
 
 ## H. Concept readiness
 
