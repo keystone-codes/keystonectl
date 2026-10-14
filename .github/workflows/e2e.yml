@@ -17,7 +17,7 @@ on:
       keystone_deploy_ref:
         description: keystone-deploy commit (release/catalog)
         required: false
-        default: dd4538167af85bf5842d88e43bca53748063879f
+        default: ffd719701f3bb0eb53bdd212447bcd43bbd07c43
       keystone_mcp_ref:
         description: keystone-mcp commit (release/0.5.0)
         required: false
@@ -35,7 +35,7 @@ jobs:
       matrix:
         layout: [production-example, keystone-deploy]
     env:
-      E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || 'dd4538167af85bf5842d88e43bca53748063879f' }}
+      E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || 'ffd719701f3bb0eb53bdd212447bcd43bbd07c43' }}
       E2E_KEYSTONE_MCP_REF: ${{ inputs.keystone_mcp_ref || '6b04a198101dac22815b17d5bcf55b0e1c6463d8' }}
       KEYSTONE_DEPLOY_TOKEN: ${{ secrets.KEYSTONE_DEPLOY_TOKEN }}
     steps:
