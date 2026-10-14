@@ -41,7 +41,7 @@ A service you run yourself is a fourth path. `keystonectl service add-remote` re
 
 ## Checks before anything is written
 
-keystone-mcp `upstream validate` and `catalog validate` run in `docker run --network none` from the image recorded in the lock. `--strict-unreachable` is not passed: tools that no role can call are a warning (`tools_unreachable`), not a failure. If the candidate registry makes previously valid policy fail in a new way, apply stops with `policy_breaks`. The same unmatched set that already failed is a warning (`policy_already_inconsistent`).
+keystone-mcp `upstream validate` and `catalog validate` run in `docker run --network none` from the image recorded in the lock. `--strict-unreachable` is not passed: tools that no role can call are a warning (`tools_unreachable`), not a failure. If the candidate registry makes previously valid policy fail in a new way, apply stops with `policy_breaks`. The same unmatched set that already failed is a warning (`policy_already_inconsistent`). keystonectl parses the text these commands print on stderr/stdout to find those outcomes; `docs/adr/0001-catalog-outside-core.md`, "What keystonectl relies on beyond the frozen contract" lists why that text is not a contract.
 
 ## Restart
 
