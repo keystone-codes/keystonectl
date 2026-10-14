@@ -19,7 +19,7 @@ The CI profile does not run keystone-deploy `setup.sh`; the partner path is prov
 | minio-resource / postgres-resource | git tag `v1.0.0`; images are the foreign digests in those manifests |
 | Package versions from the lock | |
 
-`scripts/e2e.sh --profile vm` is the command for sections A and B. It has not been run for this document. Do not mark a row from a CI log.
+`scripts/e2e.sh --profile vm` is the command for sections A and B. It has not been run for this document. Do not mark a row from a CI log. Until 0.1.0 is on PyPI, that command requires `--keystonectl <path to keystonectl-0.1.0-py3-none-any.whl>`; without it the script exits 1 before installing anything.
 
 ## 0. Candidate commit
 
@@ -33,10 +33,10 @@ Commit K is the candidate under test for every row below, including A–H. Fill 
 
 ## A. Clean VM, open example
 
-Ubuntu 22.04. Install keystone-mcp from `examples/production` by following `docs/paths/production-docker.md` in keystone-mcp. Then `uv tool install keystonectl` (or `pipx install keystonectl` once the package is on PyPI) and:
+Ubuntu 22.04. Install keystone-mcp from `examples/production` by following `docs/paths/production-docker.md` in keystone-mcp. Build the wheel from the commit under test (`uv build`), copy it to the VM, then:
 
 ```bash
-scripts/e2e.sh --layout production-example --profile vm --tls certbot --domain <vm-domain>
+scripts/e2e.sh --layout production-example --profile vm --tls certbot --domain <vm-domain> --keystonectl <path to keystonectl-0.1.0-py3-none-any.whl>
 ```
 
 Attach the JSONL report next to this file when the run exists.
@@ -44,8 +44,7 @@ Attach the JSONL report next to this file when the run exists.
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
 | Install keystone-mcp | Follow `docs/paths/production-docker.md` | Gateway answers on the VM | |
-| Install keystonectl | `uv tool install` from the checkout, or PyPI when published | `keystonectl --version` prints 0.1.0 | |
-| Run the script | command above | Exit 0; scenarios 1–15 pass; certbot issued the certificate | |
+| Run the script | command above | `keystonectl` installs from the wheel; exit 0; scenarios 1–15 pass; certbot issued the certificate | |
 
 ## B. Clean VM, keystone-deploy
 
@@ -53,7 +52,7 @@ Same script, layout `keystone-deploy`, profile `vm`, `--tls certbot`, on Ubuntu 
 
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
-| Ubuntu 22.04 | `scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain>` | Exit 0; scenarios 1–15 pass | |
+| Ubuntu 22.04 | `scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain> --keystonectl <path to keystonectl-0.1.0-py3-none-any.whl>` | Exit 0; scenarios 1–15 pass | |
 | Debian 12 | same command | Exit 0; scenarios 1–15 pass | |
 | bats | Run `tests/bash/run.sh` in keystone-deploy on the commit under test | all bats files pass | |
 

@@ -64,19 +64,72 @@ def test_deploy_vm_skips_agent_path_missing_without_a_pass() -> None:
     assert body.index("return 0") < body.index("pass agent_path_missing")
 
 
-def test_vm_manual_tls_starts_caddy_from_the_production_example() -> None:
-    starter = _function_body("start_manual_caddy")
-    assert "sudo" not in starter
-    assert '"$ROOT/Caddyfile"' in starter
-    assert "caddy run --config" in starter
-    assert "handle /u/*" in starter
-    assert "handle /d/*" in starter
-    assert "handle /healthz" in starter
-    assert "respond 404" in starter
+def test_vm_manual_tls_uses_the_nginx_vhost_not_caddy() -> None:
+    assert "start_manual_caddy" not in SCRIPT
+    assert "caddy run" not in SCRIPT
     scenario = _function_body("scenario_tls_manual")
-    assert 'start_manual_caddy || fail tls_manual "could not start Caddy"' in scenario
+    assert (
+        'install_manual_vhost || fail tls_manual "could not install the sample vhost"' in scenario
+    )
+    assert 'export SSL_CERT_FILE="$WORK/tls/cert.pem"' in scenario
     assert "pass tls_manual" in scenario
-    before_apply = scenario.split('"$PROFILE" == "ci"', 1)[1].split(
-        "run_answered service apply file-mcp", 1
+    # Both profiles take the same path: no profile branch left before the
+    # second apply.
+    before_apply = scenario.split("status_file_mcp ", 1)[1].split(
+        "run_answered service apply e2e/file-mcp", 1
     )[0]
-    assert "return 0" not in before_apply
+    assert '"$PROFILE"' not in before_apply
+
+
+def test_manual_vhost_is_shared_by_both_profiles_and_uses_the_run_domain() -> None:
+    body = _function_body("install_manual_vhost")
+    assert "ensure_self_signed_cert" in body
+    assert "sudo" in body
+    assert '"$DOMAIN"' in body
+
+
+def test_pypi_spec_prepares_a_cert_for_the_actual_domain() -> None:
+    body = _function_body("ensure_self_signed_cert")
+    assert "/CN=${DOMAIN}" in body
+    assert "subjectAltName=DNS:${DOMAIN}" in body
+
+
+def test_certbot_runs_before_manual_tls() -> None:
+    body = _function_body("main")
+    assert body.index("scenario_tls_certbot") < body.index("scenario_tls_manual")
+
+
+def test_certbot_reissue_is_checked_by_serial_not_log_size() -> None:
+    body = _function_body("scenario_tls_certbot")
+    assert "x509 -noout -serial" in body
+    assert "letsencrypt.log" not in body
+    assert "wc -c" not in body
+
+
+def test_vm_profile_refuses_the_pypi_spec_before_anything_is_installed() -> None:
+    lines = SCRIPT.splitlines()
+    spec_default_index = next(
+        index for index, line in enumerate(lines) if 'KEYSTONECTL_SPEC="pypi:0.1.0"' in line
+    )
+    guard_index = next(
+        index
+        for index, line in enumerate(lines)
+        if 'echo "pass --keystonectl <wheel or checkout>:' in line
+    )
+    main_index = next(index for index, line in enumerate(lines) if line.startswith("main()"))
+    assert spec_default_index < guard_index < main_index
+    guard_block = "\n".join(lines[guard_index - 2 : guard_index + 3])
+    assert 'KEYSTONECTL_SPEC" == pypi:*' in guard_block
+    assert "exit 1" in guard_block
+    assert "is not on PyPI yet" in guard_block
+
+
+def test_production_example_env_does_not_preset_allow_insecure_http() -> None:
+    body = _function_body("prepare_production_example")
+    assert "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP" not in body
+
+
+def test_install_scenario_asserts_keystonectl_set_allow_insecure_http() -> None:
+    body = _function_body("scenario_install_file_mcp_minio")
+    assert "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP" in body
+    assert "managed block, do not edit" in body
