@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ADR 0001 lists the core internals keystonectl depends on.
 - `docs/packaging-a-service.md`: the file-mcp example no longer calls the published image digest a placeholder; it now points authors at copying their own registry's digest.
 - Corrected five docs that had drifted from the code: resource binding question reuse (`docs/resources.md`), Postgres provider promises (`docs/spec/resources/postgres-v1.md`), the keystone-deploy `mcp/` layout example (`docs/spec/deployment-layout.md`), the public DNS check (`docs/public-paths.md`), and `keystone-resources` cross-package reachability (`docs/spec/service-package.md`, `docs/packaging-a-service.md`).
+- ADR 0004 no longer mentions a `--local` flag.
 
 ### Fixed
 
