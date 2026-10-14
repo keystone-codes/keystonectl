@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Corrected five docs that had drifted from the code: resource binding question reuse (`docs/resources.md`), Postgres provider promises (`docs/spec/resources/postgres-v1.md`), the keystone-deploy `mcp/` layout example (`docs/spec/deployment-layout.md`), the public DNS check (`docs/public-paths.md`), and `keystone-resources` cross-package reachability (`docs/spec/service-package.md`, `docs/packaging-a-service.md`).
 - ADR 0004 no longer mentions a `--local` flag.
 - `tag_not_found` names the source, the ref, and the URL.
+- e2e: vm profile requires --keystonectl until 0.1.0 is on PyPI; certbot re-issue checked by serial.
 
 ### Fixed
 

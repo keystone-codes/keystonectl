@@ -4,7 +4,7 @@
 
 ## Machine
 
-Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name and port 80 for certbot. Manual TLS on that profile starts Caddy from the production example Caddyfile and does not use sudo; if Caddy does not start, that scenario fails. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
+Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name, port 80 for certbot, and `sudo` for the same nginx vhost the CI profile uses for manual TLS (a self-signed certificate on the sample vhost; keystonectl only checks that TLS answers, not that the chain is trusted). Until keystonectl 0.1.0 is published, the VM profile requires `--keystonectl <wheel or checkout>`; without it the script exits 1 before installing anything. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
 
 Port 8080 must be free. If it is not, pass `--publish-port` with a free loopback port. The script rewrites only its own copy of the compose file and records that as a note in the report.
 
@@ -15,7 +15,7 @@ Containers and the temp directory use the `ks-cat-e2e-` prefix. Networks require
 | Flag | Default | Meaning |
 |---|---|---|
 | `--layout` | `production-example` | `production-example` (open example) or `keystone-deploy` |
-| `--profile` | `ci` | `ci` installs from this checkout and uses a self-signed certificate. `vm` installs from PyPI unless `--keystonectl` is set, and may use certbot |
+| `--profile` | `ci` | `ci` installs from this checkout and uses a self-signed certificate. `vm` requires `--keystonectl <wheel or checkout>` until 0.1.0 is on PyPI, and may use certbot |
 | `--storage` | `both` | `minio`, `external`, or `both` |
 | `--postgres` | `both` | `provider`, `external`, or `both` |
 | `--tls` | `custom` | `custom` or `certbot` (`certbot` only with `--profile vm`) |
@@ -51,12 +51,16 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 10. Point file-mcp at an external S3 (`ks-cat-e2e-external-s3`, alias `e2e-external-s3`).
 11. Point docs-service at an external Postgres (`ks-cat-e2e-external-pg`).
 12. A second catalog source; an ambiguous name asks for a choice.
-13. On the open example, manual TLS: the first apply is retryable `public_unreachable`. The CI profile installs the sample nginx vhost. The VM profile starts Caddy from the production example Caddyfile with the public-paths site, then apply reaches ready. Certbot is a separate VM scenario.
+13. On the open example, manual TLS: the first apply is retryable `public_unreachable`. Both profiles then install the sample nginx vhost with a self-signed certificate; apply reaches ready. On the VM profile this runs after the certbot scenario, so a certbot-issued certificate cannot be mistaken for the manual one.
 14. `check` allows `tls_untrusted`, `s3_plain_http`, and `postgres_plain_connection`. Any other warning fails.
 15. The deployment has none of the forbidden names (`EXTERNAL_APIS`, `docker-compose.external.yml`, `FILE_API_URL`, a git-built keystone-mcp image).
+
+On the VM profile with `--tls certbot`, an unnumbered scenario runs between 12 and 13: the certificate for `--domain` was issued by Let's Encrypt, and re-applying does not change its serial number (certbot did not re-issue).
 
 ## Report
 
 Each line is `{"scenario","status","code","message"}`. `status` is `pass`, `fail`, `skip`, or `deviation`. `deviation` is a note, not a failure: the empty layout patch, the catalog SHA instead of a missing `v1.0.0` tag, the local stand-in for file-mcp 0.9.0, and a non-default publish port.
+
+In CI (`.github/workflows/e2e.yml`), the report and `e2e-diagnostics/` are uploaded as a build artifact on every run, not only on failure.
 
 `scripts/e2e/jsonq.py` reads one keystonectl JSON document from stdin and prints one value per line. It has no expression language. `scripts/e2e/mcp_check.py` calls the gateway from inside the keystone-mcp image. The API key stays in `E2E_API_KEY` and in a mode 600 env file.
