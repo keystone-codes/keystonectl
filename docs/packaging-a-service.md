@@ -324,7 +324,7 @@ Not yet supported in keystonectl 0.1: stdio-only packages, signed catalogs, Helm
 | `compat.keystone_mcp` set | `keystonectl lint` |
 | Five checklist items from `connecting-services.md` | Installer handles registry steps; author verifies service behavior, namespace, schemas |
 
-For a full **file-mcp** manifest with S3 and public paths (placeholder digest until release CI runs), see:
+For a full **file-mcp** manifest with S3 and public paths, see:
 
 <!-- example: keystone-service.yaml -->
 
@@ -384,4 +384,4 @@ public_base_url_env: FILE_MCP_PUBLIC_BASE_URL
 recommended_policy: policy.example.yaml
 ```
 
-Image digest is a **placeholder** until [release-image workflow](https://github.com/keystone-codes/file-mcp/blob/v1.0.0/.github/workflows/release-image.yml) records the published index.
+The digest above is the one published for file-mcp 1.0.0; copy the digest your registry reports for your own image.

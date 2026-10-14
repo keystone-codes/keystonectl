@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Error hints no longer mention a `--local` flag; `package_ambiguous` names the `source/name` form with an example.
 - README links are absolute for PyPI.
 - ADR 0001 lists the core internals keystonectl depends on.
+- `docs/packaging-a-service.md`: the file-mcp example no longer calls the published image digest a placeholder; it now points authors at copying their own registry's digest.
 
 ### Fixed
 
