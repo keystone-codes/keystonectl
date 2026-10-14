@@ -95,6 +95,8 @@ identity:
 
 **`needs`** — declare `s3/v1` or `postgres/v1` with `bind_env` (Postgres accepts a single `url` and/or separate fields; see [postgres-v1](spec/resources/postgres-v1.md)). Optional `extensions` and `needs[].containers` limit which roles receive credentials. Providers install once; each consumer gets its own bucket or database/user. **`requires`** — install order only, no credentials.
 
+`keystone-resources` is one bridge shared by every consumer package and every provider. Compose makes each service name resolvable on every network it joins, so a container of one package can reach a container of another package that is also on `keystone-resources`. Treat internal roles as reachable: check the caller, do not rely on the network.
+
 ### public_paths
 
 List URL path prefixes that must be reachable on the public service domain (for example signed download paths). Pair with `public_base_url_env` so the service learns `https://<operator-chosen-domain>`. The installer configures loopback port + nginx vhost; do not publish container ports for these paths yourself.

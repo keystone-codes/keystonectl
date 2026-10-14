@@ -9,7 +9,7 @@ A package with `public_paths` is reachable from the internet only through those 
 | Variable | When |
 |---|---|
 | `KEYSTONE_SETUP_SERVICE_<NAME>_DOMAIN` | Required. Lowercase hostname, at least two labels. No default. |
-| `KEYSTONE_SETUP_SERVICE_<NAME>_DNS` | `check` (default) or `skip` when the name is behind a proxy or in CI. |
+| `KEYSTONE_SETUP_SERVICE_<NAME>_DNS` | `check` (default) or `skip` when the name is behind a proxy or in CI. The DNS check asks api.ipify.org, ifconfig.me, or ipinfo.io for the host's public address and resolves the domain through `dig @1.1.1.1`; it checks IPv4 only. Use `DNS=skip` when outbound access is closed or the name is behind a proxy. |
 | `KEYSTONE_SETUP_SERVICE_<NAME>_TLS` | `keep` (only if a current certificate is already on disk), `certbot`, `custom`, or `manual`. |
 | `KEYSTONE_SETUP_SERVICE_<NAME>_CERT_PATH` and `_KEY_PATH` | Paths on the host when `TLS=custom`. Not secrets. |
 | `KEYSTONE_SETUP_TLS_EMAIL` | Shared Let's Encrypt address when `TLS=certbot`. |

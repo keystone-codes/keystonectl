@@ -156,6 +156,8 @@ Only `mcp.container` joins `keystone-mcp-upstreams` with a network alias equal t
 
 `provides.container` is reachable by consumers as `<package>-<role>` on the external bridge `keystone-resources`. A consumer joins that network only with the roles listed in `needs[].containers` (by default, every container of a package that declares the need, including `init`). A provider that has no `mcp` block is not attached to `keystone-mcp-upstreams`.
 
+`keystone-resources` is one bridge shared by every consumer package and every provider. Compose makes each service name resolvable on every network it joins, so a container of one package can reach a container of another package that is also on `keystone-resources`. Treat internal roles as reachable: check the caller, do not rely on the network.
+
 `init` containers use `restart: "no"` and run in manifest order. Long-running containers start after every `init` container has finished (`depends_on` with `condition: service_completed_successfully`).
 
 The manifest does not restrict the service's own outbound calls. Package networks and `keystone-resources` are ordinary bridges, so egress exists. The generator, not the manifest, builds those networks.
@@ -170,7 +172,7 @@ The manifest has nowhere to put a host-level setting. That is deliberate: the sa
 
 | Rejected | Why |
 |---|---|
-| `ports`, `expose` | Callers reach the service only over the internal network |
+| `ports`, `expose` | Callers reach the service only over the internal `keystone-mcp-upstreams` network |
 | `build` | Packages ship a pinned image |
 | `privileged`, `cap_add`, `devices`, `network_mode`, `pid`, `ipc`, `security_opt`, `extra_hosts`, `volumes_from`, `sysctls`, `userns_mode` | A package cannot request host access |
 | `networks`, `depends_on`, `restart`, `container_name`, `links` | The installer sets these |
