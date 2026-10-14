@@ -62,7 +62,7 @@ uv run keystonectl --root <directory> service apply <package>
 
 Agents install services by following [`skills/keystonectl/`](https://github.com/keystone-codes/keystonectl/blob/main/skills/keystonectl/SKILL.md). Copy that directory into the agent's skills directory on the host where keystone-mcp runs. The skill ships in the repository, not in the wheel: copy `skills/keystonectl/` from a checkout or a release archive.
 
-The agent runs `keystonectl` with `--json`, asks one question at a time, and takes a secret only as a path to a mode 600 file. It does not run Docker, edit compose files, or edit the RBAC policy. Recommended roles are handed to the `keystone-policy-admin` skill from keystone-mcp 0.5.0, which applies them after an administrator confirms. Without that skill, the agent shows the same `{role, allow}` list and the policy path for the administrator to apply.
+The agent runs `keystonectl` with `--json`, asks one question at a time, and takes a secret only as a path to a mode 600 file. It does not run Docker, edit compose files, or edit the RBAC policy. Recommended roles are handed to the `keystone-policy-admin` skill from keystone-mcp 0.5.0, which applies them after an administrator confirms, also for bundles. Without that skill, the agent shows the same `{role, allow}` list and the policy path for the administrator to apply.
 
 ## JSON
 

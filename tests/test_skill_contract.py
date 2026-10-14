@@ -24,6 +24,7 @@ _SECRET_TOKEN = re.compile(r"[A-Za-z0-9_-]{32,}")
 _PASSWORD_URL = re.compile(r"postgresql://[^/\s]*:[^/\s@]*@")
 _SCENARIOS = {
     "file-mcp-minio",
+    "bundle-install",
     "docs-service-external-postgres",
     "dns-retry",
     "eject",

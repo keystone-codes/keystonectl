@@ -1,0 +1,52 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "bundle plan",
+  "target": "keystone-codes/minimal",
+  "summary": "3 answers are missing",
+  "actions": [],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_RESOURCE_S3",
+      "question": "Where should file-mcp keep files: in S3 storage you already have (external), or in a new MinIO on this server (catalog)?",
+      "kind": "choice",
+      "choices": [
+        "external",
+        "catalog"
+      ],
+      "default": null,
+      "secret": false
+    },
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_MAX_BYTES",
+      "question": "Value of FILE_MCP_MAX_BYTES for file-mcp.",
+      "kind": "text",
+      "choices": null,
+      "default": null,
+      "secret": false
+    },
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_LINK_TTL_SECONDS",
+      "question": "Value of FILE_MCP_LINK_TTL_SECONDS for file-mcp.",
+      "kind": "text",
+      "choices": null,
+      "default": null,
+      "secret": false
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "order": [
+      "file-mcp"
+    ],
+    "packages": [
+      {
+        "name": "file-mcp",
+        "status": "needs_answers"
+      }
+    ]
+  }
+}

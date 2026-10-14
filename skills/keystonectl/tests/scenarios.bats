@@ -38,12 +38,24 @@ run_scenario() {
     install -m 600 "$SCENARIO_DIR/secrets/pg-url" "$WORK/pg-url"
     export KEYSTONE_SETUP_POSTGRES_URL_FILE="$WORK/pg-url"
   fi
+  if [[ -f "$SCENARIO_DIR/secrets/s3-access-key" ]]; then
+    install -m 600 "$SCENARIO_DIR/secrets/s3-access-key" "$WORK/s3-access-key"
+    export KEYSTONE_SETUP_S3_ACCESS_KEY_FILE="$WORK/s3-access-key"
+  fi
+  if [[ -f "$SCENARIO_DIR/secrets/s3-secret-key" ]]; then
+    install -m 600 "$SCENARIO_DIR/secrets/s3-secret-key" "$WORK/s3-secret-key"
+    export KEYSTONE_SETUP_S3_SECRET_KEY_FILE="$WORK/s3-secret-key"
+  fi
   "$REPO/skills/keystonectl/tests/run-scenario.sh"
   python3 "$REPO/skills/keystonectl/tests/assert-scenario.py" "$name" "$FAKE_JOURNAL"
 }
 
 @test "file-mcp-minio" {
   run_scenario file-mcp-minio
+}
+
+@test "bundle-install" {
+  run_scenario bundle-install
 }
 
 @test "docs-service-external-postgres" {
