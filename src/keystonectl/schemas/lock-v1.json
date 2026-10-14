@@ -254,6 +254,10 @@
         "not_after": {"$ref": "#/$defs/timestamp"},
         "vhost": {"type": "string", "minLength": 1},
         "took_over": {"type": ["string", "null"]},
+        "disabled_sites": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
         "last_error": {"type": ["string", "null"]}
       }
     },
