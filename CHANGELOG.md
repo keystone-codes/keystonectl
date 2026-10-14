@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- e2e: the vm profile checks PyPI for the requested version instead of refusing outright.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added

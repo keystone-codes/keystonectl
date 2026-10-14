@@ -6,8 +6,9 @@ The CI profile does not run keystone-deploy `setup.sh`; the partner path is prov
 
 | Field | Value |
 |---|---|
-| keystonectl (PyPI) | not published; install from the checkout (`--profile ci` does this) |
-| keystonectl commit | |
+| keystonectl (PyPI) | `0.1.0` — wheel sha256 `ceb302ae396a65a4852ba61f3daf7a092e6ec8dc692b593bba58b17773d02bd4`, sdist sha256 `d5c42bb17d9b52f42e9399c4b5e7d7c136046a5da0bae1c00b6d8f8ae5b54975` |
+| keystonectl commit | `79d16b7` |
+| Release run (publish, pypi-verify, github-release) | <https://github.com/keystone-codes/keystonectl/actions/runs/38542146269> |
 | Date | |
 | Checked by | |
 | keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.5.0` |
@@ -19,7 +20,7 @@ The CI profile does not run keystone-deploy `setup.sh`; the partner path is prov
 | minio-resource / postgres-resource | git tag `v1.0.0`; images are the foreign digests in those manifests |
 | Package versions from the lock | |
 
-`scripts/e2e.sh --profile vm` is the command for sections A and B. It has not been run for this document. Do not mark a row from a CI log. Until 0.1.0 is on PyPI, that command requires `--keystonectl <path to keystonectl-0.1.0-py3-none-any.whl>`; without it the script exits 1 before installing anything.
+`scripts/e2e.sh --profile vm` is the command for sections A and B. It has not been run for this document. Do not mark a row from a CI log. The command checks PyPI for the requested keystonectl version; pass `--keystonectl <wheel or checkout>` for an unpublished candidate, otherwise it installs from PyPI.
 
 ## 0. Candidate commit
 
@@ -27,24 +28,26 @@ Commit K is the candidate under test for every row below, including A–H. Fill 
 
 | Check | Expected | Link |
 |---|---|---|
-| `ci` on commit K | green | |
-| Manual `e2e` workflow_dispatch on commit K | green | |
-| Trial `Release` run with `dry_run` on commit K | green | |
+| `ci` on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539656674> |
+| Manual `e2e` workflow_dispatch on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539668689> (both layouts, success) |
+| Trial `Release` run with `dry_run` on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539675781> |
 
 ## A. Clean VM, open example
 
 Ubuntu 22.04. Install keystone-mcp from `examples/production` by following `docs/paths/production-docker.md` in keystone-mcp. Build the wheel from the commit under test (`uv build`), copy it to the VM, then:
 
 ```bash
-scripts/e2e.sh --layout production-example --profile vm --tls certbot --domain <vm-domain> --keystonectl <path to keystonectl-0.1.0-py3-none-any.whl>
+scripts/e2e.sh --layout production-example --profile vm --tls certbot --domain <vm-domain>
 ```
+
+(or add `--keystonectl <wheel>` for an unpublished candidate)
 
 Attach the JSONL report next to this file when the run exists.
 
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
 | Install keystone-mcp | Follow `docs/paths/production-docker.md` | Gateway answers on the VM | |
-| Run the script | command above | `keystonectl` installs from the wheel; exit 0; scenarios 1–15 pass; certbot issued the certificate | |
+| Run the script | command above | `keystonectl` installs from PyPI (or the wheel, if passed); exit 0; scenarios 1–15 pass; certbot issued the certificate | |
 
 ## B. Clean VM, keystone-deploy
 
@@ -52,7 +55,7 @@ Same script, layout `keystone-deploy`, profile `vm`, `--tls certbot`, on Ubuntu 
 
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
-| Ubuntu 22.04 | `scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain> --keystonectl <path to keystonectl-0.1.0-py3-none-any.whl>` | Exit 0; scenarios 1–15 pass | |
+| Ubuntu 22.04 | `scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain>` (or add `--keystonectl <wheel>` for an unpublished candidate) | Exit 0; scenarios 1–15 pass | |
 | Debian 12 | same command | Exit 0; scenarios 1–15 pass | |
 | bats | Run `tests/bash/run.sh` in keystone-deploy on the commit under test | all bats files pass | |
 
