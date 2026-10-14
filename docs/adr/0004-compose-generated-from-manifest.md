@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (keystonectl 0.1, 2026-10-12).
+Accepted (keystonectl 0.1, 2026-10-12); revised 2026-10-14 before release.
 
 ## Context
 
@@ -27,9 +27,11 @@ compose. A `compose.yaml` in the package repo is for author development only.
 ## Consequences
 
 Dangerous fields have nowhere to appear: the schema uses `additionalProperties: false` with clear
-errors. One manifest drives compose now and Helm values later. Images are digest-pinned; building
-from source is `--local` only. Operator-specific architecture belongs in the operator layer
-(ADR 0005), not in manifest fields.
+errors. One manifest drives compose now and Helm values later. Package images are digest-pinned
+and cannot be built by the installer. Building keystone-mcp itself from source is the operator's
+layout choice (`build.context` in their compose file); keystonectl records it as `keystone_build`
+and skips the image-based checks with the warning `validation_skipped_local`. Operator-specific
+architecture belongs in the operator layer (ADR 0005), not in manifest fields.
 
 ## Alternatives considered
 
