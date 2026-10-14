@@ -231,7 +231,7 @@ Retell `problems` on status. They can include `container_missing`, `container_un
 | `KEYSTONE_SETUP_SERVICE_{PKG}_S3_BUCKET`, `KEYSTONE_SETUP_SERVICE_{PKG}_S3_ACCESS_KEY_FILE`, `KEYSTONE_SETUP_SERVICE_{PKG}_S3_SECRET_KEY_FILE` | Same S3 questions for this service only. They override the shared answers. Secret names are rule 2. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_DATABASE`, `KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_USER`, `KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_PASSWORD_FILE`, `KEYSTONE_SETUP_SERVICE_{PKG}_POSTGRES_URL_FILE` | Same Postgres questions for this service only. They override the shared answers. Secret names are rule 2. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_DOMAIN` | Which hostname should links use? It must already point at this server (for example `files.example.com`). |
-| `KEYSTONE_SETUP_SERVICE_{PKG}_DNS` | Check that the name points at this server? Skip only when a proxy sits in front. `check` or `skip`. |
+| `KEYSTONE_SETUP_SERVICE_{PKG}_DNS` | Not asked; read with default `check`. Set `skip` only when the operator says the name is behind a proxy or outbound DNS is closed. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_TLS` | Certificate: keep the one found (say the expiry), a free Let's Encrypt certificate, your own files, or you run the proxy and certificate (for example Caddy)? `keep`, `certbot`, `custom`, or `manual`. For `manual`, repeat the sample vhost path and say keystonectl will check the hostname over https. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_CERT_PATH`, `KEYSTONE_SETUP_SERVICE_{PKG}_KEY_PATH` | Where on the server are the certificate (full chain, PEM) and the key? Paths, not contents. |
 | `KEYSTONE_SETUP_TLS_EMAIL` | Which email should Let's Encrypt use for expiry reminders? |
@@ -261,11 +261,13 @@ Pass the path in a `…_FILE` variable. Do not read the file and do not print it
 
 ## Policy
 
-Read `result.recommended_policy` from `apply` (or from `bundle install`).
+Read `result.recommended_policy` from `apply` or from `bundle plan`/`bundle install`. There are three forms. Tell them apart by shape, not by command:
 
-- If it is a list of roles, use that list.
-- If it is an example file (`path` and `content`, or only the example text), build the list from the `roles` section. One entry per role: `{role: <name>, allow: [<patterns>]}`. Add nothing. Do not invent tool names.
-- Also take `result.critical_tools` (or the package `critical` list). That is the hint for `critical_tools`.
+- **A list of roles** (each item has `allow`): use that list as is.
+- **One example file** (an object with `path` and, when it fits, `content`; or only the example text): build the list from its `roles` section. One entry per role: `{role: <name>, allow: [<patterns>]}`. Add nothing. Do not invent tool names.
+- **A list of files by package** (each item has `package`, and `path` and, when it fits, `content`, but no `allow`): this is what `bundle plan`/`bundle install` return, one item per package that recommends a policy. For each item, parse `content` as the policy example of that package, collect its `roles`, then merge into one `{role, allow}` list; the same role name from two packages is one entry with the union of patterns.
+
+Also take `result.critical_tools` (or the package `critical` list). For bundles it is a list of `{package, name}`; use the `name` values the same way as a flat list. That is the hint for `critical_tools`.
 
 If you have the `policy_*` tools and the `keystone-policy-admin` skill (you are connected to keystone-mcp as an administrator): say that an administrator sets roles, and pass the list in one sentence: `Recommended rows from package file-mcp 1.0.0 (namespace files): [{"role": "files_user", "allow": ["files_create_upload_url", "files_get_download_link", "files_get_file_info"]}]. Critical tools: files_create_upload_url, files_get_download_link.` The policy skill shows the change and applies it after the administrator confirms. Do not call `policy_*` yourself.
 
@@ -448,6 +450,34 @@ keystonectl --root /srv/keystone service status file-mcp --json
 ```
 
 Agent: file-mcp 1.0.0 is installed with a new MinIO on this server (other services that need S3 get their own bucket in it). Tools: files_create_upload_url, files_get_download_link, files_get_file_info. Links open at https://files.example.com (Let's Encrypt, renews automatically). Nobody can call the tools yet. Recommended rows from package file-mcp 1.0.0 (namespace files): [{"role": "files_user", "allow": ["files_create_upload_url", "files_get_download_link", "files_get_file_info"]}]. Critical tools: files_create_upload_url, files_get_download_link.
+
+Operator: Install the minimal bundle. We already have S3.
+
+```
+<!-- scenario: bundle-install -->
+keystonectl --root /srv/keystone check --json
+keystonectl --root /srv/keystone catalog list --json
+keystonectl --root /srv/keystone bundle plan minimal --json
+# code 2, missing: KEYSTONE_SETUP_RESOURCE_S3, KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_MAX_BYTES, KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_LINK_TTL_SECONDS
+Agent: Where should file-mcp keep files: in S3 you already have, or in a new MinIO on this server?
+Operator: We already have S3.
+Agent: Put the access key and the secret key each in their own mode 600 file and send the paths.
+Operator: The paths are ready.
+Agent: What is the maximum upload size in bytes, and how long should a download link stay valid, in seconds?
+Operator: 5368709120 and 900.
+KEYSTONE_SETUP_RESOURCE_S3=external \
+KEYSTONE_SETUP_S3_ENDPOINT=https://s3.example \
+KEYSTONE_SETUP_S3_BUCKET=file-mcp \
+KEYSTONE_SETUP_S3_ACCESS_KEY_FILE="$KEYSTONE_SETUP_S3_ACCESS_KEY_FILE" \
+KEYSTONE_SETUP_S3_SECRET_KEY_FILE="$KEYSTONE_SETUP_S3_SECRET_KEY_FILE" \
+KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_MAX_BYTES=5368709120 \
+KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_LINK_TTL_SECONDS=900 \
+keystonectl --root /srv/keystone bundle install minimal --json
+# code 0
+<!-- /scenario -->
+```
+
+Agent: The minimal bundle (file-mcp 1.0.0) is installed, S3 is the one you already have. `recommended_policy` came back as one file per package; file-mcp's `policy.example.yaml` has one role. Recommended rows from the bundle: [{"role": "files_user", "allow": ["files_create_upload_url", "files_get_download_link", "files_get_file_info"]}]. Critical tools: files_create_upload_url, files_get_download_link.
 
 Operator: Install the document service. The database is ours.
 

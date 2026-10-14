@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ADR 0004 no longer mentions a `--local` flag.
 - `tag_not_found` names the source, the ref, and the URL.
 - e2e: vm profile requires --keystonectl until 0.1.0 is on PyPI; certbot re-issue checked by serial.
+- Skill handles `recommended_policy` from `bundle install`.
 
 ### Fixed
 
