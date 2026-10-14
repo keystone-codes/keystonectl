@@ -11,7 +11,7 @@ Fill this in when a person runs the manual checks. The result column stays empty
 | keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.5.0` |
 | keystone-mcp commit | `6b04a198101dac22815b17d5bcf55b0e1c6463d8` (`release/0.5.0`) |
 | keystone-deploy commit | `dd4538167af85bf5842d88e43bca53748063879f` (`release/catalog`) |
-| keystone-catalog commit | `1bc59512acccbd30cfbd958f78b713b21a7276a2` (no `v1.0.0` tag; the script pins this SHA) |
+| keystone-catalog commit | `1bc59512acccbd30cfbd958f78b713b21a7276a2` (tag `v1.0.0` = `1bc5951`) |
 | file-mcp | `1.0.0` — `ghcr.io/keystone-codes/file-mcp@sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0` |
 | hello-upstream | `1.0.0` — `ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337` |
 | minio-resource / postgres-resource | git tag `v1.0.0`; images are the foreign digests in those manifests |
