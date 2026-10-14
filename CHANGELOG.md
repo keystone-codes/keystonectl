@@ -15,13 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Published on PyPI as `keystonectl`; tags `vX.Y.Z` publish through trusted publishing.
 - Public paths: loopback port, nginx vhost, certificate lifecycle, and `service remove`, `upgrade`, `rollback`, `eject`, and `adopt`.
 - Release gate verifies that the default catalog ref exists.
+- `SECURITY.md`.
 
 ### Changed
 
 - catalog spec explains tag versus commit pinning.
 - ADR 0005 and generation.md describe `check` as reporting, `apply` and `upgrade` as stopping.
 - Error hints no longer mention a `--local` flag; `package_ambiguous` names the `source/name` form with an example.
-
+- README links are absolute for PyPI.
 
 ### Fixed
 
