@@ -362,3 +362,18 @@ def test_fetch_tmp_root_created_with_private_mode(tmp_path: Path) -> None:
     assert tree.is_relative_to(tmp_path / ".keystonectl" / "tmp")
     mode = (tmp_path / ".keystonectl" / "tmp").stat().st_mode & 0o777
     assert mode == 0o700
+
+
+def test_fetch_creates_keystonectl_dir_on_bare_root(tmp_path: Path) -> None:
+    """``catalog list --root`` on a checkout without ``init`` must not leave
+
+    ``.keystonectl`` with a permissive, default mode: the deployment layout promises
+    mode 700 and a ``.gitignore`` with a single ``*`` line for that directory.
+    """
+    assert not (tmp_path / ".keystonectl").exists()
+    runner = git_runner()
+    fetch_tree(runner, URL, "v1.0.0", tmp_path)
+    keystonectl_dir = tmp_path / ".keystonectl"
+    mode = keystonectl_dir.stat().st_mode & 0o777
+    assert mode == 0o700
+    assert (keystonectl_dir / ".gitignore").read_text() == "*\n"
