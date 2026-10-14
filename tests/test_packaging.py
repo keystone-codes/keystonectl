@@ -30,3 +30,16 @@ def test_extract_changelog_prints_section() -> None:
     section = extract_changelog.extract_section(text, "Unreleased")
     assert section is not None
     assert "trusted publishing" in section
+
+
+def test_readme_has_no_relative_repo_links() -> None:
+    text = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "](docs/" not in text
+    assert "](skills/" not in text
+    assert "](LICENSE)" not in text
+
+
+def test_security_md_exists_and_lists_supported_versions() -> None:
+    text = (_REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    assert "Supported versions" in text
+    assert "0.1.x" in text
