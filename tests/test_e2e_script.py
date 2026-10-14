@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,7 +108,7 @@ def test_certbot_reissue_is_checked_by_serial_not_log_size() -> None:
     assert "wc -c" not in body
 
 
-def test_vm_profile_refuses_the_pypi_spec_before_anything_is_installed() -> None:
+def test_vm_profile_checks_pypi_before_installing() -> None:
     lines = SCRIPT.splitlines()
     spec_default_index = next(
         index for index, line in enumerate(lines) if 'KEYSTONECTL_SPEC="pypi:0.1.0"' in line
@@ -114,14 +116,47 @@ def test_vm_profile_refuses_the_pypi_spec_before_anything_is_installed() -> None
     guard_index = next(
         index
         for index, line in enumerate(lines)
-        if 'echo "pass --keystonectl <wheel or checkout>:' in line
+        if 'echo "keystonectl $pypi_version is not on PyPI:' in line
     )
     main_index = next(index for index, line in enumerate(lines) if line.startswith("main()"))
     assert spec_default_index < guard_index < main_index
-    guard_block = "\n".join(lines[guard_index - 2 : guard_index + 3])
+    guard_block = "\n".join(lines[guard_index - 3 : guard_index + 2])
     assert 'KEYSTONECTL_SPEC" == pypi:*' in guard_block
+    assert "pypi_version_exists" in guard_block
     assert "exit 1" in guard_block
-    assert "is not on PyPI yet" in guard_block
+    assert "pass --keystonectl <wheel or checkout>" in guard_block
+
+
+def test_pypi_version_exists_defers_to_the_check_command_override() -> None:
+    # The default path would hit the real PyPI index; substitute the check
+    # command via E2E_PYPI_CHECK_CMD so this test never touches the network.
+    body = _function_body("pypi_version_exists")
+    assert "E2E_PYPI_CHECK_CMD" in body
+    assert "curl" in body
+    assert "command -v curl" in body
+
+    script = f'pypi_version_exists() {{\n{body}\n}}\npypi_version_exists "$1"\n'
+
+    env = os.environ.copy()
+    env["E2E_PYPI_CHECK_CMD"] = "false"
+    absent = subprocess.run(
+        ["bash", "-c", script, "bash", "9.9.9-not-on-pypi"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert absent.returncode != 0
+
+    env["E2E_PYPI_CHECK_CMD"] = "true"
+    present = subprocess.run(
+        ["bash", "-c", script, "bash", "0.1.0"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert present.returncode == 0
 
 
 def test_production_example_env_does_not_preset_allow_insecure_http() -> None:
