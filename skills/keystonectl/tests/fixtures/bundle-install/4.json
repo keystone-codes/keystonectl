@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "bundle install",
+  "target": "keystone-codes/minimal",
+  "summary": "Installed keystone-codes/minimal.",
+  "actions": [],
+  "changes": 1,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "order": [
+      "file-mcp"
+    ],
+    "packages": [
+      {
+        "name": "file-mcp",
+        "status": "installed"
+      }
+    ],
+    "recommended_policy": [
+      {
+        "package": "file-mcp",
+        "path": "policy.example.yaml",
+        "content": "# Example only. The installer prints this file and never merges it into your\n# policy (packages bring tools, administrators build roles).\n# Tool names assume the default namespace \"files\"; adjust if you renamed it.\nversion: \"2.0.0\"\ndefault_deny: true\nroles:\n  files_user:\n    description: \"Upload files and get download links for files this user uploaded.\"\n    allow:\n      - files_create_upload_url\n      - files_get_download_link\n      - files_get_file_info\ncritical_tools:\n  - files_create_upload_url\n  - files_get_download_link\n"
+      }
+    ],
+    "critical_tools": [
+      {
+        "package": "file-mcp",
+        "name": "files_create_upload_url"
+      },
+      {
+        "package": "file-mcp",
+        "name": "files_get_download_link"
+      }
+    ]
+  }
+}

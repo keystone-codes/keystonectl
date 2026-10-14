@@ -1,6 +1,6 @@
 # keystonectl skill walkthrough
 
-Text walkthrough of the five scenarios in `SKILL.md`. Automated checks are `bats skills/keystonectl/tests` and `tests/test_skill_contract.py`. The manual protocol at the end is filled in on the owner's stand.
+Text walkthrough of the six scenarios in `SKILL.md`. Automated checks are `bats skills/keystonectl/tests` and `tests/test_skill_contract.py`. The manual protocol at the end is filled in on the owner's stand.
 
 ## file-mcp-minio
 
@@ -12,6 +12,17 @@ Text walkthrough of the five scenarios in `SKILL.md`. Automated checks are `bats
 | 4 | Retells version, namespace, tools, MinIO, domain, and warnings | Hears that nobody can call the tools yet | `apply` code 0, `tools_unreachable` included |
 | 5 | Passes `{role, allow}` and critical tools to the policy skill | The policy skill asks before it changes anything | List matches `result.recommended_policy`, nothing added |
 | 6 | `service status file-mcp` | Container, link, certificate expiry | `problems` empty |
+
+## bundle-install
+
+| Step | What the agent does | What the operator sees | Success |
+|---|---|---|---|
+| 1 | `check`, `catalog list`, `bundle plan minimal` | A short retelling, then one question about storage | Plan returns code 2 with `KEYSTONE_SETUP_RESOURCE_S3` and two package env questions |
+| 2 | Asks where files should live | "We already have S3" | Answer `external`, not typed as a flag |
+| 3 | Asks for the access key and the secret key, each in its own mode 600 file | Operator creates the files and sends the paths | Both variables end in `_FILE`, mode 600, contents never repeated |
+| 4 | Asks the two package settings (max upload size, link lifetime) | Gives both values | One `bundle install` with `RESOURCE_S3`, the S3 answers, and both `_ENV_` variables |
+| 5 | Retells the install and parses the third `recommended_policy` form (one file per package) | Hears that nobody can call the tools yet | `bundle install` code 0, `result.recommended_policy` is a list of `{package, path, content}` |
+| 6 | Passes the merged `{role, allow}` list and the merged critical tools to the policy skill | The policy skill asks before it changes anything | List matches the roles parsed from each package's `content`, nothing added |
 
 ## docs-service-external-postgres
 
