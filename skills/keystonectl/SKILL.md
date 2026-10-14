@@ -282,8 +282,8 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `usage` | 1 | false | The command was not understood. | Check the command and flags. Run keystonectl --help. |
 | `root_not_found` | 1 | false | No deployment directory was found. | Pass --root DIR, set KEYSTONECTL_ROOT, or run keystonectl init --adopt <dir>. |
 | `secret_in_argument` | 1 | false | A secret was passed on the command line. | Secrets are accepted only as a path to a mode 600 file, via the environment. |
-| `not_implemented` | 1 | false | This command cannot apply changes yet. | service apply has no deploy step in this build. Use service plan to preview. |
-| `package_ambiguous` | 2 | false | More than one catalog has this package. | Pass the package as source/name. |
+| `not_implemented` | 1 | false | This command cannot apply changes yet. | No deploy step is configured for this change. Run service plan to preview it. |
+| `package_ambiguous` | 2 | false | More than one catalog has this package. | Pass the package as source/name, for example local/file-mcp. service upgrade reads the source from the lock. |
 | `keystone_mcp_version_unknown` | 2 | false | The keystone-mcp version could not be read from the image. | Set KEYSTONE_SETUP_KEYSTONE_MCP_VERSION to the version that is running, for example 0.5.0. |
 | `keystone_service_ambiguous` | 2 | false | More than one compose service looks like keystone-mcp. | Re-run init --adopt with --keystone-service NAME. |
 | `package_not_found` | 3 | false | The package is not in any configured catalog. | Check the name, or add the catalog with keystonectl catalog add. |
@@ -340,7 +340,7 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `layout_invalid` | 3 | false | keystone-mcp cannot see the registry, the snapshot, or the service network. | Run keystonectl init --adopt <root> and start compose with both files: docker compose -f docker-compose.yml -f docker-compose.packages.yml. |
 | `fragment_modified` | 3 | false | A generated package fragment was edited by hand. | Move your changes into the override file, or eject the service. |
 | `init_failed` | 3 | false | An init container exited with an error. | Read the container log, fix the package, and run the command again. |
-| `keystone_mcp_image_unavailable` | 3 | true | The keystone-mcp image is not available. | Pull the image recorded in the lock, or pass --local and build it, then retry. |
+| `keystone_mcp_image_unavailable` | 3 | true | The keystone-mcp image is not available. | Pull the image recorded in the lock, or build it with your deployment's own tooling, then retry. |
 | `service_unhealthy` | 3 | true | A service container did not become healthy. | Read the container log and run the command again. |
 | `domain_invalid` | 3 | false | The public domain is not a lowercase hostname. | Use a lowercase DNS name with at least two labels, for example files.example.com. |
 | `domain_in_use` | 3 | false | That domain is already used by another service or nginx site. | Pick another domain, or disable the other site and run the command again. |

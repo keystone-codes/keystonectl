@@ -766,7 +766,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | key_mismatch | 3 | false | Point KEYSTONE_SETUP_SERVICE_<NAME>_KEY_PATH at the key for this certificate. |
 | key_not_pem | 3 | false | Replace KEYSTONE_SETUP_SERVICE_<NAME>_KEY_PATH with a PEM key. |
 | keystone_env_file_missing | 3 | false | Add env_file: .env to the keystone-mcp service. |
-| keystone_mcp_image_unavailable | 3 | true | Pull the image recorded in the lock, or pass --local and build it, then retry. |
+| keystone_mcp_image_unavailable | 3 | true | Pull the image recorded in the lock, or build it with your deployment's own tooling, then retry. |
 | keystone_mcp_version_unknown | 2 | false | Set KEYSTONE_SETUP_KEYSTONE_MCP_VERSION to the version that is running, for example 0.5.0. |
 | keystone_service_ambiguous | 2 | false | Re-run init --adopt with --keystone-service NAME. |
 | keystone_service_not_found | 3 | false | Pass --keystone-service NAME if the service was renamed. |
@@ -781,9 +781,9 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | no_provider | 3 | false | Choose external and point at storage you already run, or add a catalog that provides it. |
 | not_ejectable | 3 | false | Remote services are not generated. There is nothing to eject. |
 | not_ejected | 3 | false | service adopt only takes back a fragment that was ejected. |
-| not_implemented | 1 | false | service apply has no deploy step in this build. Use service plan to preview. |
+| not_implemented | 1 | false | No deploy step is configured for this change. Run service plan to preview it. |
 | not_package | 3 | false | A remote service has no package; use add-remote to change its url. |
-| package_ambiguous | 2 | false | Pass the package as source/name (for example `local/file-mcp`). `service upgrade` does this from the lock when the same name exists in more than one catalog. |
+| package_ambiguous | 2 | false | Pass the package as source/name, for example local/file-mcp. service upgrade reads the source from the lock. |
 | package_not_found | 3 | false | Check the name, or add the catalog with keystonectl catalog add. |
 | path_outside_root | 3 | false | Keep registry, snapshot, and policy files inside the deployment root. |
 | policy_breaks | 3 | false | Fix the policy, or install a version whose tools the policy already allows. |
