@@ -177,6 +177,16 @@ def test_lock_service_without_mcp() -> None:
     assert lock_errors(_lock([_generated()])) == []
 
 
+def test_lock_public_disabled_sites_list_is_valid() -> None:
+    service = _generated(public={"state": "none", "disabled_sites": ["other.conf", "second.conf"]})
+    assert lock_errors(_lock([service])) == []
+
+
+def test_lock_public_legacy_took_over_field_is_still_valid() -> None:
+    service = _generated(public={"state": "none", "took_over": "other.conf"})
+    assert lock_errors(_lock([service])) == []
+
+
 def test_lock_dangling_references() -> None:
     service = _generated(resources=["s3"])
     missing_kind = lock_errors(_lock([service], []))

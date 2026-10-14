@@ -71,6 +71,7 @@ services:
       not_after: "2027-01-10T00:00:00Z"
       vhost: /etc/nginx/sites-available/keystone-svc-file-mcp
       took_over: null
+      disabled_sites: []
       last_error: null
     retired_tools: []
     previous: null
