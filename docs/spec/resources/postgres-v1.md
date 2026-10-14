@@ -42,9 +42,11 @@ For consumer `<consumer>` (package name):
    limit holds).
 2. The role owns its database and the `public` schema; `LOGIN` only — no `SUPERUSER`, `CREATEDB`,
    `CREATEROLE`, `REPLICATION`, or `BYPASSRLS`.
-3. `REVOKE ALL ON DATABASE <db> FROM PUBLIC` and `GRANT CONNECT ON DATABASE <db> TO <db>` so other
-   consumers cannot connect. The role has no `CONNECT` on other databases (including revoking
-   `PUBLIC` on `postgres` where applicable).
+3. The role owns `<db>` and `PUBLIC` is revoked on it (`REVOKE ALL ON DATABASE <db> FROM PUBLIC`),
+   so other consumers cannot connect. Provision additionally runs
+   `GRANT ALL ON DATABASE <db> TO <db>`, which adds nothing for the owner; rights are the same as
+   promised here. The role has no `CONNECT` on other databases (including revoking `PUBLIC` on
+   `postgres` where applicable).
 4. Extensions listed in `needs[].extensions` are created in the consumer database at provision time
    (`CREATE EXTENSION IF NOT EXISTS` with provider admin rights). Unknown extensions fail provision.
 5. Server version ≥ 14 (`server_version_num >= 140000`).

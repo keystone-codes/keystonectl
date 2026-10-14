@@ -7,7 +7,7 @@ There are two ways to satisfy a need:
 - **external** — storage or a database you already run. You create the bucket, database, user, and extensions. keystonectl only checks them.
 - **catalog** — one provider package from a configured catalog (`kind: resource`, `provides.kind` matching the need). keystonectl installs that provider, then creates the consumer's bucket or database.
 
-One provider per kind. A second MinIO, or an external S3 next to a MinIO that is already bound, is refused with `resource_already_bound`.
+One provider per kind. Installing a second provider package of the same kind is refused with `resource_already_bound`. Once a kind is bound, later consumers use that provider; the `KEYSTONE_SETUP_RESOURCE_<KIND>` answer is not asked again and an `external` answer is ignored.
 
 ## Questions
 
