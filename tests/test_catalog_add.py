@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
 
+from keystonectl.catalog import DEFAULT_CATALOG_REF
 from keystonectl.sources import add_source
 from tests.support.served_catalog import SHA, catalog_runner
 
 PARTNER = "https://example.com/partner.git"
 CODES = "https://example.com/keystone-codes.git"
 BROKEN = "https://example.com/broken.git"
+
+_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def test_default_catalog_ref_is_a_tag_or_commit() -> None:
+    assert _TAG_RE.match(DEFAULT_CATALOG_REF) or _SHA_RE.match(DEFAULT_CATALOG_REF), (
+        f"DEFAULT_CATALOG_REF {DEFAULT_CATALOG_REF!r} must be a vX.Y.Z tag or a 40-char commit SHA"
+    )
+    assert DEFAULT_CATALOG_REF not in {"main", "master"}
 
 
 def _sources(root: Path, *, priority: int = 100) -> None:

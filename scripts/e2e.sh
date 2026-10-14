@@ -9,7 +9,8 @@ KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keys
 # keystone-codes/deploy, branch release/catalog.
 KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-dd4538167af85bf5842d88e43bca53748063879f}"
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
-# keystone-catalog main. The product default ref is v1.0.0; that tag is not on the repo.
+# keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
+# the script pins a commit so the run is reproducible.
 CATALOG_REF="${E2E_CATALOG_REF:-1bc59512acccbd30cfbd958f78b713b21a7276a2}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
 # file-mcp 1.0.0, git f2928bf. hello-upstream 1.0.0, git c9dd693.
@@ -1755,7 +1756,7 @@ main() {
   fi
   note "production-example.patch has no diff; layout A is not edited"
   note "file-mcp has no published 0.9.0 tag; the local catalog vendors 0.9.0 from the 1.0.0 tree and the same image digest"
-  note "sources.yaml pins catalog ${CATALOG_REF}; the product default ref v1.0.0 is not a tag on keystone-catalog"
+  note "sources.yaml pins catalog ${CATALOG_REF}"
   note "containers created by this script are named ks-cat-e2e-*; network aliases stay redis, e2e-external-s3, and e2e-external-pg"
   WORK="$(mktemp -d /tmp/ks-cat-e2e.XXXXXX)"
   DIAG="${REPO}/e2e-diagnostics"

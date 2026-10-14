@@ -110,6 +110,16 @@ def test_github_release_needs_pypi() -> None:
     assert "pypi-verify" in needs
 
 
+def test_version_gate_checks_the_default_catalog_ref_exists() -> None:
+    doc = _load("release.yml")
+    steps = doc["jobs"]["version-gate"]["steps"]
+    ls_remote_steps = [s for s in steps if "ls-remote" in (s.get("run") or "")]
+    assert ls_remote_steps, "version-gate must have a step that runs 'git ls-remote'"
+    run = ls_remote_steps[0]["run"]
+    assert "DEFAULT_SOURCES" in run
+    assert "--tags" in run
+
+
 def test_e2e_paths_include_the_script_and_its_unit_tests() -> None:
     doc = _load("e2e.yml")
     paths = _workflow_on(doc)["pull_request"]["paths"]
