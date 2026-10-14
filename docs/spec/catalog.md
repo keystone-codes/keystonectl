@@ -42,6 +42,10 @@ Each version row:
 | `ref` | yes | git tag or 40-character commit SHA (not a branch name) |
 | `keystone_mcp` | for `service` | compatibility range with installed keystone-mcp (see below) |
 
+### Tag or commit
+
+A git tag can be moved by anyone with push access to the package repository; a 40-character commit SHA cannot. The container image inside the manifest is pinned by digest either way, but the manifest itself is only as fixed as the `ref` that names it — on a tag, nothing stops it from pointing at a different commit tomorrow. Use a SHA for any catalog whose publishing process you do not trust. The keystone-codes catalog's CI (`scripts/check_refs.py`) re-checks, on every pull request, that the digest on the tag still matches the published image, but that check runs in CI, not on the operator's machine.
+
 Catalog `keystone_mcp` repeats manifest `compat.keystone_mcp` so `catalog list` can show compatibility without cloning every package. If the manifest differs after fetch, the manifest wins and the installer emits warning `compat_mismatch`.
 
 ## Sources
@@ -129,5 +133,6 @@ Warnings include `compat_mismatch`, `local_source` (`file://` URLs), and `catalo
 ## Not in this release
 
 - Cryptographic signing of catalogs or packages.
+- Pinning a package by SHA in the default catalog; tags are used, see [Tag or commit](#tag-or-commit).
 - Revoking a release: remove the version from `catalog.yaml`.
 - stdio transport packages in the catalog workflow.
