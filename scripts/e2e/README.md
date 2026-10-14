@@ -4,7 +4,7 @@
 
 ## Machine
 
-Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name, port 80 for certbot, and `sudo` for the same nginx vhost the CI profile uses for manual TLS (a self-signed certificate on the sample vhost; keystonectl only checks that TLS answers, not that the chain is trusted). Until keystonectl 0.1.0 is published, the VM profile requires `--keystonectl <wheel or checkout>`; without it the script exits 1 before installing anything. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
+Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name, port 80 for certbot, and `sudo` for the same nginx vhost the CI profile uses for manual TLS (a self-signed certificate on the sample vhost; keystonectl only checks that TLS answers, not that the chain is trusted). The VM profile checks PyPI for the requested `keystonectl` version (`curl https://pypi.org/pypi/keystonectl/<version>/json`); `--keystonectl <wheel or checkout>` is optional once that version is published and required for an unpublished candidate. Without `curl` the script only warns and continues; the install itself then fails with a clear error if the version is missing. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
 
 Port 8080 must be free. If it is not, pass `--publish-port` with a free loopback port. The script rewrites only its own copy of the compose file and records that as a note in the report.
 
@@ -15,7 +15,7 @@ Containers and the temp directory use the `ks-cat-e2e-` prefix. Networks require
 | Flag | Default | Meaning |
 |---|---|---|
 | `--layout` | `production-example` | `production-example` (open example) or `keystone-deploy` |
-| `--profile` | `ci` | `ci` installs from this checkout and uses a self-signed certificate. `vm` requires `--keystonectl <wheel or checkout>` until 0.1.0 is on PyPI, and may use certbot |
+| `--profile` | `ci` | `ci` installs from this checkout and uses a self-signed certificate. `vm` checks PyPI for the requested version and installs from there unless `--keystonectl <wheel or checkout>` is given; it may use certbot |
 | `--storage` | `both` | `minio`, `external`, or `both` |
 | `--postgres` | `both` | `provider`, `external`, or `both` |
 | `--tls` | `custom` | `custom` or `certbot` (`certbot` only with `--profile vm`) |

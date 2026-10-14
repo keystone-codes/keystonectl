@@ -105,9 +105,25 @@ if [[ -z "$KEYSTONECTL_SPEC" ]]; then
     KEYSTONECTL_SPEC="pypi:0.1.0"
   fi
 fi
+pypi_version_exists() {
+  local version="$1" check_cmd="${E2E_PYPI_CHECK_CMD:-}" status
+  if [[ -n "$check_cmd" ]]; then
+    "$check_cmd" "$version"
+    return $?
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "warning: curl not found; cannot verify keystonectl $version is on PyPI, continuing (install will fail with a clear error if it is not)" >&2
+    return 0
+  fi
+  status="$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/keystonectl/${version}/json" || echo "000")"
+  [[ "$status" == "200" ]]
+}
 if [[ "$KEYSTONECTL_SPEC" == pypi:* ]]; then
-  echo "pass --keystonectl <wheel or checkout>: ${KEYSTONECTL_SPEC#pypi:} is not on PyPI yet" >&2
-  exit 1
+  pypi_version="${KEYSTONECTL_SPEC#pypi:}"
+  if ! pypi_version_exists "$pypi_version"; then
+    echo "keystonectl $pypi_version is not on PyPI: pass --keystonectl <wheel or checkout>" >&2
+    exit 1
+  fi
 fi
 
 want_storage() { [[ "$STORAGE" == "$1" || "$STORAGE" == "both" ]]; }
