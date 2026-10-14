@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Public paths: loopback port, nginx vhost, certificate lifecycle, and `service remove`, `upgrade`, `rollback`, `eject`, and `adopt`.
 - Release gate verifies that the default catalog ref exists.
 - `SECURITY.md`.
+- Unexpected errors are reported as `internal_error` in JSON.
 
 ### Changed
 
