@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import yaml
 
 from keystonectl.catalog import Source
 from keystonectl.cli import main
-from keystonectl.fetch import fetch_tree
+from keystonectl.fetch import FetchError, fetch_tree
 from keystonectl.plan import run_service
 from keystonectl.runner import CommandResult, FakeCommandRunner
 from keystonectl.sources import add_source, refresh_source, resolve_package
@@ -179,9 +180,9 @@ def test_catalog_add_priority_default_unique(tmp_path: Path) -> None:
     assert result.result["priority"] == 40
 
 
-def test_fetch_clones_tag_and_records_commit() -> None:
+def test_fetch_clones_tag_and_records_commit(tmp_path: Path) -> None:
     runner = git_runner()
-    _tree, commit = fetch_tree(runner, URL, "v1.0.0")
+    _tree, commit = fetch_tree(runner, URL, "v1.0.0", tmp_path)
     assert commit == SHA
     clone = next(call for call in runner.calls if call.args[1] == "clone")
     assert clone.args[:8] == (
@@ -198,21 +199,21 @@ def test_fetch_clones_tag_and_records_commit() -> None:
     assert clone.args[9] == URL
 
 
-def test_fetch_by_commit_sha() -> None:
+def test_fetch_by_commit_sha(tmp_path: Path) -> None:
     runner = git_runner()
-    _tree, commit = fetch_tree(runner, URL, SHA)
+    _tree, commit = fetch_tree(runner, URL, SHA, tmp_path)
     assert commit == SHA
     assert any(call.args[:3] == ("git", "init", call.args[2]) for call in runner.calls)
     fetch = next(call for call in runner.calls if call.args[1] == "fetch")
     assert fetch.args == ("git", "fetch", "--depth", "1", URL, SHA)
 
 
-def test_fetch_refuses_branch_ref() -> None:
+def test_fetch_refuses_branch_ref(tmp_path: Path) -> None:
     runner = FakeCommandRunner(
         [(["git", "ls-remote"], CommandResult((), 0, f"{SHA}\trefs/heads/main\n", ""))]
     )
     with pytest.raises(Exception) as caught:
-        fetch_tree(runner, URL, "main")
+        fetch_tree(runner, URL, "main", tmp_path)
     assert caught.value.error_id == "tag_not_found"  # type: ignore[attr-defined]
 
 
@@ -293,9 +294,9 @@ def test_tag_not_found_names_source_tag_and_url(tmp_path: Path) -> None:
     assert "token123" not in message
 
 
-def test_git_never_prompts() -> None:
+def test_git_never_prompts(tmp_path: Path) -> None:
     runner = git_runner()
-    fetch_tree(runner, URL, "v1.0.0")
+    fetch_tree(runner, URL, "v1.0.0", tmp_path)
     assert runner.calls
     for call in runner.calls:
         assert call.env is not None
@@ -311,3 +312,53 @@ def test_catalog_list_command_uses_fake_source(
     document = json.loads(capsys.readouterr().out)
     assert code == 0
     assert document["result"]["packages"]
+
+
+def test_fetch_tmp_dir_survives_exdev_on_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The clone used to land in the system temp dir; renaming across file systems
+
+    raises ``EXDEV`` when the deployment root is on a different one. The clone must
+    land under ``<root>/.keystonectl/tmp`` so the later rename never crosses a mount
+    point.
+    """
+    cache_root = tmp_path / ".keystonectl"
+    real_rename = Path.rename
+
+    def fake_rename(self: Path, target: str | Path) -> Path:
+        target_path = Path(target)
+        if not (self.is_relative_to(cache_root) and target_path.is_relative_to(cache_root)):
+            raise OSError(errno.EXDEV, "cross-device link", str(self))
+        return real_rename(self, target_path)
+
+    monkeypatch.setattr(Path, "rename", fake_rename, raising=True)
+    runner = git_runner()
+    result = add_source(tmp_path, URL, runner, name="local", ref="v1.0.0")
+    assert result.code == 0
+    assert (cache_root / "catalogs" / "local" / "catalog.yaml").is_file()
+
+
+def test_fetch_tree_removes_tmp_dir_on_clone_failure(tmp_path: Path) -> None:
+    runner = FakeCommandRunner(
+        [
+            (
+                ["git", "ls-remote", "--tags"],
+                CommandResult((), 0, f"{SHA}\trefs/tags/v1.0.0\n", ""),
+            ),
+            (["git", "clone"], CommandResult((), 1, "", "clone failed")),
+        ]
+    )
+    with pytest.raises(FetchError):
+        fetch_tree(runner, URL, "v1.0.0", tmp_path)
+    tmp_root = tmp_path / ".keystonectl" / "tmp"
+    assert tmp_root.is_dir()
+    assert list(tmp_root.iterdir()) == []
+
+
+def test_fetch_tmp_root_created_with_private_mode(tmp_path: Path) -> None:
+    runner = git_runner()
+    tree, _commit = fetch_tree(runner, URL, "v1.0.0", tmp_path)
+    assert tree.is_relative_to(tmp_path / ".keystonectl" / "tmp")
+    mode = (tmp_path / ".keystonectl" / "tmp").stat().st_mode & 0o777
+    assert mode == 0o700
