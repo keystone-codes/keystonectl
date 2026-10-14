@@ -214,3 +214,64 @@ def test_schemas_load_via_importlib_resources() -> None:
     assert "2020-12" in schema_text("output.schema.json")
     assert schema_text("service-package-v1.json").lstrip().startswith("{")
     assert schema_text("lock-v1.json").lstrip().startswith("{")
+
+
+def test_internal_error_is_json_with_code_3(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(error_id: str) -> Result:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("keystonectl.cli._explain", boom)
+    code, document = _json(capsys, ["--json", "explain", "usage"])
+    assert code == 3
+    assert document["ok"] is False
+    assert document["error"]["id"] == "internal_error"
+    assert document["error"]["message"] == "RuntimeError: boom"
+    assert document["retryable"] is False
+
+
+def test_internal_error_text_mode_one_line_no_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(error_id: str) -> Result:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("keystonectl.cli._explain", boom)
+    code = main(["explain", "usage"])
+    assert code == 3
+    captured = capsys.readouterr()
+    assert captured.out.splitlines()[0] == "internal_error: RuntimeError: boom"
+    assert "Traceback" not in captured.out
+    assert "Traceback" not in captured.err
+
+
+def test_internal_error_traceback_only_with_debug_env(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(error_id: str) -> Result:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("keystonectl.cli._explain", boom)
+    monkeypatch.setenv("KEYSTONECTL_DEBUG", "1")
+    code = main(["explain", "usage"])
+    assert code == 3
+    assert "Traceback" in capsys.readouterr().err
+
+
+def test_internal_error_does_not_catch_system_exit_or_keyboard_interrupt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(error_id: str) -> Result:
+        raise SystemExit(5)
+
+    monkeypatch.setattr("keystonectl.cli._explain", boom)
+    with pytest.raises(SystemExit):
+        main(["explain", "usage"])
+
+    def interrupt(error_id: str) -> Result:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("keystonectl.cli._explain", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        main(["explain", "usage"])

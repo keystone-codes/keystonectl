@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import traceback
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -170,6 +171,16 @@ def _error(
         error={"id": spec.id, "message": message or spec.title, "hint": spec.action},
         retryable=spec.retryable,
     )
+
+
+def _internal_error(command: str, exc: Exception) -> Result:
+    """Any exception a command did not handle itself. Never covers ``SystemExit``
+
+    or ``KeyboardInterrupt``; those propagate so ``Ctrl-C`` and ``--help`` keep working.
+    """
+    if os.environ.get("KEYSTONECTL_DEBUG") == "1":
+        traceback.print_exc(file=sys.stderr)
+    return _error("internal_error", command, f"{type(exc).__name__}: {exc}")
 
 
 def _explain(error_id: str) -> Result:
@@ -714,36 +725,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         root = find_root(args.root, os.environ, Path.cwd(), required=False)
 
     state_changing, lock_root = _lock_target(args, root)
-    if state_changing and lock_root is not None:
-        try:
-            with hold_lock(lock_root / "services.lock.yaml"):
-                result = _dispatch(
-                    args,
-                    root,
-                    command,
-                    interactive=interactive,
-                    json_mode=json_mode,
-                    sets=sets,
-                    secrets=secrets,
+    try:
+        if state_changing and lock_root is not None:
+            try:
+                with hold_lock(lock_root / "services.lock.yaml"):
+                    result = _dispatch(
+                        args,
+                        root,
+                        command,
+                        interactive=interactive,
+                        json_mode=json_mode,
+                        sets=sets,
+                        secrets=secrets,
+                    )
+            except LockError as exc:
+                result = Result(
+                    code=exc.code,
+                    command=command,
+                    summary=exc.message,
+                    error={"id": exc.error_id, "message": exc.message, "hint": exc.hint},
+                    retryable=exc.retryable,
                 )
-        except LockError as exc:
-            result = Result(
-                code=exc.code,
-                command=command,
-                summary=exc.message,
-                error={"id": exc.error_id, "message": exc.message, "hint": exc.hint},
-                retryable=exc.retryable,
+        else:
+            result = _dispatch(
+                args,
+                root,
+                command,
+                interactive=interactive,
+                json_mode=json_mode,
+                sets=sets,
+                secrets=secrets,
             )
-    else:
-        result = _dispatch(
-            args,
-            root,
-            command,
-            interactive=interactive,
-            json_mode=json_mode,
-            sets=sets,
-            secrets=secrets,
-        )
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except Exception as exc:  # noqa: BLE001 - last-resort catch-all, reported as JSON
+        result = _internal_error(command, exc)
     if (
         not json_mode
         and result.command == "lint"
