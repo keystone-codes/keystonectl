@@ -136,6 +136,14 @@ def test_e2e_paths_include_the_script_and_its_unit_tests() -> None:
     ]
 
 
+def test_e2e_report_is_uploaded_even_when_the_run_passes() -> None:
+    doc = _load("e2e.yml")
+    steps = doc["jobs"]["e2e"]["steps"]
+    upload_steps = [s for s in steps if (s.get("uses") or "").startswith("actions/upload-artifact")]
+    assert upload_steps, "e2e job must upload the report"
+    assert upload_steps[0].get("if") == "always()"
+
+
 def test_no_pypi_token_secret_is_referenced() -> None:
     text = (WORKFLOWS_DIR / "release.yml").read_text(encoding="utf-8")
     assert "secrets.PYPI" not in text
