@@ -32,7 +32,7 @@ An ejected package is not rewritten. The lock, registry, and secrets move forwar
 
 ## eject and adopt
 
-These are the three ways an operator keeps control of a compose fragment:
+A compose fragment is in one of three states:
 
 1. Leave it generated. keystonectl rewrites it on apply. Put local changes in `packages/<name>.override.yml`.
 2. `service eject <name>` marks the fragment as yours. keystonectl stops rewriting that file. Registry, secrets, the public site, and status still follow the package. Apply reports the fragment step as skipped. A remote service cannot be ejected.

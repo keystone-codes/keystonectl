@@ -33,7 +33,7 @@ An `init` container has `restart: "no"` and no healthcheck. Every other containe
 
 ## Your own changes
 
-Put them in `packages/<name>.override.yml`. keystonectl never writes, deletes, or opens that file. When the file exists, `docker-compose.packages.yml` includes it in the same `path` list as the fragment. `check` warns `override_not_included` when the packages file does not mention an override that is on disk, and `override_widens_access` when the merged model publishes a non-loopback port or adds privileges.
+Put them in `packages/<name>.override.yml`. keystonectl never writes, deletes, or opens that file. The merged model for `override_widens_access` comes from `docker compose config`, which reads the override; keystonectl only parses that output. Without a JSON answer from Compose the check is skipped with a warning. When the file exists, `docker-compose.packages.yml` includes it in the same `path` list as the fragment. `check` warns `override_not_included` when the packages file does not mention an override that is on disk, and `override_widens_access` when the merged model publishes a non-loopback port or adds privileges.
 
 `keystonectl service eject` stops keystonectl from rewriting the fragment. Until then, a hand-edited fragment fails apply with `fragment_modified`. `service adopt` generates it again.
 
