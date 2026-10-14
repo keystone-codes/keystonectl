@@ -273,10 +273,24 @@ def test_catalog_cached_on_network_failure(tmp_path: Path) -> None:
     seed_catalog(tmp_path)
     source = Source("local", URL, "v1.0.0", 100)
     runner = FakeCommandRunner([(["git", "ls-remote"], CommandResult((), 1, "", "down"))])
-    _path, noted, error_id = refresh_source(tmp_path, source, runner)
+    _path, noted, error_id, _message = refresh_source(tmp_path, source, runner)
     assert error_id is None
     assert noted is not None
     assert noted["id"] == "catalog_cached"
+
+
+def test_tag_not_found_names_source_tag_and_url(tmp_path: Path) -> None:
+    url = "https://user:token123@example.com/catalog.git"
+    source = Source("keystone-codes", url, "v1.0.0", 100)
+    runner = FakeCommandRunner([(["git", "ls-remote"], CommandResult((), 0, "", ""))])
+    _path, _noted, error_id, message = refresh_source(tmp_path, source, runner)
+    assert error_id == "tag_not_found"
+    assert message is not None
+    assert "keystone-codes" in message
+    assert "v1.0.0" in message
+    assert "example.com/catalog.git" in message
+    assert "user:token123@" not in message
+    assert "token123" not in message
 
 
 def test_git_never_prompts() -> None:

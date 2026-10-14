@@ -20,3 +20,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - catalog spec explains tag versus commit pinning.
 - ADR 0005 and generation.md describe `check` as reporting, `apply` and `upgrade` as stopping.
 - Error hints no longer mention a `--local` flag; `package_ambiguous` names the `source/name` form with an example.
+- `tag_not_found` names the source, the ref, and the URL.
