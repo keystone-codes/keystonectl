@@ -82,18 +82,38 @@ def list_tags(runner: CommandRunner, url: str) -> str:
     return result.stdout
 
 
+def _tighten(path: Path, *, created: bool) -> None:
+    """Chmod ``path`` to 700 when it was just created or its mode is wider than 700."""
+    if created or (path.stat().st_mode & 0o077):
+        os.chmod(path, _MODE_PRIVATE_DIR)
+
+
 def _tmp_root(root: Path) -> Path:
     """``.keystonectl/tmp`` next to the cache, created with mode 700 if absent.
 
     Clones are built here so the later rename into the cache or into place stays on the
     same file system; ``/tmp`` can be a different one (tmpfs, a separate disk), which
     makes ``Path.rename`` fail with ``EXDEV``.
+
+    ``.keystonectl`` itself is created here, mode 700, if the caller never ran
+    ``init`` (for example ``catalog list --root`` on a bare checkout); the deployment
+    layout promises mode 700 and a ``.gitignore`` with a single ``*`` line for that
+    directory regardless of who creates it first.
     """
-    path = Path(root) / ".keystonectl" / "tmp"
-    path.mkdir(parents=True, exist_ok=True)
-    if (path.stat().st_mode & 0o777) != _MODE_PRIVATE_DIR:
-        os.chmod(path, _MODE_PRIVATE_DIR)
-    return path
+    base = Path(root) / ".keystonectl"
+    created_base = not base.is_dir()
+    base.mkdir(parents=True, exist_ok=True)
+    _tighten(base, created=created_base)
+    if created_base:
+        gitignore = base / ".gitignore"
+        if not gitignore.exists():
+            gitignore.write_text("*\n")
+
+    tmp = base / "tmp"
+    created_tmp = not tmp.is_dir()
+    tmp.mkdir(exist_ok=True)
+    _tighten(tmp, created=created_tmp)
+    return tmp
 
 
 def fetch_tree(runner: CommandRunner, url: str, ref: str, root: Path) -> tuple[Path, str]:
