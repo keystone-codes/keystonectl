@@ -133,7 +133,8 @@ ERRORS: dict[str, ErrorSpec] = dict(
             3,
             False,
             "That git tag does not exist.",
-            "The ref must be a tag or a 40-character commit. Branches are refused.",
+            "Check the ref in sources.yaml or catalog.yaml. For the default source, "
+            "update keystonectl or add sources.yaml with a ref that exists.",
         ),
         _e(
             "tag_moved",

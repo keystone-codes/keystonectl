@@ -25,7 +25,13 @@ from keystonectl.answers import (
 )
 from keystonectl.envfiles import read_env, upsert_env
 from keystonectl.errors import ERRORS
-from keystonectl.fetch import FetchError, fetch_tree, replace_tree, sha256_file
+from keystonectl.fetch import (
+    FetchError,
+    describe_fetch_error,
+    fetch_tree,
+    replace_tree,
+    sha256_file,
+)
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.output import SecretRegistry
 from keystonectl.plan import Context, StepPlan, register_step
@@ -1250,7 +1256,7 @@ def _fetch_package(ctx: Context, package: ResolvedPackage) -> dict[str, Any] | N
         tree, commit = fetch_tree(ctx.runner, package.git_url, package.ref)
     except FetchError as exc:
         error_id = getattr(exc, "error_id", "source_unreachable")
-        _fail(ctx, error_id, str(exc))
+        _fail(ctx, error_id, describe_fetch_error(f"Package {package.name}", exc))
         return None
     dest = package_cache(ctx.root, package.source_name, package.name, package.version)
     replace_tree(tree, dest)
