@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Resource binding for `s3/v1` and `postgres/v1` with probes.
 - Published on PyPI as `keystonectl`; tags `vX.Y.Z` publish through trusted publishing.
 - Public paths: loopback port, nginx vhost, certificate lifecycle, and `service remove`, `upgrade`, `rollback`, `eject`, and `adopt`.
+- Release gate verifies that the default catalog ref exists.
 
 ### Changed
 
