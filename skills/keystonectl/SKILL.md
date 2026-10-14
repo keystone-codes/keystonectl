@@ -290,7 +290,7 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `version_not_found` | 3 | false | That version is not listed in the catalog. | Run keystonectl catalog list and pick a listed version. |
 | `source_invalid` | 3 | false | The catalog source is not valid. | Use an https://, ssh://, git@host:path, or file:// URL. http:// is refused. |
 | `source_exists` | 3 | false | A source with that name or address is already configured. | Pick another --name, or edit sources.yaml. |
-| `tag_not_found` | 3 | false | That git tag does not exist. | The ref must be a tag or a 40-character commit. Branches are refused. |
+| `tag_not_found` | 3 | false | That git tag does not exist. | Check the ref in sources.yaml or catalog.yaml. For the default source, update keystonectl or add sources.yaml with a ref that exists. |
 | `tag_moved` | 3 | false | The tag now points at a different commit than the one recorded in the lock. | Refuse the move. Pin a commit, or upgrade on purpose with service upgrade. |
 | `manifest_invalid` | 3 | false | The package manifest is not valid. | Fix the problems listed in result.problems and run keystonectl lint. |
 | `catalog_invalid` | 3 | false | The catalog file is not valid. | Fix catalog.yaml and run keystonectl lint on it. |
