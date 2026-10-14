@@ -14,7 +14,7 @@ import yaml
 from keystonectl.catalog import CatalogError, load_sources
 from keystonectl.compat import detect_keystone_mcp_version
 from keystonectl.errors import ERRORS
-from keystonectl.fetch import FetchError, fetch_tree
+from keystonectl.fetch import FetchError, describe_fetch_error, fetch_tree
 from keystonectl.lock import load_lock
 from keystonectl.output import Result, SecretRegistry, missing_summary
 from keystonectl.plan import run_service
@@ -76,7 +76,7 @@ def install_bundle(
             target=ref,
             error={"id": spec.id, "message": "; ".join(exc.messages), "hint": spec.action},
         )
-    catalogs, warnings, error_id = refresh_all(root, sources, runner)
+    catalogs, warnings, error_id, message = refresh_all(root, sources, runner)
     if error_id:
         spec = ERRORS[error_id]
         return Result(
@@ -85,7 +85,7 @@ def install_bundle(
             summary=spec.title,
             target=ref,
             warnings=warnings,
-            error={"id": spec.id, "message": spec.title, "hint": spec.action},
+            error={"id": spec.id, "message": message or spec.title, "hint": spec.action},
             retryable=spec.retryable,
         )
     lock = load_lock(root / "services.lock.yaml")
@@ -361,11 +361,12 @@ def _read_manifest(root: Path, package: Any, runner: CommandRunner) -> dict[str,
             tree, _commit = fetch_tree(runner, package.git_url, package.ref)
         except FetchError as exc:
             spec = ERRORS[exc.error_id]
+            message = describe_fetch_error(f"Package {package.name}", exc)
             return Result(
                 code=spec.code,
                 command="bundle",
                 summary=spec.title,
-                error={"id": spec.id, "message": exc.message, "hint": spec.action},
+                error={"id": spec.id, "message": message, "hint": spec.action},
                 retryable=spec.retryable,
             )
         path = _manifest_file(tree, package.path)

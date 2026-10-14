@@ -7,6 +7,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from keystonectl.runner import CommandResult, CommandRunner
 
@@ -24,6 +25,24 @@ class FetchError(Exception):
 
 def is_commit_sha(ref: str) -> bool:
     return _SHA.fullmatch(ref) is not None
+
+
+def strip_userinfo(url: str) -> str:
+    """Drop ``user:token@`` from a URL before it is shown to the operator."""
+    if "://" not in url:
+        return url
+    parts = urlsplit(url)
+    if "@" not in parts.netloc:
+        return url
+    host = parts.netloc.rsplit("@", 1)[-1]
+    return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+
+
+def describe_fetch_error(subject: str, exc: FetchError) -> str:
+    """Prefix ``tag_not_found`` messages with the source or package they came from."""
+    if exc.error_id == "tag_not_found":
+        return f"{subject}: {exc.message}"
+    return exc.message
 
 
 def sha256_file(path: Path) -> str:
@@ -51,7 +70,7 @@ def tag_on_remote(runner: CommandRunner, url: str, tag: str) -> None:
         ref = line.split("\t", 1)[-1] if "\t" in line else ""
         if ref == needle or ref == f"{needle}^{{}}":
             return
-    raise FetchError("tag_not_found", f"Tag {tag} was not found at {url}.")
+    raise FetchError("tag_not_found", f"Tag {tag} was not found at {strip_userinfo(url)}.")
 
 
 def list_tags(runner: CommandRunner, url: str) -> str:
