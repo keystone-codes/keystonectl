@@ -93,7 +93,9 @@ class Host:
             return CommandResult(recorded, code, "", "nginx: [emerg] config invalid")
         if body[:2] == ["nginx", "-s"]:
             code = 0 if self.reload_ok else 1
-            return CommandResult(recorded, code, "", self.reload_stderr if not self.reload_ok else "")
+            return CommandResult(
+                recorded, code, "", self.reload_stderr if not self.reload_ok else ""
+            )
         if body == ["nginx"]:
             return CommandResult(recorded, 0, "", "")
         if body[:1] == ["tee"] and len(body) > 1:
@@ -130,7 +132,9 @@ class Host:
             return CommandResult(recorded, 0, "", "")
         if body[:2] == ["systemctl", "reload"] and body[-1] == "nginx":
             code = 0 if self.reload_ok else 1
-            return CommandResult(recorded, code, "", self.reload_stderr if not self.reload_ok else "")
+            return CommandResult(
+                recorded, code, "", self.reload_stderr if not self.reload_ok else ""
+            )
         if body[:1] == ["systemctl"]:
             return CommandResult(recorded, 0, self.systemctl, "")
         if body[:1] == ["dig"]:

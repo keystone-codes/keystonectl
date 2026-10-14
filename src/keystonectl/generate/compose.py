@@ -117,7 +117,7 @@ def _env_values(manifest: Mapping[str, Any], entry: Mapping[str, Any], role: str
 
 
 def _path_health_shell(url: str) -> str:
-    py = f'python -c "import urllib.request; urllib.request.urlopen(\'{url}\')"'
+    py = f"python -c \"import urllib.request; urllib.request.urlopen('{url}')\""
     return f"wget -q -O /dev/null {url} || curl -fsS -o /dev/null {url} || {py}"
 
 
@@ -239,9 +239,7 @@ def render_fragment(
         if joins_upstreams(manifest, role):
             uses_upstreams = True
             alias = yaml_scalar(name)
-            lines.append(
-                f"      {yaml_scalar(f'{name}-upstreams')}: {{aliases: [{alias}]}}"
-            )
+            lines.append(f"      {yaml_scalar(f'{name}-upstreams')}: {{aliases: [{alias}]}}")
         if not init and inits:
             lines.append("    depends_on:")
             for init_role in inits:
