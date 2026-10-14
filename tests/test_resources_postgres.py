@@ -208,8 +208,11 @@ def _capture_provision_secrets(lab: Lab) -> list[str]:
                 )
                 consumer = list(args)[list(args).index("--consumer") + 1]
                 text = (Path(out) / f"{consumer}.secret").read_text(encoding="utf-8")
-                seen.append(text)
                 assert all(text not in str(arg) for arg in args)
+                # provision.sh requires a trailing newline (POSIX read at EOF), but
+                # _read_secret() strips it before the secret reaches callers. Compare
+                # the same way the production code does.
+                seen.append(text.rstrip("\n"))
             return _outcome(args, **kwargs)
 
         updated.append((prefix, wrapped))
