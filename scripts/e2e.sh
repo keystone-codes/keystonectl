@@ -7,7 +7,7 @@ set -euo pipefail
 KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-6b04a198101dac22815b17d5bcf55b0e1c6463d8}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
 # keystone-codes/deploy, branch release/catalog.
-KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-dd4538167af85bf5842d88e43bca53748063879f}"
+KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-ffd719701f3bb0eb53bdd212447bcd43bbd07c43}"
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
