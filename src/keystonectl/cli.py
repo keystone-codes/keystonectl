@@ -14,7 +14,7 @@ from keystonectl.bundles import add_bundle_parser
 from keystonectl.check import run_check
 from keystonectl.errors import ERRORS, explain
 from keystonectl.lint import render_text, run_lint
-from keystonectl.lock import LockError, load_lock
+from keystonectl.lock import LockError, hold_lock, load_lock
 from keystonectl.output import Result, SecretRegistry, emit
 from keystonectl.plan import run_service
 from keystonectl.runner import build_runner
@@ -400,6 +400,37 @@ def _needs_root(args: argparse.Namespace) -> bool:
     return args.command not in {None, "init", "lint", "explain", "package"}
 
 
+_STATE_CHANGING_SERVICE_COMMANDS = {
+    "apply",
+    "install",
+    "remove",
+    "upgrade",
+    "rollback",
+    "eject",
+    "adopt",
+    "add-remote",
+}
+
+
+def _lock_target(args: argparse.Namespace, root: Path | None) -> tuple[bool, Path | None]:
+    """Return whether the command changes state and, if so, the directory holding its lock.
+
+    State-changing commands hold ``services.lock.yaml.lck`` for the whole run so a second
+    process gets ``busy`` instead of racing the registry, ``.env`` files, and Docker.
+    """
+    if args.command == "init":
+        if bool(getattr(args, "adopt", False)):
+            return True, Path(args.root_arg)
+        return False, None
+    if args.command == "service" and args.service_command in _STATE_CHANGING_SERVICE_COMMANDS:
+        return True, root
+    if args.command == "catalog" and args.catalog_command == "add":
+        return True, root
+    if args.command == "bundle" and args.bundle_command == "install":
+        return True, root
+    return False, None
+
+
 def _scan_options(argv: Sequence[str]) -> tuple[str | None, list[str], bool]:
     """Read global flags from argv. Subparsers must not drop a flag placed before the command."""
     root: str | None = None
@@ -430,57 +461,17 @@ def _scan_options(argv: Sequence[str]) -> tuple[str | None, list[str], bool]:
     return root, sets, non_interactive
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args_list = list(sys.argv[1:] if argv is None else argv)
-    json_mode = "--json" in args_list
-    secrets = SecretRegistry()
-    parser = build_parser()
-    parser.json_mode = json_mode
-    parser.secrets = secrets
-    try:
-        args = parser.parse_args(args_list)
-    except SystemExit as exc:
-        code = exc.code
-        return int(code) if isinstance(code, int) else 1
-    json_mode = json_mode or bool(args.json)
-    root_arg, set_pairs, scanned_non_interactive = _scan_options(args_list)
-    if root_arg:
-        args.root = root_arg
-    if not json_mode and not args.non_interactive and not scanned_non_interactive:
-        interactive = sys.stdin.isatty()
-    else:
-        interactive = False
-    try:
-        sets = parse_sets(set_pairs)
-    except AnswerError as exc:
-        result = Result(
-            code=exc.code,
-            command=_command_name(args) if args.command else "",
-            summary=exc.message,
-            error={"id": exc.error_id, "message": exc.message, "hint": exc.hint},
-            retryable=exc.retryable,
-        )
-        emit(result, json_mode=json_mode, secrets=secrets)
-        return result.code
-    if args.version and not args.command:
-        result = _version_result()
-        emit(result, json_mode=json_mode, secrets=secrets)
-        return 0
-    if not args.command:
-        parser.json_mode = json_mode
-        parser.error("a command is required")
-    command = _command_name(args)
-    if _needs_root(args):
-        root = find_root(args.root, os.environ, Path.cwd(), required=True)
-        if root is None:
-            result = _error(
-                "root_not_found", command, f"{ERRORS['root_not_found'].title} {ROOT_HINT}"
-            )
-            emit(result, json_mode=json_mode, secrets=secrets)
-            return result.code
-    else:
-        root = find_root(args.root, os.environ, Path.cwd(), required=False)
-
+def _dispatch(
+    args: argparse.Namespace,
+    root: Path | None,
+    command: str,
+    *,
+    interactive: bool,
+    json_mode: bool,
+    sets: Mapping[str, str],
+    secrets: SecretRegistry,
+) -> Result:
+    """Build the ``Result`` for one command. Callers hold the lock for state-changing commands."""
     if args.command == "explain" or (
         args.command == "service" and args.service_command == "explain"
     ):
@@ -668,6 +659,91 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     else:
         result = _error("usage", command or "", "Unknown command.")
+    return result
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args_list = list(sys.argv[1:] if argv is None else argv)
+    json_mode = "--json" in args_list
+    secrets = SecretRegistry()
+    parser = build_parser()
+    parser.json_mode = json_mode
+    parser.secrets = secrets
+    try:
+        args = parser.parse_args(args_list)
+    except SystemExit as exc:
+        code = exc.code
+        return int(code) if isinstance(code, int) else 1
+    json_mode = json_mode or bool(args.json)
+    root_arg, set_pairs, scanned_non_interactive = _scan_options(args_list)
+    if root_arg:
+        args.root = root_arg
+    if not json_mode and not args.non_interactive and not scanned_non_interactive:
+        interactive = sys.stdin.isatty()
+    else:
+        interactive = False
+    try:
+        sets = parse_sets(set_pairs)
+    except AnswerError as exc:
+        result = Result(
+            code=exc.code,
+            command=_command_name(args) if args.command else "",
+            summary=exc.message,
+            error={"id": exc.error_id, "message": exc.message, "hint": exc.hint},
+            retryable=exc.retryable,
+        )
+        emit(result, json_mode=json_mode, secrets=secrets)
+        return result.code
+    if args.version and not args.command:
+        result = _version_result()
+        emit(result, json_mode=json_mode, secrets=secrets)
+        return 0
+    if not args.command:
+        parser.json_mode = json_mode
+        parser.error("a command is required")
+    command = _command_name(args)
+    if _needs_root(args):
+        root = find_root(args.root, os.environ, Path.cwd(), required=True)
+        if root is None:
+            result = _error(
+                "root_not_found", command, f"{ERRORS['root_not_found'].title} {ROOT_HINT}"
+            )
+            emit(result, json_mode=json_mode, secrets=secrets)
+            return result.code
+    else:
+        root = find_root(args.root, os.environ, Path.cwd(), required=False)
+
+    state_changing, lock_root = _lock_target(args, root)
+    if state_changing and lock_root is not None:
+        try:
+            with hold_lock(lock_root / "services.lock.yaml"):
+                result = _dispatch(
+                    args,
+                    root,
+                    command,
+                    interactive=interactive,
+                    json_mode=json_mode,
+                    sets=sets,
+                    secrets=secrets,
+                )
+        except LockError as exc:
+            result = Result(
+                code=exc.code,
+                command=command,
+                summary=exc.message,
+                error={"id": exc.error_id, "message": exc.message, "hint": exc.hint},
+                retryable=exc.retryable,
+            )
+    else:
+        result = _dispatch(
+            args,
+            root,
+            command,
+            interactive=interactive,
+            json_mode=json_mode,
+            sets=sets,
+            secrets=secrets,
+        )
     if (
         not json_mode
         and result.command == "lint"

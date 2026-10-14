@@ -27,7 +27,7 @@ Paths are relative to the deployment root.
 | `keystonectl/catalog-snapshot.yaml` (mode 644) | shared | changes only `<namespace>_*` names in `active` for namespaces this install owns |
 | `policy/rbac-policy.yaml`, or the file named by `KEYSTONE_MCP_RBAC_POLICY_PATH` | operator and the policy tools | reads it (`check`) |
 | `.env` (mode 600) | operator | writes only inside the managed block below |
-| `services.lock.yaml`, and its `.bak` and `.lck` siblings (mode 600) | keystonectl | the install state |
+| `services.lock.yaml`, and its `.bak` and `.lck` siblings (mode 600) | keystonectl | the install state. `.lck` is held for the whole state-changing command |
 | `sources.yaml` (mode 600) | keystonectl (`catalog add`); the operator may edit it | format is in [Catalog sources](catalog.md#sources). `init` does not create it |
 | `.keystonectl/` (mode 700) | keystonectl | catalog and package cache, `secrets/` (mode 700), and `tmp/`. Contains a `.gitignore` whose only line is `*` |
 | `.gitignore` | operator | created only when the file is absent, with the lines below |
