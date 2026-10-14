@@ -371,14 +371,17 @@ and leaves the operator's compose file, `.env`, policy, and `upstreams.yaml`
 unchanged. The registry keystone-mcp will read is `keystonectl/upstreams.yaml`.
 
 **keystone-deploy `mcp/`.** Service `keystone-mcp` with profile `keystone-mcp`,
-a `build.context`, image `keystone-mcp:local`, and networks `mcp_net` and
-`keystone_upstreams`. The top-level key `keystone_upstreams` has
-`name: keystone-mcp-upstreams`, so `attached_by` is `operator` and the packages
-file does not declare that network. The published env example sets
-`KEYSTONE_MCP_UPSTREAMS=[]` and has no registry file and no policy file, so
-adopt warns `inline_registry_ignored` and `policy_not_configured` and writes an
-empty registry. The same recognition works before and after that directory
-grows a real `upstreams.yaml`.
+the pinned image `ghcr.io/keystone-codes/keystone-mcp:0.5.0@sha256:…` (a local
+source build is a separate `docker-compose.local.yml`, started with
+`./start.sh --local`), and networks `mcp_net`, `keystone_upstreams`, and a
+third, internal-only network private to this file. The top-level key
+`keystone_upstreams` has `name: keystone-mcp-upstreams`, so `attached_by` is
+`operator` and the packages file does not declare that network. The published
+`.env.example` does not set `KEYSTONE_MCP_UPSTREAMS` — the install script
+strips that key from `mcp/.env` on every write — and there is no registry file
+and no policy file, so adopt warns `inline_registry_ignored` and
+`policy_not_configured` and writes an empty registry. The same recognition
+works before and after that directory grows a real `upstreams.yaml`.
 
 ## Layout versions
 
