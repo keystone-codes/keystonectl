@@ -598,22 +598,22 @@ def _remove_vhost(
     site = site_name(name)
     tls = Tls(runner, clock=lambda: __import__("datetime").datetime.now(__import__("datetime").UTC))
     link = enabled / site
-    target = link.resolve() if link.is_symlink() else None
     if link.exists() or link.is_symlink():
         tls._run(["rm", "-f", str(link)])
     site_file = available / site
     if site_file.is_file():
         tls._run(["rm", "-f", str(site_file)])
-    took = public.get("took_over")
-    remembered = None
-    if isinstance(took, str) and took:
-        restored = enabled / took
-        destination = available / took
+    disabled = public.get("disabled_sites")
+    if isinstance(disabled, list):
+        restored_names = [item for item in disabled if isinstance(item, str) and item]
+    else:
+        took = public.get("took_over")
+        restored_names = [took] if isinstance(took, str) and took else []
+    for name_to_restore in restored_names:
+        restored = enabled / name_to_restore
+        destination = available / name_to_restore
         if destination.is_file() and not restored.exists():
             tls._run(["ln", "-s", str(destination), str(restored)])
-            remembered = target
-    if remembered is not None:
-        del remembered
     ok, _detail = __import__("keystonectl.public", fromlist=["_nginx_test"])._nginx_test(tls)
     if ok:
         from keystonectl.public import _reload

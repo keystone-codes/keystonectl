@@ -801,6 +801,10 @@ def test_takeover_stops_while_another_site_remains(tmp_path: Path) -> None:
 
 
 def test_takeover_yes_removes_every_enabled_link(tmp_path: Path) -> None:
+    from keystonectl.lifecycle import remove_service
+
+    root, text, catalog = _installed(tmp_path)
+    _certs(tmp_path)
     nginx = _nginx(tmp_path)
     links: list[Path] = []
     for name in ("aaa.conf", "zzz.conf"):
@@ -809,11 +813,104 @@ def test_takeover_yes_removes_every_enabled_link(tmp_path: Path) -> None:
         link = nginx / "sites-enabled" / name
         link.symlink_to(available)
         links.append(link)
-    result = _apply_nginx(tmp_path, nginx, KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes")
+    host = Host()
+    result = run_service(
+        root,
+        "apply",
+        "file-mcp",
+        runner=Combo(runner_for({"file-mcp": text}, DockerBox(), catalog), host),
+        secrets=SecretRegistry(),
+        sets={},
+        environ=_env(KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes"),
+        interactive=False,
+        clock=lambda: CLOCK,
+        deployer=ComposeDeployer(),
+        http=_http(),
+        nginx_root=nginx,
+        le_live=tmp_path / "le",
+    )
     assert result.code == 0, result.error
     assert all(not link.exists() for link in links)
     assert all((nginx / "sites-available" / link.name).is_file() for link in links)
     assert _written_site(nginx).is_file()
+    removed = remove_service(
+        root,
+        "file-mcp",
+        runner=Combo(runner_for({"file-mcp": text}, DockerBox(), catalog), host),
+        secrets=SecretRegistry(),
+        sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE": "yes"},
+        environ={},
+        interactive=False,
+        clock=lambda: CLOCK,
+        nginx_root=nginx,
+    )
+    assert removed.code == 0, removed.error
+    assert all(link.is_symlink() for link in links)
+
+
+def test_takeover_question_mentions_disable_and_404(tmp_path: Path) -> None:
+    nginx = _nginx(tmp_path)
+    available = nginx / "sites-available" / "other.conf"
+    available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / "other.conf"
+    link.symlink_to(available)
+    result = _apply_nginx(tmp_path, nginx)
+    assert result.code == 2
+    question = next(
+        item for item in result.missing if item["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER"
+    )
+    assert "disable" in question["question"].lower()
+    assert "404" in question["question"]
+    assert question["default"] == "no"
+
+
+def test_takeover_asks_again_for_a_different_foreign_site(tmp_path: Path) -> None:
+    root, text, catalog = _installed(tmp_path)
+    _certs(tmp_path)
+    nginx = _nginx(tmp_path)
+    first_available = nginx / "sites-available" / "first.conf"
+    first_available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    first_link = nginx / "sites-enabled" / "first.conf"
+    first_link.symlink_to(first_available)
+    host = Host()
+    first = run_service(
+        root,
+        "apply",
+        "file-mcp",
+        runner=Combo(runner_for({"file-mcp": text}, DockerBox(), catalog), host),
+        secrets=SecretRegistry(),
+        sets={},
+        environ=_env(KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes"),
+        interactive=False,
+        clock=lambda: CLOCK,
+        deployer=ComposeDeployer(),
+        http=_http(),
+        nginx_root=nginx,
+        le_live=tmp_path / "le",
+    )
+    assert first.code == 0, first.error
+    second_available = nginx / "sites-available" / "second.conf"
+    second_available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    second_link = nginx / "sites-enabled" / "second.conf"
+    second_link.symlink_to(second_available)
+    second = run_service(
+        root,
+        "apply",
+        "file-mcp",
+        runner=Combo(runner_for({"file-mcp": text}, DockerBox(), catalog), host),
+        secrets=SecretRegistry(),
+        sets={},
+        environ=_env(),
+        interactive=False,
+        clock=lambda: CLOCK,
+        deployer=ComposeDeployer(),
+        http=_http(),
+        nginx_root=nginx,
+        le_live=tmp_path / "le",
+    )
+    assert second.code == 2, second.error
+    assert any(item["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER" for item in second.missing)
+    assert second_link.is_symlink()
 
 
 def test_tls_keep_skips_certbot(tmp_path: Path) -> None:
