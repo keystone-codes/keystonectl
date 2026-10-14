@@ -27,7 +27,7 @@ The port is the smallest of `47600`–`47699` that is not already in the lock an
 
 ## Taking over a site
 
-If `sites-enabled` already has a symlink and every `server_name` in it is exactly this domain (comparison is case-insensitive), apply asks before it removes that symlink. The file in `sites-available` stays, and `service remove` puts the symlink back. A wildcard, a suffix, or any other name is left in place: apply stops with `domain_in_use` and the operator narrows that site by hand. A regular file, or anything under `conf.d`, is left alone the same way.
+If `sites-enabled` already has a symlink and every `server_name` in it is exactly this domain (comparison is case-insensitive), apply asks before it removes that symlink: "Site <file> serves <domain>. keystonectl will disable that site entirely: only the service paths and /healthz will answer on this name, everything else returns 404. Disable it?" (default `no`). The question is asked on every apply that meets a foreign site, even one answered `yes` on an earlier run: a takeover answer is never remembered, so a later apply that meets a different foreign site on the same domain asks again. The file in `sites-available` stays; `service remove` puts back every symlink a takeover has disabled for this service, not only the most recent one. A wildcard, a suffix, or any other name is left in place: apply stops with `domain_in_use` and the operator narrows that site by hand. A regular file, or anything under `conf.d`, is left alone the same way.
 
 ## extra_hosts
 
