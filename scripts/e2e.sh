@@ -1535,7 +1535,7 @@ import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
-top_paths = {root / "setup.sh", root / "start.sh", root / "README.md", root / "SETUP.md"}
+top_paths = {root / "setup.sh", root / "start.sh", root / "README.md", root / "SETUP.md", root / ".env.example"}
 mcp_paths = {path for path in (root / "mcp").rglob("*") if path.is_file()}
 text_of = {
     path: path.read_text(encoding="utf-8") for path in top_paths | mcp_paths
