@@ -260,7 +260,7 @@ install -m 600 /dev/null /root/keystone-secrets/pg-url && nano /root/keystone-se
 Pass the path in a `…_FILE` variable. Do not read the file and do not print it. If the operator pastes a secret anyway, do not repeat it, do not use it, and tell them to rotate that key or password.
 3. Never pass a secret as a command argument or as a variable value. Only a path, and only in a name that ends with `_FILE`.
 4. **Do not touch policy.** Do not edit the policy file and do not call `policy_*`. Hand the recommended rows to the policy skill (Policy).
-5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`. If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
+5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`. Set `CONFIRM_*` only after they said yes to that exact action in this chat; see [Confirmations](https://github.com/keystone-codes/keystonectl/blob/main/docs/lifecycle.md#confirmations). If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
@@ -281,6 +281,8 @@ If you have the `policy_*` tools and the `keystone-policy-admin` skill (you are 
 If you do not have `policy_*` (keystone-mcp is older than 0.5.0, or you are not an administrator): show the same list and the policy path from `check` (`KEYSTONE_MCP_RBAC_POLICY_PATH`, or the `policy_not_configured` warning). Say the administrator adds the rows and reloads the policy (SIGHUP). Do not open the policy file.
 
 If the namespace changed during install, the example patterns use the default prefix. Say so, and replace that prefix in the list. That is the same list under the new name, not a new list.
+
+Right after install, `tools_unreachable` is expected until an administrator adds `recommended_policy`; keystonectl does not merge policy and there is no deadline.
 
 ## Errors
 
