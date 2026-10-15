@@ -503,3 +503,11 @@ def test_stderr_redacted_in_error(tmp_path: Path) -> None:
     assert result.error_id == "provision_failed"
     assert secret not in result.message
     assert "***" in result.message
+
+
+def test_provision_creates_keystonectl_gitignore(tmp_path: Path) -> None:
+    runner = _runner()
+    _run(tmp_path, runner, endpoint="http://minio-server:9000")
+    gitignore = tmp_path / ".keystonectl" / ".gitignore"
+    assert gitignore.is_file()
+    assert gitignore.read_text(encoding="utf-8") == "*\n"

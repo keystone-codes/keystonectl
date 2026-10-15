@@ -744,16 +744,6 @@ def list_catalogs(
     )
 
 
-def ensure_cache(root: Path) -> None:
-    base = cache_dir(root)
-    base.mkdir(parents=True, exist_ok=True)
-    base.chmod(0o700)
-    for name in ("catalogs", "packages", "secrets", "tmp"):
-        directory = base / name
-        directory.mkdir(parents=True, exist_ok=True)
-        directory.chmod(0o700)
-
-
 def failure_result(resolution: Resolution, *, command: str, target: str | None) -> Result:
     assert resolution.error_id is not None
     spec = ERRORS[resolution.error_id]

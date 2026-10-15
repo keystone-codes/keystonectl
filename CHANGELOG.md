@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Bundle results read the policy of the installed package version; cached versions are compared as versions.
+- ``.keystonectl/`` gets its ``.gitignore`` whichever command creates it first.
 
 ## [0.1.1] - 2026-10-15
 

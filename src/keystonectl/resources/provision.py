@@ -226,7 +226,9 @@ def run_provision(
             ),
             retryable=True,
         )
-    out_dir = Path(root) / ".keystonectl" / "tmp" / uuid.uuid4().hex
+    from keystonectl.cachedir import private_subdir
+
+    out_dir = private_subdir(Path(root), "tmp") / uuid.uuid4().hex
     out_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(out_dir, 0o700)
     chosen = secret if secret else token_hex(32)
