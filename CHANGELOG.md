@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Provider contract: the secret file is the desired secret.
+- docs: Backups of catalog providers, `tools_unreachable` as the state before policy, confirmations as a contract, manual registry edits during apply.
 - Removing a provider uses one consumer check; warnings `provider_unused` and `provider_data_kept` name the volumes that stay.
 - `CONTRIBUTING.md` sets the changelog line rules; a test checks `[Unreleased]`.
 - e2e: Scenario 12 adds the partner catalog over the network when `E2E_PARTNER_CATALOG_URL` is set; the vm profile does so by default.
@@ -29,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- docs: Upgrade confirmation is the target version, not `y`.
 - Bundle results read the policy of the installed package version; cached versions are compared as versions.
 - ``.keystonectl/`` gets its ``.gitignore`` whichever command creates it first.
 - A failed apply re-enables the nginx sites it disabled in that run.

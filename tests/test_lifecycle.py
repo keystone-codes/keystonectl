@@ -797,6 +797,30 @@ def test_upgrade_confirmation_must_match_version(tmp_path: Path) -> None:
     assert right.code != 2
 
 
+def test_upgrade_prompt_asks_for_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _install(tmp_path)
+    _prepare_upgrade(root)
+    prompts: list[str] = []
+
+    def fake_input(prompt: str = "") -> str:
+        prompts.append(prompt)
+        return ""
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    result = upgrade_service(
+        root,
+        "file-mcp",
+        runner=_diff_runner(),
+        secrets=SecretRegistry(),
+        sets={},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=True,
+        clock=lambda: CLOCK,
+    )
+    assert result.code == 2
+    assert prompts == ["type 1.1.0 to proceed: "]
+
+
 def test_upgrade_keeps_registry_name_namespace_and_override(tmp_path: Path) -> None:
     root = _install(tmp_path)
     before = load_lock(root / "services.lock.yaml")["services"][0]
