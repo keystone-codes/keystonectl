@@ -104,11 +104,16 @@ def _confirm(
         return None
     if interactive:
         print(question)
-        typed = input("proceed? [y/N] ").strip().lower()
-        if typed in {"y", "yes"} and accept == "yes":
-            return None
-        if typed == accept:
-            return None
+        if accept == "yes":
+            prompt = "proceed? [y/N] "
+            typed = input(prompt).strip().lower()
+            if typed in {"y", "yes"}:
+                return None
+        else:
+            prompt = f"type {accept} to proceed: "
+            typed = input(prompt).strip()
+            if typed == accept:
+                return None
     missing = Question(var, question, "confirm").as_missing()
     return Result(
         code=2,

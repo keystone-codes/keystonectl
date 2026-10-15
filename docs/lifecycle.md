@@ -2,9 +2,20 @@
 
 `service apply` is the normal path. These commands change what keystonectl owns afterwards. Volumes, buckets, databases, certificates, and `packages/<name>.override.yml` are never deleted. A first `service apply` that fails is rolled back the same way: see [When apply fails](generation.md#when-apply-fails).
 
+## Confirmations
+
+| Command | Terminal | Environment variable |
+|---|---|---|
+| `service remove` | `y` or `yes` | `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_REMOVE=yes` |
+| `service upgrade` | type the target version exactly | `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_UPGRADE=<target version>` |
+| `service adopt` | `y` or `yes` | `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ADOPT=yes` |
+| `service rotate` | `y` or `yes` | `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ROTATE=yes` |
+
+A confirmation comes from a person. An agent sets `CONFIRM_*` only after the operator said yes to that exact action in this conversation, and never for a later action. keystonectl cannot tell who set the variable; this rule is what keeps it safe.
+
 ## remove
 
-`service remove <name>` asks for confirmation (`y` in a terminal, or `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_REMOVE=yes`).
+`service remove <name>` asks for confirmation (see [Confirmations](#confirmations)).
 
 It refuses when another installed package `requires` this one (`required_by`), and when a resource provider still has consumers (`resource_in_use`).
 
@@ -18,7 +29,7 @@ A provider with no consumers can be removed. Its volume and `packages/<provider>
 
 When the last catalog consumer of a provider is removed, the warning `provider_unused` names the provider and the Docker volumes that still hold buckets or databases. Remove the provider with `service remove` when you no longer need that data.
 
-Removing a provider warns `provider_data_kept`: the `ks-pkg-<provider>-*` volumes still contain every former consumer's data. Installing the provider again reuses them. Delete volumes with `docker volume rm` only after a backup.
+Removing a provider warns `provider_data_kept`: the `ks-pkg-<provider>-*` volumes still contain every former consumer's data. Installing the provider again reuses them. Delete volumes with `docker volume rm` only after a backup ([Backups](resources.md#backups)).
 
 ## upgrade
 
@@ -26,7 +37,7 @@ Removing a provider warns `provider_data_kept`: the `ks-pkg-<provider>-*` volume
 
 If `packages/<name>.yml` was edited by hand, upgrade stops with `fragment_modified` before any question and before Docker. Move the edits to the override, or eject, then upgrade.
 
-The preview lists tools and containers added or removed, and policy rows that stop matching (`catalog diff` before and after). New tools that no role can call are `tools_unreachable`. Confirmation is `y`, or `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_UPGRADE` set to the target version exactly. An older confirmation does not apply.
+The preview lists tools and containers added or removed, and policy rows that stop matching (`catalog diff` before and after). New tools that no role can call are `tools_unreachable`. Confirmation is in [Confirmations](#confirmations); an older `CONFIRM_UPGRADE` value does not apply.
 
 On success, keystonectl keeps `.bak` copies (mode 600), records `previous` in the lock, and runs the normal apply. The apply step uses the installed entry's `source` (`source/name@version`) so the same package name in another catalog does not ask which package to use. `registry_name`, `namespace`, and the override stay. A failed health check tells you to run `service rollback <name>` and does not roll back by itself.
 
@@ -42,4 +53,4 @@ A compose fragment is in one of three states:
 
 1. Leave it generated. keystonectl rewrites it on apply. Put local changes in `packages/<name>.override.yml`.
 2. `service eject <name>` marks the fragment as yours. keystonectl stops rewriting that file. Registry, secrets, the public site, and status still follow the package. Apply reports the fragment step as skipped. A remote service cannot be ejected.
-3. `service adopt <name>` generates the fragment again from the installed version, including the current loopback port and `extra_hosts`. The previous file is saved as `packages/<name>.yml.ejected.bak` (mode 600). Confirmation is `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ADOPT=yes`. In `--json` the preview lists changed service keys and not the values, because the operator file may contain secrets. On a terminal the preview is a unified diff.
+3. `service adopt <name>` generates the fragment again from the installed version, including the current loopback port and `extra_hosts`. The previous file is saved as `packages/<name>.yml.ejected.bak` (mode 600). Confirmation is in [Confirmations](#confirmations). In `--json` the preview lists changed service keys and not the values, because the operator file may contain secrets. On a terminal the preview is a unified diff.
