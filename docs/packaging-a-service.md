@@ -292,7 +292,7 @@ Fix digest errors by copying the registry index digest (`image: …@sha256:<64 h
 
 ### The keystone-codes catalog
 
-Open a PR to [keystone-catalog](https://github.com/keystone-codes/keystone-catalog/tree/v1.0.0) following its README: immutable tag `v<version>`, digest checked in CI, green `check.yml`, review. The README links to this guide's [Checklist](#checklist) for author steps.
+Open a PR to [keystone-catalog](https://github.com/keystone-codes/keystone-catalog/tree/v1.0.0) following its README: immutable tag `v<version>`, digest checked in CI, green `check.yml`, review. The README links to this guide's [Checklist](#checklist) for author steps. A new version of a listed package is the same pull request with one more row; see [Releasing a new version](#releasing-a-new-version).
 
 ### Your own catalog
 
@@ -305,6 +305,19 @@ Use semantic versioning for the package `version` field and git tags `v<version>
 Bump the **major** version when you remove or rename tools in `mcp.tools`, break env or role names operators rely on, or change resource interfaces.
 
 Not yet supported in keystonectl 0.1: stdio-only packages, signed catalogs, Helm charts, and automatic Caddy vhost generation (use TLS modes documented in [public-paths.md](public-paths.md)).
+
+## Releasing a new version
+
+Any change to a published package, even a comment in the manifest, is a new version. Tags `vX.Y.Z` and image tags `:X.Y.Z` are never moved or overwritten. A rebuilt image has a new digest even when the code did not change (labels and attestations differ). The old version stays in the catalog and in the registry so operators can stay on it or roll back.
+
+1. On a branch `release/X.Y.Z`, set `version` in `keystone-service.yaml` and in every other place your build reads it, and add a changelog entry. Do not change `version` on `main` first: the tag workflow would look for an image that is not published yet.
+2. Build and push the multi-arch image as `<registry>/<name>:X.Y.Z` from that branch. Refuse to overwrite an existing `:X.Y.Z`.
+3. Write the published index digest into `containers.<role>.image` (and `provision.image` for a resource package) through a pull request to `main`; that pull request carries the version change and the digest.
+4. After the merge, tag `vX.Y.Z` only when the registry digest of `:X.Y.Z` matches the manifest.
+5. Open a catalog pull request that adds `{version: X.Y.Z, ref: vX.Y.Z, …}` under `packages.<name>.versions`. Keep the older rows.
+6. Operators move with `keystonectl service upgrade <name>`; `service rollback <name>` returns to the previous version.
+
+The [file-mcp](https://github.com/keystone-codes/file-mcp/tree/v1.0.0/.github/workflows) workflows implement steps 2–4. The same steps apply to resource packages; `minio` pins two images (server and provision client) and both carry the `:X.Y.Z` tag.
 
 ## Checklist
 
@@ -323,6 +336,7 @@ Not yet supported in keystonectl 0.1: stdio-only packages, signed catalogs, Helm
 | `recommended_policy` present and only allows this package's tools | `keystonectl lint` (file exists); review |
 | `public_paths` only when strictly needed | Review |
 | Immutable tag `v<version>` matches manifest `version` | Catalog CI |
+| New version: branch release/X.Y.Z, image :X.Y.Z, digest pinned by PR, tag after the digest check | Catalog CI (check_refs.py); your release workflow |
 | `compat.keystone_mcp` set | `keystonectl lint` |
 | Five checklist items from `connecting-services.md` | Installer handles registry steps; author verifies service behavior, namespace, schemas |
 
