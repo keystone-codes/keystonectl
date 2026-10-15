@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service status",
+  "target": "atlassian",
+  "summary": "atlassian is running.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "services": [
+      {
+        "name": "atlassian",
+        "managed": "generated",
+        "version": "1.0.0",
+        "namespace": "atlassian",
+        "containers": [
+          {
+            "role": "mcp",
+            "service": "atlassian-mcp",
+            "state": "running",
+            "health": "healthy",
+            "exit_code": 0
+          }
+        ],
+        "keystone": {
+          "ready": "ready",
+          "discovery": "available"
+        },
+        "public": {
+          "state": "ready",
+          "domain": "jira.example.com",
+          "tls": "certbot",
+          "inside": "ok",
+          "not_after": "2026-12-01T00:00:00Z"
+        },
+        "problems": [],
+        "warnings": []
+      }
+    ]
+  }
+}

@@ -73,3 +73,7 @@ run_scenario() {
 @test "remove" {
   run_scenario remove
 }
+
+@test "atlassian-profiles" {
+  run_scenario atlassian-profiles
+}
