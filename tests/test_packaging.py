@@ -37,7 +37,7 @@ def test_extract_changelog_prints_section() -> None:
 
 def test_check_version_passes_for_release_tag() -> None:
     result = subprocess.run(
-        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.1.0"],
+        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.1.1"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
