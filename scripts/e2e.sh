@@ -23,6 +23,11 @@ MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:63ba7ba9b7ba59af56cb52d9052
 PG_IMAGE="postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 # redis:7-alpine index, docker buildx imagetools inspect on 2026-10-13.
 REDIS_IMAGE="redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
+# stdio-box tag atlassian/v1.0.0, read 2026-10-15. v0.1.0 points at the same
+# commit. The image reference is the IMAGE file in that tree (index digest).
+STDIO_BOX_URL=https://github.com/keystone-codes/stdio-box.git
+STDIO_BOX_GIT_SHA=1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f
+STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519
 # Scenario 12 partner catalog. E2E_PARTNER_CATALOG_URL is filled in after
 # --profile is known: vm uses the published repository, ci leaves the URL
 # empty and builds a file:// catalog. An explicit value, including empty, wins.
@@ -450,7 +455,7 @@ ensure_self_signed_cert() {
   mkdir -p "$WORK/tls"
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
     -subj "/CN=${DOMAIN}" \
-    -addext "subjectAltName=DNS:${DOMAIN}" \
+    -addext "subjectAltName=DNS:${DOMAIN},DNS:atlassian.e2e.test" \
     -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1
   chmod 600 "$WORK/tls/key.pem"
   chmod 644 "$WORK/tls/cert.pem"
@@ -461,7 +466,7 @@ prepare_host() {
     sudo apt-get update
     sudo apt-get install -y nginx
   fi
-  local line="127.0.0.1 files.e2e.test docs.e2e.test"
+  local line="127.0.0.1 files.e2e.test docs.e2e.test atlassian.e2e.test"
   if ! grep -qxF "$line" /etc/hosts; then
     printf '%s\n' "$line" | sudo tee -a /etc/hosts >/dev/null
     printf '%s\n' "$line" >"$WORK/state/hosts-line"
@@ -698,22 +703,57 @@ prepare_layout() {
   esac
 }
 
-issue_api_key() {
-  local json
-  compose exec -T "$KEYSTONE_SERVICE" \
-    keystone-mcp service-accounts add --name e2e --role agent >/dev/null
+issue_api_key_for() {
+  local name="$1"
+  shift
+  local -a args=("$@")
+  local count="${#args[@]}"
+  if [[ "$count" -lt 3 ]]; then
+    printf '%s\n' "issue_api_key_for needs a name, one or more roles, a variable, and an env file" >&2
+    return 2
+  fi
+  local envfile="${args[$((count - 1))]}"
+  local var="${args[$((count - 2))]}"
+  local -a roles=("${args[@]:0:$((count - 2))}")
+  local -a role_args=()
+  local role attempt json keyfile
+  for role in "${roles[@]}"; do
+    role_args+=(--role "$role")
+  done
+  attempt=0
+  while [[ "$attempt" -lt 5 ]]; do
+    if compose exec -T "$KEYSTONE_SERVICE" \
+      keystone-mcp service-accounts add --name "$name" "${role_args[@]}" >/dev/null; then
+      break
+    fi
+    attempt=$((attempt + 1))
+    if [[ "$attempt" -eq 5 ]]; then
+      return 1
+    fi
+    sleep 1
+  done
   json="$(compose exec -T "$KEYSTONE_SERVICE" \
-    keystone-mcp keys issue --subject svc:e2e --label e2e --days 1)"
+    keystone-mcp keys issue --subject "svc:${name}" --label "$name" --days 1)" || return 1
+  keyfile="$WORK/secrets/${name}.key"
   printf '%s' "$json" | python3 -c 'import json,sys; data=json.load(sys.stdin); sys.stdout.write(data["key"])' \
-    >"$WORK/secrets/api-key"
-  chmod 600 "$WORK/secrets/api-key"
+    >"$keyfile" || return 1
+  chmod 600 "$keyfile"
   python3 -c '
 import pathlib, sys
-key = pathlib.Path(sys.argv[1]).read_text().strip()
-path = pathlib.Path(sys.argv[2])
-path.write_text("E2E_API_KEY=" + key + "\n")
+var = sys.argv[1]
+key = pathlib.Path(sys.argv[2]).read_text().strip()
+path = pathlib.Path(sys.argv[3])
+text = path.read_text() if path.exists() else ""
+if text and not text.endswith("\n"):
+    text += "\n"
+text += var + "=" + key + "\n"
+path.write_text(text)
 path.chmod(0o600)
-' "$WORK/secrets/api-key" "$WORK/secrets/client.env"
+' "$var" "$keyfile" "$envfile"
+}
+
+issue_api_key() {
+  issue_api_key_for e2e agent E2E_API_KEY "$WORK/secrets/client.env"
 }
 
 mcp_check_fail_reason() {
@@ -942,6 +982,15 @@ network_names() {
 
 build_local_catalogs() {
   local docs="$WORK/src/docs-service" files="$WORK/src/file-mcp-e2e" catalog="$WORK/e2e-catalog"
+  pin_clone "$STDIO_BOX_URL" "$STDIO_BOX_GIT_SHA" "$WORK/src/stdio-box"
+  if ! git -C "$WORK/src/stdio-box" rev-parse -q --verify refs/tags/atlassian/v1.0.0 >/dev/null; then
+    git -C "$WORK/src/stdio-box" tag atlassian/v1.0.0
+  fi
+  [[ "$(git -C "$WORK/src/stdio-box" rev-parse HEAD)" == "$(git -C "$WORK/src/stdio-box" rev-parse 'atlassian/v1.0.0^{}')" ]] \
+    || fail prepare "atlassian/v1.0.0 is not the pinned commit"
+  [[ -f "$WORK/src/stdio-box/packages/atlassian/keystone-service.yaml" ]] \
+    || fail prepare "atlassian manifest missing"
+  verify_image_pins
   mkdir -p "$docs"
   cp "$REPO/tests/e2e/packages/docs-service/keystone-service.yaml" "$docs/"
   git init -q "$docs"
@@ -986,6 +1035,13 @@ packages:
     versions:
       - {version: 0.9.0, ref: v0.9.0, keystone_mcp: ">=0.5.0,<2.0"}
       - {version: 1.0.0, ref: v1.0.0, keystone_mcp: ">=0.5.0,<2.0"}
+  atlassian:
+    kind: service
+    summary: Jira and Confluence behind Keystone with per-person accounts.
+    source: file://${WORK}/src/stdio-box
+    path: packages/atlassian
+    versions:
+      - {version: 1.0.0, ref: atlassian/v1.0.0, keystone_mcp: ">=0.5.0,<2.0"}
 EOF
   git init -q "$catalog"
   git -C "$catalog" add catalog.yaml
@@ -1878,6 +1934,353 @@ PY
   pass legacy_gone "$started"
 }
 
+start_atlassian_mock() {
+  local cid image
+  docker rm -f ks-cat-e2e-atlassian-mock >/dev/null 2>&1 || true
+  cid="$(compose ps -q "$KEYSTONE_SERVICE")"
+  [[ -n "$cid" ]] || return 1
+  image="$(docker inspect --format '{{.Image}}' "$cid")"
+  docker run -d --name ks-cat-e2e-atlassian-mock \
+    --network keystone-mcp-upstreams --network-alias atlassian-mock \
+    -v "$HERE/e2e/fixtures/atlassian-mock:/fixtures:ro" \
+    --entrypoint python "$image" /fixtures/atlassian_mock.py 8080 >/dev/null
+}
+
+stop_atlassian_mock() {
+  docker rm -f ks-cat-e2e-atlassian-mock >/dev/null 2>&1 || true
+}
+
+box_service() {
+  kc service status atlassian
+  [[ "$KC_RC" -eq 0 ]] || return 1
+  jq_ box-service atlassian <"$WORK/log/kc.out"
+}
+
+box_credsctl() {
+  compose exec -T "$(box_service)" credsctl "$@"
+}
+
+policy_add_atlassian_roles() {
+  local dest="$ROOT/policy/rbac-policy.yaml"
+  local backup="$WORK/state/rbac-policy.atlassian.bak"
+  local edited="$WORK/state/rbac-policy.atlassian.yaml"
+  if [[ "$(id -u)" -eq 0 ]]; then
+    cp "$dest" "$backup" || return 1
+  else
+    sudo cp "$dest" "$backup" || return 1
+    sudo chown "$(id -u):$(id -g)" "$backup" || return 1
+  fi
+  python3 - "$backup" "$edited" <<'PY' || return 1
+import pathlib, sys
+source, dest = sys.argv[1:]
+text = pathlib.Path(source).read_text(encoding="utf-8")
+marker = "requires_human_identity:"
+if marker not in text:
+    raise SystemExit("policy has no requires_human_identity")
+block = """  atlassian_dev:
+    description: "Jira and Confluence through the dev-team account."
+    allow:
+      - atlassian_jira_get_issue
+      - atlassian_confluence_get_page
+      - atlassian_creds_whoami
+  atlassian_design:
+    description: "Jira through the design account."
+    allow:
+      - atlassian_jira_get_issue
+      - atlassian_confluence_get_page
+      - atlassian_creds_whoami
+  atlassian_nobody:
+    description: "Atlassian tools with no credentials profile of their own."
+    allow:
+      - atlassian_jira_get_issue
+      - atlassian_confluence_get_page
+      - atlassian_creds_whoami
+  atlassian_box_admin:
+    description: "Manage accounts and bindings in the atlassian box."
+    allow:
+      - "atlassian_creds_*"
+
+"""
+pathlib.Path(dest).write_text(text.replace(marker, block + marker, 1), encoding="utf-8")
+PY
+  if [[ "$(id -u)" -eq 0 ]]; then
+    cp "$edited" "$dest" || return 1
+    chown 10001:10001 "$dest" || return 1
+  else
+    sudo cp "$edited" "$dest" || return 1
+    sudo chown 10001:10001 "$dest" || return 1
+  fi
+  compose kill -s HUP "$KEYSTONE_SERVICE" || return 1
+  sleep 2
+}
+
+restore_atlassian_policy() {
+  local dest="$ROOT/policy/rbac-policy.yaml"
+  local backup="${WORK:-}/state/rbac-policy.atlassian.bak"
+  [[ -n "${ROOT:-}" && -f "$backup" ]] || return 0
+  if [[ "$(id -u)" -eq 0 ]]; then
+    cp "$backup" "$dest" || return 1
+    chown 10001:10001 "$dest" || return 1
+  else
+    sudo cp "$backup" "$dest" || return 1
+    sudo chown 10001:10001 "$dest" || return 1
+  fi
+  rm -f "$backup"
+  if [[ -n "${KEYSTONE_SERVICE:-}" && -f "$ROOT/docker-compose.yml" ]]; then
+    compose kill -s HUP "$KEYSTONE_SERVICE" >/dev/null 2>&1 || true
+  fi
+}
+
+write_atlassian_override() {
+  mkdir -p "$ROOT/packages"
+  cat >"$ROOT/packages/atlassian.override.yml" <<'EOF'
+services:
+  atlassian-mcp:
+    environment:
+      BOX_ALLOW_HTTP_URLS: "true"
+      BOX_ALLOW_PRIVATE_URLS: "true"
+EOF
+}
+
+ensure_atlassian_catalog() {
+  if [[ ! -d "$WORK/e2e-catalog" ]]; then
+    build_local_catalogs || return 1
+    kc catalog add "file://${WORK}/e2e-catalog"
+    [[ "$KC_RC" -eq 0 ]] || return 1
+  fi
+  grep -q 'path: packages/atlassian' "$WORK/e2e-catalog/catalog.yaml"
+}
+
+apply_atlassian() {
+  if [[ "$PROFILE" == "ci" ]]; then
+    run_answered service apply atlassian || return $?
+    return 0
+  fi
+  kc service apply atlassian --defer-public
+  return "$KC_RC"
+}
+
+status_atlassian_running() {
+  local attempts=0
+  while [[ "$attempts" -lt 6 ]]; do
+    kc service status atlassian
+    if [[ "$KC_RC" -eq 0 ]] \
+      && jq_ package-status atlassian <"$WORK/log/kc.out" | has_prefix "container mcp state running"; then
+      return 0
+    fi
+    sleep 5
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
+
+append_atlassian_tokens() {
+  python3 - "$WORK/secrets/atlassian.env" <<'PY' || return 1
+import os, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8") if path.exists() else ""
+if text and not text.endswith("\n"):
+    text += "\n"
+for name in ("E2E_ATL_DEV_TOKEN", "E2E_ATL_DESIGN_TOKEN", "E2E_ATL_BACKEND_TOKEN"):
+    text += name + "=" + os.environ[name] + "\n"
+path.write_text(text, encoding="utf-8")
+path.chmod(0o600)
+PY
+}
+
+write_import_file() {
+  local path="$1" kind="$2" token_var="$3"
+  ATL_IMPORT_PATH="$path" ATL_IMPORT_KIND="$kind" ATL_IMPORT_VAR="$token_var" python3 - <<'PY'
+import os
+import pathlib
+path = pathlib.Path(os.environ["ATL_IMPORT_PATH"])
+token = os.environ[os.environ["ATL_IMPORT_VAR"]]
+lines = [
+    "JIRA_URL=http://atlassian-mock:8080",
+    "JIRA_PERSONAL_TOKEN=" + token,
+]
+if os.environ["ATL_IMPORT_KIND"] == "server":
+    lines.extend(
+        [
+            "CONFLUENCE_URL=http://atlassian-mock:8080",
+            "CONFLUENCE_PERSONAL_TOKEN=" + token,
+        ]
+    )
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+path.chmod(0o600)
+PY
+}
+
+import_atlassian_profiles() {
+  local dev="$WORK/secrets/atlassian-dev.import"
+  local design="$WORK/secrets/atlassian-design.import"
+  local backend="$WORK/secrets/atlassian-backend.import"
+  write_import_file "$dev" server E2E_ATL_DEV_TOKEN || return 1
+  write_import_file "$design" jira_server E2E_ATL_DESIGN_TOKEN || return 1
+  write_import_file "$backend" jira_server E2E_ATL_BACKEND_TOKEN || return 1
+  box_credsctl profile import atlassian/dev-team --from-file - <"$dev" || return 1
+  box_credsctl profile import atlassian/design --from-file - <"$design" || return 1
+  box_credsctl profile import atlassian/backend --from-file - <"$backend" || return 1
+}
+
+atlassian_check() {
+  local phase="$1"
+  local form="false"
+  if [[ "$PROFILE" == "ci" ]]; then
+    form="true"
+  fi
+  local cid image rc=0
+  cid="$(compose ps -q "$KEYSTONE_SERVICE")"
+  image="$(docker inspect --format '{{.Image}}' "$cid")"
+  local -a args=(--keystone "http://127.0.0.1:${PUBLISH_PORT}/" --phase "$phase" --form "$form")
+  local -a mounts=(-v "$HERE/e2e:/e2e:ro")
+  if [[ -f "$WORK/tls/cert.pem" ]]; then
+    args+=(--ca /tls/cert.pem)
+    mounts+=(-v "$WORK/tls:/tls:ro")
+  fi
+  if [[ "$phase" == "reinstalled" ]]; then
+    args+=(--expect-installed-key "$ATL_INSTALLED_KEY" --box-status /box-status.json)
+    mounts+=(-v "$WORK/log/atlassian-status.json:/box-status.json:ro")
+  fi
+  ATL_CHECK_REASON=""
+  docker run --rm --network host --env-file "$WORK/secrets/atlassian.env" \
+    "${mounts[@]}" --entrypoint python "$image" \
+    /e2e/atlassian_check.py "${args[@]}" >"$WORK/log/atlassian.json" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    return 0
+  fi
+  ATL_CHECK_REASON="$(mcp_check_fail_reason "$WORK/log/atlassian.json")"
+  return 1
+}
+
+wait_box_status() {
+  local mode="$1" attempts=0
+  while [[ "$attempts" -lt 8 ]]; do
+    if box_credsctl status --json >"$WORK/log/atlassian-status.json"; then
+      if python3 - "$mode" "$WORK/log/atlassian-status.json" <<'PY'
+import json, sys
+mode, path = sys.argv[1], sys.argv[2]
+doc = json.load(open(path, encoding="utf-8"))
+result = doc.get("result") if isinstance(doc.get("result"), dict) else doc
+if not isinstance(result, dict):
+    raise SystemExit(1)
+if mode == "running":
+    running = (result.get("instances") or {}).get("running")
+    raise SystemExit(0 if isinstance(running, int) and running >= 3 else 1)
+install = result.get("install")
+raise SystemExit(0 if isinstance(install, dict) and install.get("from_cache") is True else 1)
+PY
+      then
+        return 0
+      fi
+    fi
+    sleep 2
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
+
+remove_atlassian_volumes() {
+  local attempts=0
+  while [[ "$attempts" -lt 5 ]]; do
+    if docker volume rm ks-pkg-atlassian-store ks-pkg-atlassian-cache >/dev/null; then
+      return 0
+    fi
+    sleep 1
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
+
+atlassian_cleanup() {
+  stop_atlassian_mock
+  restore_atlassian_policy || true
+  if [[ -n "${ROOT:-}" ]]; then
+    rm -f "$ROOT/packages/atlassian.override.yml"
+  fi
+}
+
+atlassian_fail() {
+  local step="$1" reason="$2"
+  atlassian_cleanup
+  fail atlassian_profiles "${step}: ${reason}"
+}
+
+read_installed_key() {
+  python3 - "$WORK/log/atlassian.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+for step in doc.get("steps") or []:
+    if step.get("name") == "providers" and step.get("installed_key"):
+        sys.stdout.write(str(step["installed_key"]))
+        break
+PY
+}
+
+scenario_atlassian_profiles() {
+  local started service
+  local ATL_INSTALLED_KEY=""
+  started="$(date +%s)"
+  start_atlassian_mock || atlassian_fail mock "atlassian mock did not start"
+  write_atlassian_override
+  ensure_atlassian_catalog || atlassian_fail catalog "local catalog has no atlassian path"
+  grep -q 'path: packages/atlassian' "$WORK/e2e-catalog/catalog.yaml" \
+    || atlassian_fail catalog "local catalog has no atlassian path"
+  if [[ "$PROFILE" == "ci" ]]; then
+    export KEYSTONE_SETUP_SERVICE_ATLASSIAN_DOMAIN=atlassian.e2e.test
+    export KEYSTONE_SETUP_SERVICE_ATLASSIAN_DNS=skip
+    export KEYSTONE_SETUP_SERVICE_ATLASSIAN_TLS=custom
+    export KEYSTONE_SETUP_SERVICE_ATLASSIAN_CERT_PATH="$WORK/tls/cert.pem"
+    export KEYSTONE_SETUP_SERVICE_ATLASSIAN_KEY_PATH="$WORK/tls/key.pem"
+  fi
+  apply_atlassian || atlassian_fail apply "apply exited ${KC_RC}"
+  status_atlassian_running || atlassian_fail status "atlassian is not running"
+  service="$(box_service)" || atlassian_fail box-service "status exited ${KC_RC}"
+  [[ "$service" == "atlassian-mcp" ]] || atlassian_fail box-service "mcp service is ${service:-missing}"
+  policy_add_atlassian_roles || atlassian_fail policy "could not reload policy"
+  : >"$WORK/secrets/atlassian.env"
+  chmod 600 "$WORK/secrets/atlassian.env"
+  issue_api_key_for e2e-atl-admin atlassian_box_admin E2E_ATL_ADMIN_KEY "$WORK/secrets/atlassian.env" \
+    || atlassian_fail accounts "admin key"
+  issue_api_key_for e2e-atl-dev atlassian_dev E2E_ATL_DEV_KEY "$WORK/secrets/atlassian.env" \
+    || atlassian_fail accounts "dev key"
+  issue_api_key_for e2e-atl-design atlassian_design E2E_ATL_DESIGN_KEY "$WORK/secrets/atlassian.env" \
+    || atlassian_fail accounts "design key"
+  issue_api_key_for e2e-atl-both atlassian_dev atlassian_design E2E_ATL_BOTH_KEY "$WORK/secrets/atlassian.env" \
+    || atlassian_fail accounts "both key"
+  issue_api_key_for e2e-atl-nobody atlassian_nobody E2E_ATL_NOBODY_KEY "$WORK/secrets/atlassian.env" \
+    || atlassian_fail accounts "nobody key"
+  issue_api_key_for e2e-atl-backend atlassian_nobody E2E_ATL_BACKEND_KEY "$WORK/secrets/atlassian.env" \
+    || atlassian_fail accounts "backend key"
+  export E2E_ATL_DEV_TOKEN="$(rand_hex 16)"
+  export E2E_ATL_DESIGN_TOKEN="$(rand_hex 16)"
+  export E2E_ATL_BACKEND_TOKEN="$(rand_hex 16)"
+  append_atlassian_tokens || atlassian_fail accounts "token file"
+  atlassian_check setup || atlassian_fail setup "${ATL_CHECK_REASON:-atlassian check failed}"
+  ATL_INSTALLED_KEY="$(read_installed_key)" || atlassian_fail setup "installed_key missing"
+  [[ -n "$ATL_INSTALLED_KEY" ]] || atlassian_fail setup "installed_key missing"
+  if [[ "$PROFILE" != "ci" ]]; then
+    import_atlassian_profiles || atlassian_fail import "profile import failed"
+  fi
+  atlassian_check calls || atlassian_fail calls "${ATL_CHECK_REASON:-atlassian check failed}"
+  wait_box_status running || atlassian_fail calls "instances.running is below 3"
+  export KEYSTONE_SETUP_SERVICE_ATLASSIAN_CONFIRM_REMOVE=yes
+  kc service remove atlassian
+  [[ "$KC_RC" -eq 0 ]] || atlassian_fail remove "remove exited ${KC_RC}"
+  unset KEYSTONE_SETUP_SERVICE_ATLASSIAN_CONFIRM_REMOVE
+  apply_atlassian || atlassian_fail reinstall "apply exited ${KC_RC}"
+  status_atlassian_running || atlassian_fail reinstall "atlassian is not running"
+  wait_box_status cache || atlassian_fail reinstalled "install.from_cache is not true"
+  atlassian_check reinstalled || atlassian_fail reinstalled "${ATL_CHECK_REASON:-atlassian check failed}"
+  export KEYSTONE_SETUP_SERVICE_ATLASSIAN_CONFIRM_REMOVE=yes
+  kc service remove atlassian
+  [[ "$KC_RC" -eq 0 ]] || atlassian_fail cleanup "remove exited ${KC_RC}"
+  unset KEYSTONE_SETUP_SERVICE_ATLASSIAN_CONFIRM_REMOVE
+  remove_atlassian_volumes || atlassian_fail cleanup "volume remove failed"
+  atlassian_cleanup
+  pass atlassian_profiles "$started"
+}
+
 remove_all() {
   local name
   kc service list || return 0
@@ -1932,7 +2335,7 @@ cleanup() {
     compose down -v --remove-orphans >/dev/null 2>&1 || true
   fi
   local name
-  for name in ks-cat-e2e-redis ks-cat-e2e-external-s3 ks-cat-e2e-external-pg; do
+  for name in ks-cat-e2e-redis ks-cat-e2e-external-s3 ks-cat-e2e-external-pg ks-cat-e2e-atlassian-mock; do
     if docker inspect "$name" >/dev/null 2>&1; then
       docker rm -f "$name" >/dev/null 2>&1 || true
     fi
@@ -1952,6 +2355,12 @@ kept = [item for item in path.read_text().splitlines() if item != line]
 path.write_text("\n".join(kept) + "\n")
 ' "$line" || true
   fi
+  if [[ -f "${WORK:-}/state/rbac-policy.atlassian.bak" ]]; then
+    restore_atlassian_policy || true
+  fi
+  if [[ -n "${ROOT:-}" ]]; then
+    rm -f "$ROOT/packages/atlassian.override.yml"
+  fi
   if [[ -n "${WORK:-}" && -d "$WORK" ]]; then
     # Provision files are owned by container users. Take them back, then remove the tree.
     if [[ "$(id -u)" -ne 0 ]]; then
@@ -1970,7 +2379,7 @@ main() {
   note "production-example.patch has no diff; layout A is not edited"
   note "file-mcp has no published 0.9.0 tag; the local catalog vendors 0.9.0 from the 1.0.0 tree and the same image digest"
   note "sources.yaml pins catalog ${CATALOG_REF}"
-  note "containers created by this script are named ks-cat-e2e-*; network aliases stay redis, e2e-external-s3, and e2e-external-pg"
+  note "containers created by this script are named ks-cat-e2e-*; network aliases stay redis, e2e-external-s3, e2e-external-pg, and atlassian-mock"
   WORK="$(mktemp -d /tmp/ks-cat-e2e.XXXXXX)"
   DIAG="${REPO}/e2e-diagnostics"
   mkdir -p "$WORK/secrets" "$WORK/log" "$WORK/state" "$WORK/src"
@@ -2005,6 +2414,7 @@ main() {
   scenario_tls_manual
   scenario_check_clean
   scenario_legacy_gone
+  scenario_atlassian_profiles
   cleanup
 }
 
@@ -2013,6 +2423,16 @@ verify_image_pins() {
     || fail prepare "file-mcp fixture does not match FILE_MCP_IMAGE"
   grep -F -q "$HELLO_IMAGE" "$REPO/tests/e2e/packages/docs-service/keystone-service.yaml" \
     || fail prepare "docs-service fixture does not match HELLO_IMAGE"
+  local mock="$HERE/e2e/fixtures/atlassian-mock/atlassian_mock.py"
+  local expected actual
+  expected="$(tr -d '[:space:]' <"$HERE/e2e/fixtures/atlassian-mock/SHA256")"
+  actual="$(sha_file "$mock")"
+  [[ "$actual" == "$expected" ]] || fail prepare "atlassian mock hash does not match SHA256"
+  local manifest="$WORK/src/stdio-box/packages/atlassian/keystone-service.yaml"
+  if [[ -f "$manifest" ]]; then
+    grep -F -q "$STDIO_BOX_IMAGE" "$manifest" \
+      || fail prepare "atlassian manifest does not match STDIO_BOX_IMAGE"
+  fi
 }
 
 on_exit() {

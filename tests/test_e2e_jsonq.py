@@ -89,6 +89,24 @@ def test_queries_are_one_value_per_line() -> None:
     assert jsonq.query_lines(document, "package-status", "absent") == ["missing"]
 
 
+def test_box_service_reads_the_mcp_compose_service() -> None:
+    document = {
+        "result": {
+            "services": [
+                {
+                    "name": "atlassian",
+                    "containers": [
+                        {"role": "init", "service": "atlassian-init"},
+                        {"role": "mcp", "service": "atlassian-mcp"},
+                    ],
+                }
+            ]
+        }
+    }
+    assert jsonq.query_lines(document, "box-service", "atlassian") == ["atlassian-mcp"]
+    assert jsonq.query_lines(document, "box-service", "missing") == []
+
+
 def test_unknown_query_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown query"):
         jsonq.query_lines({}, "eval", None)
