@@ -235,7 +235,7 @@ Retell `problems` on status. They can include `container_missing`, `container_un
 | `KEYSTONE_SETUP_SERVICE_{PKG}_TLS` | Certificate: keep the one found (say the expiry), a free Let's Encrypt certificate, your own files, or you run the proxy and certificate (for example Caddy)? `keep`, `certbot`, `custom`, or `manual`. For `manual`, repeat the sample vhost path and say keystonectl will check the hostname over https. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_CERT_PATH`, `KEYSTONE_SETUP_SERVICE_{PKG}_KEY_PATH` | Where on the server are the certificate (full chain, PEM) and the key? Paths, not contents. |
 | `KEYSTONE_SETUP_TLS_EMAIL` | Which email should Let's Encrypt use for expiry reminders? |
-| `KEYSTONE_SETUP_SERVICE_{PKG}_TAKEOVER` | Site <file> serves <domain>. keystonectl will disable that site entirely: only the service paths and /healthz will answer on this name, everything else returns 404. Disable it? |
+| `KEYSTONE_SETUP_SERVICE_{PKG}_TAKEOVER` | Site <file> serves <domain>. keystonectl will disable that site entirely: only the service paths and /healthz will answer on this name, everything else returns 404. Disable it? If apply then fails, the site is enabled again: tell the operator and read the names from `result.public.restored_sites`. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_NAMESPACE` | The tool-name prefix is taken. Which prefix should be used instead? |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_REMOVE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_UPGRADE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_ADOPT` | Confirm only after you have retold the question and the consequences. `CONFIRM_REMOVE` and `CONFIRM_ADOPT` are `yes`. `CONFIRM_UPGRADE` is the target version. `eject` and `rollback` have no confirm variable. |
 | `package` (`kind: argument`) | This package name is in two catalogs. Which one? Repeat the command as `source/name`. |
@@ -253,7 +253,7 @@ install -m 600 /dev/null /root/keystone-secrets/pg-url && nano /root/keystone-se
 Pass the path in a `…_FILE` variable. Do not read the file and do not print it. If the operator pastes a secret anyway, do not repeat it, do not use it, and tell them to rotate that key or password.
 3. Never pass a secret as a command argument or as a variable value. Only a path, and only in a name that ends with `_FILE`.
 4. **Do not touch policy.** Do not edit the policy file and do not call `policy_*`. Hand the recommended rows to the policy skill (Policy).
-5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`.
+5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`. If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
