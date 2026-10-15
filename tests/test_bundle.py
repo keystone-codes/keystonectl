@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from keystonectl.bundles import install_bundle
+from keystonectl.bundles import _manifest_cached, install_bundle
 from keystonectl.output import SecretRegistry
 from tests.support import file_hashes
 from tests.support.deploylab import LAYOUT
@@ -258,6 +258,100 @@ def test_bundle_plan_changes_nothing(tmp_path: Path) -> None:
     kept = {key: value for key, value in before.items() if not key.startswith(".keystonectl/")}
     for key, value in kept.items():
         assert after.get(key) == value
+
+
+def _seed_cached_manifest(
+    root: Path, source: str, name: str, version: str, *, policy: str, critical: str
+) -> None:
+    directory = root / ".keystonectl" / "packages" / source / name / version
+    directory.mkdir(parents=True, exist_ok=True)
+    document = {
+        "recommended_policy": policy,
+        "mcp": {"namespace": "files", "critical": [critical]},
+    }
+    (directory / "keystone-service.yaml").write_text(
+        yaml.safe_dump(document, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _bundle_plan(lab: Lab, name: str, packages: list[str], *, environ: dict[str, str]) -> object:
+    _put_bundle(lab, name, packages)
+    return install_bundle(
+        lab.root,
+        f"local/{name}",
+        plan_only=True,
+        runner=lab.runner,
+        secrets=lab.secrets,
+        sets={},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0", **environ},
+        interactive=False,
+        deployer=lab.deployer,
+        defer_public=True,
+    )
+
+
+def test_cached_manifest_sorted_as_versions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    _seed_cached_manifest(
+        lab.root, "local", "file-mcp", "1.9.0", policy="policy-1.9.yaml", critical="old"
+    )
+    _seed_cached_manifest(
+        lab.root, "local", "file-mcp", "1.10.0", policy="policy-1.10.yaml", critical="new"
+    )
+    result = _bundle_plan(
+        lab,
+        "solo",
+        ["file-mcp"],
+        environ={"KEYSTONE_SETUP_RESOURCE_S3": "catalog"},
+    )
+    assert result.code == 0, result.error
+    row = next(
+        item for item in result.result["recommended_policy"] if item["package"] == "file-mcp"
+    )
+    assert row["path"] == "policy-1.10.yaml"
+    critical = next(
+        item for item in result.result["critical_tools"] if item["package"] == "file-mcp"
+    )
+    assert critical["name"] == "files_new"
+
+
+def test_cached_manifest_prefers_installed_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    installed = lab.apply("file-mcp", environ={"KEYSTONE_SETUP_RESOURCE_S3": "catalog"})
+    assert installed.code == 0, installed.error
+    _seed_cached_manifest(
+        lab.root, "local", "file-mcp", "1.0.0", policy="policy-1.0.yaml", critical="v0"
+    )
+    _seed_cached_manifest(
+        lab.root, "local", "file-mcp", "1.1.0", policy="policy-1.1.yaml", critical="v1"
+    )
+    lock = yaml.safe_load((lab.root / "services.lock.yaml").read_text(encoding="utf-8"))
+    manifest = _manifest_cached(lab.root, "local", "file-mcp", lock)
+    assert manifest is not None
+    assert manifest["recommended_policy"] == "policy-1.0.yaml"
+
+
+def test_cached_manifest_skips_non_version_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    _seed_cached_manifest(
+        lab.root, "local", "file-mcp", "1.0.0", policy="policy-1.0.yaml", critical="ok"
+    )
+    base = lab.root / ".keystonectl" / "packages" / "local" / "file-mcp"
+    (base / "tmp-xyz").mkdir(parents=True)
+    lock = yaml.safe_load((lab.root / "services.lock.yaml").read_text(encoding="utf-8"))
+    manifest = _manifest_cached(lab.root, "local", "file-mcp", lock)
+    assert manifest is not None
+    assert manifest["recommended_policy"] == "policy-1.0.yaml"
 
 
 def test_bundle_recommended_policy_merged_with_package_names(
