@@ -51,3 +51,4 @@ Keep each record under roughly 80 lines. Use short sentences and present tense.
 | [0004](0004-compose-generated-from-manifest.md) | Compose is generated from the manifest; a package's own compose file is not read | Accepted (keystonectl 0.1, 2026-10-12) |
 | [0005](0005-operator-freedom-override-eject-adopt.md) | The operator can change anything: override, eject, adopt; a fragment hash prevents silent overwrites | Accepted (keystonectl 0.1, 2026-10-12) |
 | [0006](0006-keystonectl-is-a-separate-product.md) | keystonectl is a separate product, not part of keystone-deploy or keystone-mcp | Accepted (keystonectl 0.1, 2026-10-12) |
+| [0007](0007-stdio-servers-as-boxes.md) | Stdio-only MCP servers are packaged as boxes; credential profiles live in the box | Accepted (keystonectl 0.2, 2026-10-15) |

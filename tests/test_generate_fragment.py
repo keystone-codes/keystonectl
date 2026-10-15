@@ -208,3 +208,17 @@ def test_named_volumes_prefixed_with_package() -> None:
     text = render_fragment(_manifest("docs-service"), {})
     assert "docs-service-cache:/var/cache/docs" in text
     assert "name: ks-pkg-docs-service-cache" in text
+
+
+def test_fragment_keeps_image_user_and_default_capabilities() -> None:
+    for name in ("file-mcp", "docs-service", "hello-worker", "minio"):
+        doc = yaml.safe_load(render_fragment(_manifest(name), {}))
+        for spec in doc["services"].values():
+            assert "user" not in spec
+            assert "cap_drop" not in spec
+            assert spec.get("security_opt") == ["no-new-privileges:true"]
+
+    manifest = _manifest("minio")
+    manifest["containers"]["server"]["user"] = "1000:1000"
+    doc = yaml.safe_load(render_fragment(manifest, {}))
+    assert doc["services"]["minio-server"]["user"] == "1000:1000"
