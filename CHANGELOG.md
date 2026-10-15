@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Warning `resource_answer_ignored` when a resource answer disagrees with the provider already bound.
 - Warning `builtin_tools_unavailable` when apply cannot read keystone-mcp's live tool list.
 - `catalog set-ref <name> <ref>` moves a source to another tag or commit; `default_catalog_behind` warns when the default catalog is pinned behind this keystonectl.
+- Guide for service authors: how to release a new version of a package.
 
 ### Fixed
 
