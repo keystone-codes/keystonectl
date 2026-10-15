@@ -16,6 +16,10 @@ A service with named volumes also keeps the secrets keystonectl generated (`env.
 
 A provider with no consumers can be removed. Its volume and `packages/<provider>.env` stay, so a later install reuses the same root credentials.
 
+When the last catalog consumer of a provider is removed, the warning `provider_unused` names the provider and the Docker volumes that still hold buckets or databases. Remove the provider with `service remove` when you no longer need that data.
+
+Removing a provider warns `provider_data_kept`: the `ks-pkg-<provider>-*` volumes still contain every former consumer's data. Installing the provider again reuses them. Delete volumes with `docker volume rm` only after a backup.
+
 ## upgrade
 
 `service upgrade <name>` or `service upgrade <name>@<version>` moves to a newer compatible release. When nothing newer exists, the command exits 0 with `result.up_to_date: true`.
