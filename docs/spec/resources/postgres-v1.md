@@ -50,7 +50,7 @@ For consumer `<consumer>` (package name):
 4. Extensions listed in `needs[].extensions` are created in the consumer database at provision time
    (`CREATE EXTENSION IF NOT EXISTS` with provider admin rights). Unknown extensions fail provision.
 5. Server version ≥ 14 (`server_version_num >= 140000`).
-6. Re-provisioning the same consumer is idempotent (same database, role, and password).
+6. The secret file is the desired secret. A repeat with the same value changes nothing; a different value replaces the consumer's password. The database and role stay the same.
 
 Not part of v1: superuser access, creating other databases, access to other consumers’ databases,
 logical replication, cross-service `LISTEN/NOTIFY`, backups, or extensions not listed in
