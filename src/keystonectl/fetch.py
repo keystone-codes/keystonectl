@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+from keystonectl.cachedir import private_subdir
 from keystonectl.runner import CommandResult, CommandRunner
 
 GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "/bin/true"}
 GIT_TIMEOUT = 60.0
 _SHA = re.compile(r"^[0-9a-f]{40}$")
-_MODE_PRIVATE_DIR = 0o700
 
 
 class FetchError(Exception):
@@ -82,47 +81,13 @@ def list_tags(runner: CommandRunner, url: str) -> str:
     return result.stdout
 
 
-def _tighten(path: Path, *, created: bool) -> None:
-    """Chmod ``path`` to 700 when it was just created or its mode is wider than 700."""
-    if created or (path.stat().st_mode & 0o077):
-        os.chmod(path, _MODE_PRIVATE_DIR)
-
-
-def _tmp_root(root: Path) -> Path:
-    """``.keystonectl/tmp`` next to the cache, created with mode 700 if absent.
-
-    Clones are built here so the later rename into the cache or into place stays on the
-    same file system; ``/tmp`` can be a different one (tmpfs, a separate disk), which
-    makes ``Path.rename`` fail with ``EXDEV``.
-
-    ``.keystonectl`` itself is created here, mode 700, if the caller never ran
-    ``init`` (for example ``catalog list --root`` on a bare checkout); the deployment
-    layout promises mode 700 and a ``.gitignore`` with a single ``*`` line for that
-    directory regardless of who creates it first.
-    """
-    base = Path(root) / ".keystonectl"
-    created_base = not base.is_dir()
-    base.mkdir(parents=True, exist_ok=True)
-    _tighten(base, created=created_base)
-    if created_base:
-        gitignore = base / ".gitignore"
-        if not gitignore.exists():
-            gitignore.write_text("*\n")
-
-    tmp = base / "tmp"
-    created_tmp = not tmp.is_dir()
-    tmp.mkdir(exist_ok=True)
-    _tighten(tmp, created=created_tmp)
-    return tmp
-
-
 def fetch_tree(runner: CommandRunner, url: str, ref: str, root: Path) -> tuple[Path, str]:
     """Clone ``ref`` into a new directory with ``.git`` removed. Return ``(path, commit)``.
 
     The directory is created under ``root/.keystonectl/tmp`` so the caller can later
     rename it onto the cache or deployment directory without crossing file systems.
     """
-    tmp = Path(tempfile.mkdtemp(prefix="fetch-", dir=_tmp_root(root)))
+    tmp = Path(tempfile.mkdtemp(prefix="fetch-", dir=private_subdir(root, "tmp")))
     try:
         commit = _materialize(runner, url, ref, tmp)
     except Exception:
