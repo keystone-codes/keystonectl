@@ -264,7 +264,7 @@ Use a box when the server speaks only stdio. One image, [`stdio-box`](https://gi
 
 `--derived-image` writes a two-line `Dockerfile` (`FROM` the stdio-box image, `COPY` into `/opt/box/packages/<name>/`) for an author who publishes from their own repository.
 
-The image reference written into a new manifest is `ghcr.io/keystone-codes/stdio-box:0.1.0` plus a placeholder digest of 64 zeros. That digest is still open. It is not a published pin; the stdio-box image release replaces it.
+The image reference written into a new manifest is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`), unless `--derived-image` selects a derived publisher image.
 
 ## Check it locally
 
