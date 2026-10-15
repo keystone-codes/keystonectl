@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - e2e: the vm profile checks PyPI for the requested version instead of refusing outright.
 
+### Fixed
+
+- A failed first `service apply` stops and removes the containers it started and drops the package from `services.lock.yaml`; the fragment, the include, and the lock no longer disagree with Docker.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added

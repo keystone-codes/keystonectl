@@ -1,6 +1,6 @@
 # Service lifecycle
 
-`service apply` is the normal path. These commands change what keystonectl owns afterwards. Volumes, buckets, databases, certificates, and `packages/<name>.override.yml` are never deleted.
+`service apply` is the normal path. These commands change what keystonectl owns afterwards. Volumes, buckets, databases, certificates, and `packages/<name>.override.yml` are never deleted. A first `service apply` that fails is rolled back the same way: see [When apply fails](generation.md#when-apply-fails).
 
 ## remove
 
