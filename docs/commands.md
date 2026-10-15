@@ -533,6 +533,32 @@ Asks `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_REMOVE`. Drops the lock entry. A pac
 }
 ```
 
+### keystonectl service rotate-secret
+
+    keystonectl service rotate-secret <name> <kind>
+
+Replaces the bucket key or database password of one catalog consumer. `<name>` is the installed service. `<kind>` is `s3` or `postgres`. The command asks `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ROTATE`. It writes a new secret, runs the provider's provision script, updates the service env file, checks access, and recreates the containers that receive that file. The JSON result does not contain the secret. An external binding is `rotate_external_unsupported`.
+
+```json
+{
+  "ok": true,
+  "code": 0,
+  "command": "service rotate-secret",
+  "target": "file-mcp",
+  "summary": "Rotated the s3 secret of file-mcp.",
+  "actions": [],
+  "changes": 1,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "rotated": {"kind": "s3", "provider": "minio"},
+    "restarted": ["file-mcp-mcp"]
+  }
+}
+```
+
 ### keystonectl service upgrade
 
     keystonectl service upgrade <name>[@version]
@@ -916,8 +942,11 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | requires_missing | 3 | false | Install them first or use bundle install. |
 | resource_already_bound | 3 | false | One provider per kind. Use the provider that is already bound, or remove it first. |
 | resource_in_use | 3 | false | Unbind the consumers first. Their buckets and databases are kept. |
+| resource_not_bound | 3 | false | Pass a kind this service lists, s3 or postgres. |
 | root_not_empty | 3 | false | Use an empty directory, or pass a directory that already runs keystone-mcp. |
 | root_not_found | 1 | false | Pass --root DIR, set KEYSTONECTL_ROOT, or run keystonectl init --adopt <dir>. |
+| rotate_external_unsupported | 3 | false | Remove the service and install it again. |
+| rotate_failed | 3 | true | Run the command again. |
 | s3_access_denied | 3 | false | Check the access key and the secret key, then run the command again. |
 | s3_bucket_missing | 3 | false | Create the bucket in the storage you already have, then run the command again. |
 | s3_presign_failed | 3 | false | Allow s3:GetObject and s3:PutObject on the bucket, then run the command again. |

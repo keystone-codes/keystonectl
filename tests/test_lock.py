@@ -199,6 +199,40 @@ def test_cli_read_command_works_when_locked(tmp_path: Path) -> None:
     assert payload["error"] is None
 
 
+def test_cli_service_rotate_secret_gets_busy_when_locked(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    write_empty_lock(root)
+    holder = _hold_lock_externally(root / "services.lock.yaml")
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "keystonectl",
+                "service",
+                "rotate-secret",
+                "file-mcp",
+                "s3",
+                "--root",
+                str(root),
+                "--json",
+                "--non-interactive",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+    payload = json.loads(completed.stdout)
+    assert completed.returncode == 3
+    assert payload["code"] == 3
+    assert payload["command"] == "service rotate-secret"
+    assert payload["error"]["id"] == "busy"
+    assert payload["retryable"] is True
+
+
 def test_cli_catalog_set_ref_gets_busy_when_locked(tmp_path: Path) -> None:
     root = tmp_path / "root"
     write_empty_lock(root)
