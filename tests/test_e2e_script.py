@@ -168,3 +168,45 @@ def test_install_scenario_asserts_keystonectl_set_allow_insecure_http() -> None:
     body = _function_body("scenario_install_file_mcp_minio")
     assert "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP" in body
     assert "managed block, do not edit" in body
+
+
+def test_partner_catalog_uses_url_when_set() -> None:
+    body = _function_body("scenario_partner_catalog")
+    assert 'catalog add "$E2E_PARTNER_CATALOG_URL" --ref' in body
+    url_branch, local_branch = body.split("else", 1)
+    assert (
+        'kc catalog add "$E2E_PARTNER_CATALOG_URL" --ref "$E2E_PARTNER_CATALOG_REF"' in url_branch
+    )
+    assert "--name" not in url_branch
+    assert 'fail partner_catalog "local_source was warned"' in url_branch
+    assert 'fail partner_catalog "catalog_ref_chosen was warned"' in url_branch
+    assert (
+        'note "partner catalog ${E2E_PARTNER_CATALOG_URL} ref ${E2E_PARTNER_CATALOG_REF}"'
+        in url_branch
+    )
+    assert 'kc catalog add "file://${WORK}/partner-catalog"' in local_branch
+    assert "local_source was not warned" in local_branch
+    assert 'note "partner catalog file://"' in local_branch
+
+
+def test_vm_profile_defaults_to_network_partner_catalog() -> None:
+    assert 'E2E_PARTNER_CATALOG_REF="${E2E_PARTNER_CATALOG_REF:-v1.0.0}"' in SCRIPT
+    marker = (
+        'if [[ "$PROFILE" == "vm" ]]; then\n'
+        '    E2E_PARTNER_CATALOG_URL="https://github.com/keystone-codes/e2e-partner-catalog.git"'
+    )
+    assert marker in SCRIPT
+    assert 'if [[ -z "${E2E_PARTNER_CATALOG_URL+x}" ]]; then' in SCRIPT
+
+
+def test_ci_profile_keeps_local_partner_catalog() -> None:
+    vm_url = SCRIPT.index(
+        'E2E_PARTNER_CATALOG_URL="https://github.com/keystone-codes/e2e-partner-catalog.git"'
+    )
+    empty_url = SCRIPT.index('E2E_PARTNER_CATALOG_URL=""')
+    assert vm_url < empty_url
+    body = _function_body("scenario_partner_catalog")
+    assert '[[ -n "$E2E_PARTNER_CATALOG_URL" ]]' in body
+    local_branch = body.split("else", 1)[1]
+    assert "file://${WORK}/partner-catalog" in local_branch
+    assert "github.com/keystone-codes/e2e-partner-catalog" not in body

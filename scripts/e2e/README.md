@@ -24,6 +24,8 @@ Containers and the temp directory use the `ks-cat-e2e-` prefix. Networks require
 | `--report` | `e2e-report.jsonl` | one JSON object per line |
 | `--keep` | off | leave the deployment in place after a passing run |
 
+`E2E_PARTNER_CATALOG_REF` defaults to `v1.0.0`. `E2E_PARTNER_CATALOG_URL` defaults to empty on the `ci` profile and to `https://github.com/keystone-codes/e2e-partner-catalog.git` on the `vm` profile. An empty URL builds a local `file://` catalog. A set URL is added with `--ref` and without `--name` (the source name is the catalog `name`, `e2e-partner`). An explicit value, including empty, overrides the profile default.
+
 CI example:
 
 ```bash
@@ -50,7 +52,7 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 9. Remove keeps the bucket and the override; install again works. file-mcp declares no volumes, so the kept list has no volume name.
 10. Point file-mcp at an external S3 (`ks-cat-e2e-external-s3`, alias `e2e-external-s3`).
 11. Point docs-service at an external Postgres (`ks-cat-e2e-external-pg`).
-12. A second catalog source; an ambiguous name asks for a choice.
+12. A second catalog source; an ambiguous name asks for a choice. When `E2E_PARTNER_CATALOG_URL` is set, the script adds that repository at `E2E_PARTNER_CATALOG_REF` and expects neither `local_source` nor `catalog_ref_chosen`. When the URL is empty, it builds the local `file://` catalog. The report notes which path ran: the URL and ref, or `file://`.
 13. On the open example, manual TLS: the first apply is retryable `public_unreachable`. Both profiles then install the sample nginx vhost with a self-signed certificate; apply reaches ready. On the VM profile this runs after the certbot scenario, so a certbot-issued certificate cannot be mistaken for the manual one.
 14. `check` allows `tls_untrusted`, `s3_plain_http`, and `postgres_plain_connection`. Any other warning fails.
 15. The deployment has none of the forbidden names (`EXTERNAL_APIS`, `docker-compose.external.yml`, `FILE_API_URL`, a git-built keystone-mcp image).
