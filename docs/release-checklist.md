@@ -126,4 +126,4 @@ One row per item. Point at the step above that shows it. Leave the result empty 
 | Partner catalog | section G | package installs the same way | |
 | Repeat, remove, reinstall | section F | no questions on the second plan; reinstall works | |
 | Final check | `keystonectl check` | clean, apart from warnings the release note allows | |
-| Forbidden leftovers | search the deployment | no `EXTERNAL_APIS`, `docker-compose.external.yml`, a "managed" flag, `FILE_API_URL`, or a keystone-mcp image built from git | |
+| Forbidden leftovers | search the deployment | no `EXTERNAL_APIS`, `docker-compose.external.yml`, a "managed" flag, `FILE_API_URL`, or a keystone-mcp image built from git; on the open example: operator files unchanged, no temporary files, nothing unexplained in `packages/` | |

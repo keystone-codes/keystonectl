@@ -37,6 +37,8 @@ def query_lines(document: Mapping[str, Any], query: str, args: list[str]) -> lis
         return [str(layout.get("keystone_service") or "")]
     if query == "layout-version":
         return [str(document.get("layout_version") or "")]
+    if query == "layout-flavor":
+        return [str(layout.get("flavor") or "")]
     if query == "resource":
         if len(args) != 2:
             raise ValueError("resource needs KIND and FIELD")
@@ -72,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) < 2:
         print(
             "usage: lockq.py LOCK QUERY [ARG ...]\n"
-            "queries: layout-keystone-service layout-version resource service env-files",
+            "queries: layout-flavor layout-keystone-service layout-version resource service env-files",
             file=sys.stderr,
         )
         return 2
