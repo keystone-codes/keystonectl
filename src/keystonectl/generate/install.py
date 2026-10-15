@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -1368,6 +1369,7 @@ def _start(ctx: Context, manifest: Mapping[str, Any], *, recreate: bool) -> str 
     if recreate:
         up.append("--force-recreate")
     up.extend(names)
+    ctx.started_project = project
     started = run(ctx.runner, up, cwd=ctx.root)
     if started.returncode != 0:
         if daemon_down(started):
@@ -1413,6 +1415,78 @@ def service_install_would_rerun(ctx: Context) -> bool:
         extra_hosts=extra_hosts,
     )
     return _unchanged(ctx, manifest, fragment, namespace)
+
+
+def _stop_started(ctx: Context, manifest: Mapping[str, Any], project: str | None) -> list[str]:
+    """Remove the Compose services ``up -d`` created. Needs the fragment still on disk."""
+
+    if not project:
+        return []
+    name = str(manifest["name"])
+    names = service_names(manifest)
+    prefix = compose_prefix(ctx.root, _layout(ctx), project=project)
+    removed = run(ctx.runner, [*prefix, "rm", "-s", "-f", *names], cwd=ctx.root)
+    run(ctx.runner, ["docker", "network", "rm", f"ks-pkg-{name}"], cwd=ctx.root)
+    return names if removed.returncode == 0 else []
+
+
+def _drop_new_entry(ctx: Context, name: str) -> None:
+    """Remove the entry a failed first install left, and its consumer records.
+
+    A consumer record in ``resources[]`` cannot outlive its service entry, so it goes
+    the way ``service remove`` drops it. The resource itself, its env file and secrets stay.
+    """
+
+    from keystonectl.resources.binding import unbind_consumer
+
+    before = copy.deepcopy(ctx.lock)
+    unbind_consumer(ctx.lock, name)
+    services = ctx.lock.get("services")
+    if isinstance(services, list):
+        ctx.lock["services"] = [
+            item for item in services if not (isinstance(item, dict) and item.get("name") == name)
+        ]
+    if ctx.lock == before:
+        return
+    ctx.lock["updated_by"] = f"keystonectl {__version__}"
+    save_lock(ctx.root / "services.lock.yaml", ctx.lock, now=ctx.clock())
+
+
+def _roll_back(ctx: Context, manifest: Mapping[str, Any], undo: _Undo) -> None:
+    """Undo a failed apply: stop what it started, restore files, drop a first-install lock entry.
+
+    A service that was already recorded before this run keeps its containers and its entry.
+    """
+
+    name = str(manifest["name"])
+    first_install = name not in ctx.lock_services_before
+    started = ctx.started_project
+    ctx.started_project = None
+    containers = _stop_started(ctx, manifest, started) if first_install else []
+    undo.restore()
+    if first_install:
+        _drop_new_entry(ctx, name)
+    failure = ctx.failure
+    if failure is None:
+        return
+    if first_install:
+        if containers:
+            note = f"Containers {', '.join(containers)} were stopped and removed; "
+        elif started:
+            note = f"Docker could not remove containers {', '.join(service_names(manifest))}; "
+        else:
+            note = ""
+        note += f"{name} is not recorded in services.lock.yaml."
+    else:
+        note = f"{name} is still recorded in services.lock.yaml."
+    failure.message = f"{failure.message} {note}".strip()
+    failure.result = {
+        **failure.result,
+        "rollback": {
+            "containers": containers,
+            "lock_entry": "dropped" if first_install else "kept",
+        },
+    }
 
 
 def install_service(ctx: Context) -> None:
@@ -1489,14 +1563,15 @@ def install_service(ctx: Context) -> None:
         _fail(ctx, "fragment_modified", guarded, hint=fragment_modified_message(name))
         return
     undo = _Undo()
+    ctx.started_project = None
     try:
         _materialise(ctx, manifest, fragment, namespace, registry_name, undo)
     except (OSError, ValueError, RuntimeError) as exc:
-        undo.restore()
         _fail(ctx, "service_unhealthy", ctx.secrets.redact(str(exc)))
+        _roll_back(ctx, manifest, undo)
         return
     if ctx.failure is not None:
-        undo.restore()
+        _roll_back(ctx, manifest, undo)
 
 
 def _validate_compose_only(ctx: Context) -> bool:
@@ -1707,9 +1782,10 @@ class ComposeDeployer:
             return
         fragment = render_fragment(manifest, {})
         undo = _Undo()
+        ctx.started_project = None
         _materialise(ctx, manifest, fragment, None, None, undo, commit=False)
         if ctx.failure is not None:
-            undo.restore()
+            _roll_back(ctx, manifest, undo)
 
     def wait_healthy(self, ctx: Context, name: str, *, timeout: float) -> None:
         if ctx.failure is not None:

@@ -94,6 +94,8 @@ class Context:
     action_log: list[dict[str, str]] = field(default_factory=list)
     skip_actions: set[str] = field(default_factory=set)
     chosen_port: int | None = None
+    started_project: str | None = None
+    lock_services_before: frozenset[str] = field(default_factory=frozenset)
 
 
 def register_step(step: Any, after: str | None = None) -> None:
@@ -778,6 +780,11 @@ def run_service(
                 changes=0,
             )
 
+    ctx.lock_services_before = frozenset(
+        str(item.get("name"))
+        for item in ctx.lock.get("services") or []
+        if isinstance(item, dict) and item.get("name")
+    )
     for step in steps:
         step.apply(ctx)
         if ctx.halt_questions:

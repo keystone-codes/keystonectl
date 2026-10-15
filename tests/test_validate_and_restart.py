@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from keystonectl.runner import CommandResult
 from tests.support.deploylab import DockerBox, apply_package
 
 PACKAGES = Path(__file__).resolve().parent / "data" / "packages"
@@ -516,3 +517,231 @@ def test_policy_env_roundtrip(tmp_path: Path) -> None:
     policy = tmp_path / "policy.yaml"
     box = _policy_box(policy)
     assert json.loads(json.dumps(box.config))["services"]["keystone"]["volumes"]
+
+
+def _fast_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = {"t": 0.0}
+    monkeypatch.setattr("keystonectl.generate.install._monotonic", lambda: clock["t"])
+
+    def advance(_seconds: float = 3) -> None:
+        clock["t"] += 10000
+
+    monkeypatch.setattr("keystonectl.generate.install.pause", advance)
+
+
+def _removals(runner) -> list[int]:
+    return [
+        index
+        for index, call in enumerate(runner.calls)
+        if "compose" in call.args and "rm" in call.args and "-s" in call.args
+    ]
+
+
+def _lock_names(root: Path) -> list[str]:
+    document = yaml.safe_load((root / "services.lock.yaml").read_text())
+    return [item["name"] for item in document.get("services") or []]
+
+
+class _TrackedBox(DockerBox):
+    """DockerBox that marks chosen services unhealthy and notes which files exist at ``rm``."""
+
+    def __init__(self, root: Path, watched: str) -> None:
+        super().__init__()
+        self.root = root
+        self.watched = watched
+        self.unhealthy: set[str] = set()
+        self.fragment_on_rm: list[bool] = []
+
+    def __call__(self, args, **kwargs):
+        if "compose" in args and "rm" in args and "-s" in args:
+            self.fragment_on_rm.append((self.root / "packages" / f"{self.watched}.yml").is_file())
+        if list(args[:2]) == ["docker", "inspect"] and args[-1] in self.unhealthy:
+            state = {"Status": "running", "ExitCode": 0, "Health": {"Status": "unhealthy"}}
+            return CommandResult(tuple(args), 0, json.dumps([{"State": state}]), "")
+        return super().__call__(args, **kwargs)
+
+
+_CATALOG_ANSWERS = {
+    "KEYSTONE_SETUP_RESOURCE_S3": "catalog",
+    "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_MAX_BYTES": "10",
+    "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_LINK_TTL_SECONDS": "60",
+}
+
+
+def _catalog_lab(root: Path, box: DockerBox):
+    from keystonectl.generate.install import ComposeDeployer
+    from tests.support.deploylab import LAYOUT
+    from tests.support.resources import Lab, s3_consumer, s3_provider
+
+    lab = Lab(root, [s3_consumer("file-mcp", namespace="files"), s3_provider("minio")])
+    lock = yaml.safe_load((root / "services.lock.yaml").read_text())
+    lock["layout"] = LAYOUT
+    (root / "services.lock.yaml").write_text(
+        yaml.safe_dump(lock, sort_keys=False), encoding="utf-8"
+    )
+    (root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (root / "docker-compose.packages.yml").write_text("services: {}\n", encoding="utf-8")
+    (root / "packages").mkdir()
+    (root / "keystonectl").mkdir()
+    (root / "keystonectl" / "upstreams.yaml").write_text(
+        "schema_version: 1\nentries: []\n", encoding="utf-8"
+    )
+    (root / "keystonectl" / "catalog-snapshot.yaml").write_text(
+        "active: []\nreserved: []\nwip: []\n", encoding="utf-8"
+    )
+    lab_docker = next(
+        outcome for prefix, outcome in lab.runner.rules if tuple(prefix) == ("docker",)
+    )
+
+    def docker(args, **kwargs):
+        listed = list(args)
+        provisioning = listed[:2] == ["docker", "run"] and "--consumer" in listed
+        inspecting = listed[:3] == ["docker", "network", "inspect"] and "--format" in listed
+        if provisioning or inspecting:
+            return lab_docker(args, **kwargs)
+        return box(args, **kwargs)
+
+    lab.runner.rules = [
+        (prefix, docker if tuple(prefix) == ("docker",) else outcome)
+        for prefix, outcome in lab.runner.rules
+    ]
+    lab.deployer = ComposeDeployer()
+    return lab
+
+
+def test_failed_first_install_stops_containers_and_drops_lock_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fast_clock(monkeypatch)
+    root = tmp_path / "root"
+    box = _TrackedBox(root, "file-mcp")
+    box.inspect_health = "unhealthy"
+    result, runner, _box = apply_package(root, "file-mcp", {"file-mcp": _facade()}, box=box)
+    assert result.code == 3
+    assert result.error["id"] == "service_unhealthy"
+    removals = _removals(runner)
+    assert len(removals) == 1
+    ups = [i for i, call in enumerate(runner.calls) if "compose" in call.args and "up" in call.args]
+    assert ups and ups[-1] < removals[0]
+    call = runner.calls[removals[0]].args
+    assert list(call[call.index("rm") :]) == ["rm", "-s", "-f", "file-mcp-mcp"]
+    assert box.fragment_on_rm == [True]
+    assert not (root / "packages" / "file-mcp.yml").exists()
+    assert (root / "docker-compose.packages.yml").read_text() == "services: {}\n"
+    assert "file-mcp" not in _lock_names(root)
+    assert result.result["rollback"] == {"containers": ["file-mcp-mcp"], "lock_entry": "dropped"}
+    assert "were stopped and removed" in result.error["message"]
+
+
+def test_failed_first_install_keeps_resource_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from keystonectl.resources.provision import consumer_secret_path
+    from tests.support.resources import install_ok_probes
+
+    _fast_clock(monkeypatch)
+    install_ok_probes(monkeypatch)
+    root = tmp_path / "root"
+    box = _TrackedBox(root, "file-mcp")
+    box.unhealthy.add("file-mcp-mcp")
+    lab = _catalog_lab(root, box)
+    answers = dict(_CATALOG_ANSWERS)
+    failed = lab.apply("file-mcp", environ=answers)
+    assert failed.code == 3, failed.error
+    assert failed.error["id"] == "service_unhealthy"
+    assert failed.result["rollback"]["lock_entry"] == "dropped"
+    assert "file-mcp" not in _lock_names(root)
+    assert "minio" in _lock_names(root)
+    document = yaml.safe_load((root / "services.lock.yaml").read_text())
+    resource = next(item for item in document["resources"] if item["kind"] == "s3")
+    assert resource["provider"] == "minio"
+    assert resource["consumers"] == []
+    assert (root / "packages" / "file-mcp.env").is_file()
+    assert consumer_secret_path(root, "file-mcp", "s3").is_file()
+    assert not (root / "packages" / "file-mcp.yml").exists()
+    stopped = [runner_call.args for runner_call in lab.runner.calls if "rm" in runner_call.args]
+    assert all("minio-server" not in call for call in stopped)
+    assert not any(
+        "mc" in call and ("rb" in call or "rm" in call) and "compose" not in call
+        for call in (item.args for item in lab.runner.calls)
+    )
+
+    box.unhealthy.clear()
+    again = lab.apply("file-mcp", environ=answers)
+    assert again.code == 0, again.error
+    assert again.missing == []
+    assert "file-mcp" in _lock_names(root)
+
+
+def test_failed_init_stops_containers(tmp_path: Path) -> None:
+    text = (PACKAGES / "docs-service" / "keystone-service.yaml").read_text()
+    box = _TrackedBox(tmp_path / "root", "docs-service")
+    box.init_fail.add("docs-service-migrate")
+    root = tmp_path / "root"
+    document = yaml.safe_load(text)
+    document.pop("needs", None)
+    result, runner, _box = apply_package(
+        root, "docs-service", {"docs-service": yaml.safe_dump(document)}, box=box
+    )
+    assert result.code == 3
+    assert result.error["id"] == "init_failed"
+    removals = _removals(runner)
+    assert len(removals) == 1
+    call = runner.calls[removals[0]].args
+    assert "docs-service-migrate" in call
+    assert box.fragment_on_rm == [True]
+    assert not (root / "packages" / "docs-service.yml").exists()
+    assert "docs-service" not in _lock_names(root)
+    rollback = result.result["rollback"]
+    assert rollback["lock_entry"] == "dropped"
+    assert "docs-service-migrate" in rollback["containers"]
+
+
+def test_failed_reapply_keeps_lock_entry_and_containers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fast_clock(monkeypatch)
+    root = tmp_path / "root"
+    document = yaml.safe_load((PACKAGES / "file-mcp" / "keystone-service.yaml").read_text())
+    document.pop("needs", None)
+    document["containers"]["mcp"]["env"] = [{"name": "FILE_MCP_MAX_BYTES"}]
+    manifests = {"file-mcp": yaml.safe_dump(document)}
+    variable = "KEYSTONE_SETUP_SERVICE_FILE_MCP_ENV_FILE_MCP_MAX_BYTES"
+    first, _runner, _box = apply_package(root, "file-mcp", manifests, sets={variable: "10"})
+    assert first.code == 0, first.error
+    fragment = (root / "packages" / "file-mcp.yml").read_bytes()
+    box = DockerBox()
+    box.inspect_health = "unhealthy"
+    second, runner, _box = apply_package(
+        root, "file-mcp", manifests, box=box, sets={variable: "20"}, reset=False
+    )
+    assert second.code == 3
+    assert second.error["id"] == "service_unhealthy"
+    assert "file-mcp" in _lock_names(root)
+    assert _removals(runner) == []
+    assert (root / "packages" / "file-mcp.yml").read_bytes() == fragment
+    assert second.result["rollback"] == {"containers": [], "lock_entry": "kept"}
+    assert "still recorded" in second.error["message"]
+
+
+def test_failed_provider_deploy_stops_provider_containers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.support.resources import install_ok_probes
+
+    _fast_clock(monkeypatch)
+    install_ok_probes(monkeypatch)
+    root = tmp_path / "root"
+    box = _TrackedBox(root, "minio")
+    box.unhealthy.add("minio-server")
+    lab = _catalog_lab(root, box)
+    result = lab.apply("file-mcp", environ=dict(_CATALOG_ANSWERS))
+    assert result.code == 3
+    assert result.error["id"] == "service_unhealthy"
+    removals = _removals(lab.runner)
+    assert len(removals) == 1
+    call = lab.runner.calls[removals[0]].args
+    assert list(call[call.index("rm") :]) == ["rm", "-s", "-f", "minio-server"]
+    assert box.fragment_on_rm == [True]
+    assert not (root / "packages" / "minio.yml").exists()
+    assert _lock_names(root) == []
