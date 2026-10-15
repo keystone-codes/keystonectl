@@ -106,7 +106,11 @@ def test_compose_too_old(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     from keystonectl.generate import checks as checks_mod
 
     monkeypatch.setattr(checks_mod, "read_compose_version", lambda: (0, "2.23.3\n"))
-    monkeypatch.setattr(checks_mod, "read_compose_config", lambda _root: (1, ""))
+    monkeypatch.setattr(
+        checks_mod,
+        "read_compose_config",
+        lambda _root, layout=None: (1, ""),
+    )
     root = tmp_path / "check"
     apply_package(root, "file-mcp", {"file-mcp": _facade()})
     checked = run_check(root)

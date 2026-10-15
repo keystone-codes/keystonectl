@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from keystonectl.errors import ERRORS, WARNINGS
+from keystonectl.generate.docker import compose_prefix
 from keystonectl.generate.packages_file import compose_is_old
 
 
@@ -25,20 +28,14 @@ def read_compose_version() -> tuple[int, str]:
     return completed.returncode, completed.stdout
 
 
-def read_compose_config(root: str) -> tuple[int, str]:
+def read_compose_config(root: str, layout: Mapping[str, Any] | None = None) -> tuple[int, str]:
+    root_path = Path(root)
+    if layout is None:
+        layout = {}
+    command = [*compose_prefix(root_path, layout), "config", "--format", "json"]
     try:
         completed = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                "docker-compose.yml",
-                "-f",
-                "docker-compose.packages.yml",
-                "config",
-                "--format",
-                "json",
-            ],
+            command,
             cwd=root,
             capture_output=True,
             text=True,
@@ -58,7 +55,7 @@ def check_compose_version(_context: Any) -> dict[str, str]:
     code, text = read_compose_version()
     if code != 0 or not text.strip():
         return _item(
-            "compose_version",
+            "compose_version_unknown",
             "warning",
             "Docker Compose version could not be read.",
             "Install the Docker Compose plugin 2.24 or newer.",
@@ -92,31 +89,26 @@ def check_override_included(context: Any) -> dict[str, str]:
 def check_override_access(context: Any) -> dict[str, str]:
     import json
 
-    code, text = read_compose_config(str(context.root))
+    lock = getattr(context, "lock", None)
+    layout = lock.get("layout") if isinstance(lock, dict) else None
+    if not isinstance(layout, dict):
+        layout = {}
+    code, text = read_compose_config(str(context.root), layout)
+    unchecked = _item(
+        "override_unchecked",
+        "warning",
+        "docker compose config did not return JSON, so override access was not checked.",
+        "Fix the compose files and run keystonectl check again.",
+    )
     if code != 0 or not text.strip():
-        return _item(
-            "override_access",
-            "warning",
-            "docker compose config did not return JSON, so override access was not checked.",
-            "Fix the compose files and run keystonectl check again.",
-        )
+        return unchecked
     try:
         document = json.loads(text)
     except json.JSONDecodeError:
-        return _item(
-            "override_access",
-            "warning",
-            "docker compose config did not return JSON, so override access was not checked.",
-            "Fix the compose files and run keystonectl check again.",
-        )
+        return unchecked
     services = document.get("services") if isinstance(document, dict) else None
     if not isinstance(services, dict):
-        return _item(
-            "override_access",
-            "warning",
-            "docker compose config did not return JSON, so override access was not checked.",
-            "Fix the compose files and run keystonectl check again.",
-        )
+        return unchecked
     if not services:
         return _item("override_access", "ok", "Compose config has no services to compare.")
     widened = _widened(context.root, services)

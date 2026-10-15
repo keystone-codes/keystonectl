@@ -409,6 +409,10 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `validation_skipped_local` | 0 | false | Upstream and policy checks were skipped because the local image is not built. | Build the keystone-mcp image, then run keystonectl service apply again. |
 | `override_not_included` | 0 | false | An override file exists but is not included. | Run keystonectl service apply <name> to include it. |
 | `override_widens_access` | 0 | false | The merged compose model gives a package service more access than the manifest. | This is the operator's choice. Review ports, privileges, and host mounts. |
+| `override_unchecked` | 0 | false | Override access could not be checked. | Say the check did not run; fix the compose files and run check again. |
+| `compose_version_unknown` | 0 | false | Docker Compose version could not be read. | Say compose version is unknown; install the Docker Compose plugin. |
+| `check_skipped_no_docker` | 0 | false | A check that needs Docker was skipped. | Say the check did not run because Docker is unavailable. |
+| `unparsed_enddate` | 0 | false | The certificate end date could not be read. | Say the certificate end date is unreadable; check the certificate file. |
 | `tls_untrusted` | 0 | false | The public certificate is not trusted by the system trust store. | The service answered. Install the certificate in the system trust store if clients should trust it. |
 | `dns_system_resolver` | 0 | false | dig is not installed, so the system resolver was used. | Install dig for a check against 1.1.1.1. The system resolver can be cached. |
 | `chain_missing` | 0 | false | The certificate file has no chain. | Add the intermediate certificates to the full chain. |
