@@ -373,6 +373,8 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `public_unreachable` | 3 | true | https on the public domain did not answer. | Finish the proxy and certificate, then run apply again. |
 | `internal_error` | 3 | false | An unexpected error occurred. | Report this with the command and the keystonectl version. |
 
+When `service apply` ends in `service_unhealthy` or `init_failed`, read `result.rollback` and tell the operator what is left. With `lock_entry` `dropped`, the containers in `containers` were stopped and removed, the package is not in `services.lock.yaml`, and only data stays: the resource, its env file, the secrets, volumes, buckets, and databases. With `lock_entry` `kept`, the service was installed before, its files were restored, and its containers were not touched. Running the command again is safe and does not ask about the resource a second time.
+
 ## Warnings
 
 Warnings stay on code 0. Retell them. Do not hide them behind "done".
