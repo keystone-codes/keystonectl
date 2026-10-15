@@ -811,6 +811,12 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "The service still runs. Add a lifecycle rule on the bucket later if you need it.",
         ),
         _w(
+            "resource_answer_ignored",
+            "An answer about a resource that is already bound was ignored.",
+            "The installation already has one provider for this kind; every service uses it. "
+            "To move a service elsewhere, remove it and the provider first.",
+        ),
+        _w(
             "policy_check_skipped",
             "The policy check was skipped.",
             "Set KEYSTONE_MCP_RBAC_MODE to something other than off and point "
