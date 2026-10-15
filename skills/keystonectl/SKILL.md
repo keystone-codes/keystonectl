@@ -37,6 +37,13 @@ keystonectl init --adopt /srv/keystone --json
 
 Then repeat `result.compose_command` to the operator. keystone-mcp starts with two compose files (`docker-compose.yml` and `docker-compose.packages.yml`). The operator runs that command, or keystone-deploy's `start.sh` does. You do not.
 - If any other check has `status: error`, retell those checks and do not install anything until the operator decides.
+- If `check` or `catalog list` warns `default_catalog_behind`, the recorded catalog tag is older than this keystonectl. Tell the operator. The warning names the `catalog set-ref` command. Run it only after they agree, the same way as `catalog add`:
+
+```
+keystonectl --root /srv/keystone catalog set-ref keystone-codes v1.0.0 --json
+```
+
+Use the name and the tag from the warning, not this example, when they differ.
 
 ## Install flow
 
@@ -253,7 +260,7 @@ install -m 600 /dev/null /root/keystone-secrets/pg-url && nano /root/keystone-se
 Pass the path in a `…_FILE` variable. Do not read the file and do not print it. If the operator pastes a secret anyway, do not repeat it, do not use it, and tell them to rotate that key or password.
 3. Never pass a secret as a command argument or as a variable value. Only a path, and only in a name that ends with `_FILE`.
 4. **Do not touch policy.** Do not edit the policy file and do not call `policy_*`. Hand the recommended rows to the policy skill (Policy).
-5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`.
+5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`.
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
@@ -292,6 +299,7 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `version_not_found` | 3 | false | That version is not listed in the catalog. | Run keystonectl catalog list and pick a listed version. |
 | `source_invalid` | 3 | false | The catalog source is not valid. | Use an https://, ssh://, git@host:path, or file:// URL. http:// is refused. |
 | `source_exists` | 3 | false | A source with that name or address is already configured. | Pick another --name, or edit sources.yaml. |
+| `source_not_found` | 3 | false | No source with that name is configured. | Run keystonectl catalog list and pass a name from that list. |
 | `tag_not_found` | 3 | false | That git tag does not exist. | Check the ref in sources.yaml or catalog.yaml. For the default source, update keystonectl or add sources.yaml with a ref that exists. |
 | `tag_moved` | 3 | false | The tag now points at a different commit than the one recorded in the lock. | Refuse the move. Pin a commit, or upgrade on purpose with service upgrade. |
 | `manifest_invalid` | 3 | false | The package manifest is not valid. | Fix the problems listed in result.problems and run keystonectl lint. |
@@ -385,6 +393,8 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `local_source` | 0 | false | This source uses a file:// URL. | file:// is for tests and local development, not for a shared catalog. |
 | `compat_mismatch` | 0 | false | The manifest compatibility range differs from the catalog. | The manifest range is the one that is enforced. |
 | `catalog_ref_chosen` | 0 | false | No --ref was given, so the newest vX.Y.Z tag was selected. | Pass --ref to pin a different catalog tag. |
+| `default_catalog_behind` | 0 | false | A catalog source is pinned to an older tag than this keystonectl expects. | Run keystonectl catalog set-ref with the tag named in the warning. |
+| `installed_version_missing` | 0 | false | An installed package version is no longer listed in its catalog. | Upgrade or apply will need another version of that package. |
 | `compose_file_ignored` | 0 | false | A compose file in the package is ignored. | The installer never reads it. |
 | `published_name_long` | 0 | false | A published tool name is longer than 64 characters. | Many MCP clients reject names longer than 64 characters. |
 | `builtin_list_may_be_stale` | 0 | false | built-in tool names are known up to keystone-mcp 0.5.0 | built-in tool names are known up to keystone-mcp 0.5.0; the final check is upstream validate during apply. |

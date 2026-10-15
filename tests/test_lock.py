@@ -197,3 +197,36 @@ def test_cli_read_command_works_when_locked(tmp_path: Path) -> None:
     assert completed.returncode == 0
     assert payload["code"] == 0
     assert payload["error"] is None
+
+
+def test_cli_catalog_set_ref_gets_busy_when_locked(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    write_empty_lock(root)
+    holder = _hold_lock_externally(root / "services.lock.yaml")
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "keystonectl",
+                "--root",
+                str(root),
+                "--json",
+                "catalog",
+                "set-ref",
+                "keystone-codes",
+                "v1.0.0",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+    payload = json.loads(completed.stdout)
+    assert completed.returncode == 3
+    assert payload["code"] == 3
+    assert payload["command"] == "catalog set-ref"
+    assert payload["error"]["id"] == "busy"
+    assert payload["retryable"] is True

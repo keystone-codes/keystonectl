@@ -11,11 +11,13 @@ from typing import Any
 
 import yaml
 
+from keystonectl.catalog import CatalogError, load_sources
 from keystonectl.compat import detect_keystone_mcp_version
-from keystonectl.errors import ERRORS, fragment_modified_message
+from keystonectl.errors import ERRORS, WARNINGS, fragment_modified_message
 from keystonectl.keystone_mcp_rules import MAX_REGISTRY_ENTRIES, namespace_errors
 from keystonectl.lock import LockError, load_lock, validate_lock
 from keystonectl.output import Result
+from keystonectl.sources import default_catalog_behind_warnings
 
 COMPOSE_CANDIDATES = ("docker-compose.yml", "docker-compose.yaml", "compose.yaml", "compose.yml")
 _EXTRA: list[Callable[..., dict[str, Any]]] = []
@@ -408,6 +410,23 @@ def _compat_checks(
     return checks, missing
 
 
+def _default_catalog_checks(root: Path) -> list[dict[str, str]]:
+    """Warn when sources.yaml pins the default catalog behind this keystonectl.
+
+    A missing file uses the built-in pin, which matches this release, so it stays quiet.
+    An unreadable sources.yaml is not turned into a new check error here.
+    """
+    try:
+        sources = load_sources(root / "sources.yaml")
+    except CatalogError:
+        return []
+    hint = WARNINGS["default_catalog_behind"].action
+    return [
+        _item(item["id"], "warning", item["message"], hint)
+        for item in default_catalog_behind_warnings(sources)
+    ]
+
+
 def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result:
     from keystonectl.compose_gen import ensure_registered
     from keystonectl.remote import ensure_remote_checks
@@ -474,6 +493,7 @@ def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result
             checks.extend(item for item in produced if isinstance(item, dict))
         elif isinstance(produced, dict):
             checks.append(produced)
+    checks.extend(_default_catalog_checks(root))
     errors = [item for item in checks if item["status"] == "error"]
     blocking = [item for item in errors if item["id"] != "keystone_mcp_version_unknown"]
     if missing and not blocking:

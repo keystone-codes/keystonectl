@@ -68,6 +68,8 @@ Each source:
 
 When `sources.yaml` is missing, `DEFAULT_SOURCES` applies: one source `keystone-codes` pointing at `https://github.com/keystone-codes/keystone-catalog.git` with ref `DEFAULT_CATALOG_REF` (`v1.0.0`) and priority `100`.
 
+The first `catalog add` writes that file and records the ref it resolved. Later releases of keystonectl may raise `DEFAULT_CATALOG_REF`, but they do not rewrite a pin already on disk, and reading the file never substitutes the new tag. `catalog list` and `check` warn `default_catalog_behind` when the source whose URL is the default catalog is pinned to an older `vX.Y.Z` tag than `DEFAULT_CATALOG_REF`. A commit SHA is not compared. Move the pin with `catalog set-ref <name> <ref>`: it checks the new tag or commit, rewrites only that source's `ref`, and replaces the catalog cache. Installed packages and `services.lock.yaml` stay as they are. Passing the ref the source already has changes nothing and does not contact the network.
+
 ## Referring to a package
 
 Syntax: `[source/]name[@X.Y.Z]`

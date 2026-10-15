@@ -1,4 +1,4 @@
-"""Catalog sources, package resolution, and ``catalog add|list``."""
+"""Catalog sources, package resolution, and ``catalog add|list|set-ref``."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import yaml
 from packaging.version import Version
 
 from keystonectl.catalog import (
+    DEFAULT_CATALOG_REF,
     DEFAULT_SOURCES,
     CatalogError,
     Source,
@@ -401,12 +402,18 @@ def _dump_sources(sources: list[Source]) -> str:
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
 
 
-def _source_invalid(url: str, problems: list[str], warnings: list[dict[str, str]]) -> Result:
+def _source_invalid(
+    url: str,
+    problems: list[str],
+    warnings: list[dict[str, str]],
+    *,
+    command: str = "catalog add",
+) -> Result:
     spec = ERRORS["source_invalid"]
     message = "; ".join(problems) if problems else spec.title
     return Result(
         code=spec.code,
-        command="catalog add",
+        command=command,
         summary=spec.title,
         target=url,
         warnings=warnings,
@@ -468,6 +475,133 @@ def _name_conflicts(
     return warnings, conflicts
 
 
+def _version_tag(ref: str) -> Version | None:
+    if _VTAG.fullmatch(ref):
+        return Version(ref[1:])
+    return None
+
+
+def default_catalog_behind_warnings(sources: list[Source]) -> list[dict[str, str]]:
+    """Warn when the default catalog URL is pinned to an older ``vX.Y.Z`` tag.
+
+    A commit SHA is not compared. Reading never rewrites the recorded ref.
+    """
+    expected = _version_tag(DEFAULT_CATALOG_REF)
+    if expected is None:
+        return []
+    default_url = DEFAULT_SOURCES[0].url
+    found: list[dict[str, str]] = []
+    for source in sources:
+        if source.url != default_url:
+            continue
+        pinned = _version_tag(source.ref)
+        if pinned is None or pinned >= expected:
+            continue
+        found.append(
+            warning(
+                "default_catalog_behind",
+                (
+                    f"Source {source.name} is pinned to {source.ref}; "
+                    f"this keystonectl expects {DEFAULT_CATALOG_REF}. "
+                    f"Run keystonectl catalog set-ref {source.name} {DEFAULT_CATALOG_REF}."
+                ),
+            )
+        )
+    return found
+
+
+def _fetch_catalog_document(
+    root: Path,
+    url: str,
+    ref: str,
+    runner: CommandRunner,
+    *,
+    command: str,
+    warnings: list[dict[str, str]],
+) -> tuple[Path, dict[str, Any]] | Result:
+    """Clone ``ref`` and load ``catalog.yaml``. A ``Result`` means the fetch failed."""
+    try:
+        tree, _commit = fetch_tree(runner, url, ref, root)
+    except FetchError as exc:
+        spec = ERRORS[exc.error_id]
+        return Result(
+            code=spec.code,
+            command=command,
+            summary=spec.title,
+            target=url,
+            error={"id": spec.id, "message": exc.message, "hint": spec.action},
+            retryable=spec.retryable,
+            warnings=warnings,
+        )
+    catalog_path = tree / "catalog.yaml"
+    try:
+        document = load_catalog(catalog_path) if catalog_path.is_file() else None
+    except CatalogError as exc:
+        shutil_rmtree(tree)
+        return _source_invalid(url, exc.messages, warnings, command=command)
+    if document is None:
+        shutil_rmtree(tree)
+        return _source_invalid(url, ["catalog.yaml is missing."], warnings, command=command)
+    return tree, document
+
+
+def _write_sources_file(sources_path: Path, updated: list[Source]) -> None:
+    if sources_path.is_file():
+        backup = Path(str(sources_path) + ".bak")
+        backup.write_bytes(sources_path.read_bytes())
+        backup.chmod(0o600)
+    sources_path.write_text(_dump_sources(updated), encoding="utf-8")
+    sources_path.chmod(0o600)
+
+
+def _installed_version_warnings(
+    root: Path,
+    source_name: str,
+    ref: str,
+    document: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    """Warn for lock entries from ``source_name`` whose version the new catalog dropped.
+
+    A corrupt lock is left untouched; ``check`` reports that on its own.
+    """
+    from keystonectl.lock import LockError, load_lock
+
+    try:
+        lock = load_lock(Path(root) / "services.lock.yaml")
+    except LockError:
+        return []
+    packages = document.get("packages") if isinstance(document.get("packages"), dict) else {}
+    found: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in lock.get("services") or []:
+        if not isinstance(item, dict) or item.get("source") != source_name:
+            continue
+        package = item.get("package") or item.get("name")
+        version = item.get("version")
+        if not isinstance(package, str) or not isinstance(version, str):
+            continue
+        if (package, version) in seen:
+            continue
+        seen.add((package, version))
+        entry = packages.get(package) if isinstance(packages, dict) else None
+        listed: list[str] = []
+        if isinstance(entry, dict):
+            listed = [str(row.get("version")) for row in _versions(entry)]
+        if version in listed:
+            continue
+        found.append(
+            warning(
+                "installed_version_missing",
+                (
+                    f"{package} {version} is installed from {source_name}, "
+                    f"and {source_name} {ref} no longer lists it; "
+                    "upgrade or apply will need another version"
+                ),
+            )
+        )
+    return found
+
+
 def add_source(
     root: Path,
     url: str,
@@ -521,28 +655,12 @@ def add_source(
         warnings.append(
             warning("catalog_ref_chosen", f"No --ref given; using the newest tag {tag}.")
         )
-    try:
-        tree, _commit = fetch_tree(runner, url, chosen_ref, root)
-    except FetchError as exc:
-        spec = ERRORS[exc.error_id]
-        return Result(
-            code=spec.code,
-            command=command,
-            summary=spec.title,
-            target=url,
-            error={"id": spec.id, "message": exc.message, "hint": spec.action},
-            retryable=spec.retryable,
-            warnings=warnings,
-        )
-    catalog_path = tree / "catalog.yaml"
-    try:
-        document = load_catalog(catalog_path) if catalog_path.is_file() else None
-    except CatalogError as exc:
-        shutil_rmtree(tree)
-        return _source_invalid(url, exc.messages, warnings)
-    if document is None:
-        shutil_rmtree(tree)
-        return _source_invalid(url, ["catalog.yaml is missing."], warnings)
+    fetched = _fetch_catalog_document(
+        root, url, chosen_ref, runner, command=command, warnings=warnings
+    )
+    if isinstance(fetched, Result):
+        return fetched
+    tree, document = fetched
     chosen_name = name or str(document.get("name"))
     sources_path = Path(root) / "sources.yaml"
     if sources_path.is_file():
@@ -616,12 +734,7 @@ def add_source(
         )
     shadowed, conflicts = _name_conflicts(root, existing, chosen_name, document)
     warnings.extend(shadowed)
-    if sources_path.is_file():
-        backup = Path(str(sources_path) + ".bak")
-        backup.write_bytes(sources_path.read_bytes())
-        backup.chmod(0o600)
-    sources_path.write_text(_dump_sources(updated), encoding="utf-8")
-    sources_path.chmod(0o600)
+    _write_sources_file(sources_path, updated)
     replace_tree(tree, catalog_cache(root, chosen_name))
     packages = document.get("packages") if isinstance(document.get("packages"), dict) else {}
     bundles = document.get("bundles") if isinstance(document.get("bundles"), dict) else {}
@@ -651,6 +764,135 @@ def add_source(
     )
 
 
+def set_source_ref(root: Path, name: str, ref: str, runner: CommandRunner) -> Result:
+    """Move one source's pin to ``ref``. The same ref does not touch the network."""
+    command = "catalog set-ref"
+    sources_path = Path(root) / "sources.yaml"
+    if sources_path.is_file():
+        try:
+            existing = load_sources(sources_path)
+        except CatalogError as exc:
+            spec = ERRORS["source_invalid"]
+            return Result(
+                code=spec.code,
+                command=command,
+                summary=spec.title,
+                target=name,
+                error={"id": spec.id, "message": "; ".join(exc.messages), "hint": spec.action},
+                retryable=spec.retryable,
+            )
+    else:
+        existing = list(DEFAULT_SOURCES)
+    chosen = next((source for source in existing if source.name == name), None)
+    if chosen is None:
+        spec = ERRORS["source_not_found"]
+        listed = ", ".join(source.name for source in existing)
+        return Result(
+            code=spec.code,
+            command=command,
+            summary=spec.title,
+            target=name,
+            error={
+                "id": spec.id,
+                "message": f"No source named {name}. Sources: {listed}.",
+                "hint": spec.action,
+            },
+            retryable=spec.retryable,
+        )
+    if chosen.ref == ref:
+        return Result(
+            code=0,
+            command=command,
+            summary=f"Source {name} is already at {ref}.",
+            target=chosen.url,
+            changes=0,
+            actions=[
+                {
+                    "id": "catalog-set-ref",
+                    "title": f"Source {name} stays at {ref}",
+                    "status": "unchanged",
+                }
+            ],
+            result={
+                "name": name,
+                "url": chosen.url,
+                "ref": ref,
+                "previous_ref": chosen.ref,
+                "packages": _cached_package_count(root, name),
+                "conflicts": [],
+            },
+        )
+    warnings: list[dict[str, str]] = []
+    fetched = _fetch_catalog_document(
+        root, chosen.url, ref, runner, command=command, warnings=warnings
+    )
+    if isinstance(fetched, Result):
+        return fetched
+    tree, document = fetched
+    updated = [
+        Source(
+            source.name,
+            source.url,
+            ref if source.name == name else source.ref,
+            source.priority,
+        )
+        for source in existing
+    ]
+    payload = {
+        "schema_version": 1,
+        "sources": [
+            {"name": item.name, "url": item.url, "ref": item.ref, "priority": item.priority}
+            for item in updated
+        ],
+    }
+    problems = sources_errors(payload)
+    if problems:
+        shutil_rmtree(tree)
+        return _source_invalid(chosen.url, problems, warnings, command=command)
+    others = [source for source in existing if source.name != name]
+    shadowed, conflicts = _name_conflicts(root, others, name, document)
+    warnings.extend(shadowed)
+    warnings.extend(_installed_version_warnings(root, name, ref, document))
+    _write_sources_file(sources_path, updated)
+    replace_tree(tree, catalog_cache(root, name))
+    packages = document.get("packages") if isinstance(document.get("packages"), dict) else {}
+    return Result(
+        code=0,
+        command=command,
+        summary=f"Moved source {name} to {ref}.",
+        target=chosen.url,
+        warnings=warnings,
+        actions=[
+            {
+                "id": "catalog-set-ref",
+                "title": f"Move source {name} from {chosen.ref} to {ref}",
+                "status": "done",
+            }
+        ],
+        changes=1,
+        result={
+            "name": name,
+            "url": chosen.url,
+            "ref": ref,
+            "previous_ref": chosen.ref,
+            "packages": len(packages),
+            "conflicts": conflicts,
+        },
+    )
+
+
+def _cached_package_count(root: Path, name: str) -> int:
+    path = catalog_cache(root, name) / "catalog.yaml"
+    if not path.is_file():
+        return 0
+    try:
+        document = load_catalog(path)
+    except CatalogError:
+        return 0
+    packages = document.get("packages") if isinstance(document.get("packages"), dict) else {}
+    return len(packages)
+
+
 def list_catalogs(
     root: Path,
     runner: CommandRunner,
@@ -670,6 +912,7 @@ def list_catalogs(
             error={"id": spec.id, "message": "; ".join(exc.messages), "hint": spec.action},
         )
     catalogs, warnings, error_id, message = refresh_all(root, sources, runner)
+    warnings = [*default_catalog_behind_warnings(sources), *warnings]
     if error_id:
         spec = ERRORS[error_id]
         return Result(

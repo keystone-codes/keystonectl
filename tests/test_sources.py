@@ -377,3 +377,83 @@ def test_fetch_creates_keystonectl_dir_on_bare_root(tmp_path: Path) -> None:
     mode = keystonectl_dir.stat().st_mode & 0o777
     assert mode == 0o700
     assert (keystonectl_dir / ".gitignore").read_text() == "*\n"
+
+
+def _older_tag(ref: str) -> str:
+    from packaging.version import Version
+
+    version = Version(ref.removeprefix("v"))
+    if version.micro > 0:
+        return f"v{version.major}.{version.minor}.{version.micro - 1}"
+    if version.minor > 0:
+        return f"v{version.major}.{version.minor - 1}.0"
+    return f"v{version.major - 1}.9.0"
+
+
+def test_default_catalog_behind_on_list_until_set_ref(tmp_path: Path) -> None:
+    from keystonectl.catalog import DEFAULT_CATALOG_REF, DEFAULT_SOURCES
+    from keystonectl.sources import list_catalogs, set_source_ref
+    from tests.support.served_catalog import SHA as git_sha
+    from tests.support.served_catalog import catalog_runner
+
+    behind = _older_tag(DEFAULT_CATALOG_REF)
+    document = {
+        "schema_version": 1,
+        "sources": [
+            {
+                "name": "keystone-codes",
+                "url": DEFAULT_SOURCES[0].url,
+                "ref": behind,
+                "priority": 100,
+            },
+            {
+                "name": "partner",
+                "url": "https://example.com/partner.git",
+                "ref": behind,
+                "priority": 50,
+            },
+        ],
+    }
+    (tmp_path / "sources.yaml").write_text(
+        yaml.safe_dump(document, sort_keys=False), encoding="utf-8"
+    )
+    tags = f"{git_sha}\trefs/tags/{behind}\n{git_sha}\trefs/tags/{DEFAULT_CATALOG_REF}\n"
+    runner = catalog_runner(tags=tags)
+    listed = list_catalogs(tmp_path, runner, keystone_version="0.5.0", lock={})
+    assert listed.code == 0, listed.error
+    noted = [item for item in listed.warnings if item["id"] == "default_catalog_behind"]
+    assert len(noted) == 1
+    message = noted[0]["message"]
+    assert message == (
+        f"Source keystone-codes is pinned to {behind}; "
+        f"this keystonectl expects {DEFAULT_CATALOG_REF}. "
+        f"Run keystonectl catalog set-ref keystone-codes {DEFAULT_CATALOG_REF}."
+    )
+    moved = set_source_ref(tmp_path, "keystone-codes", DEFAULT_CATALOG_REF, runner)
+    assert moved.code == 0, moved.error
+    again = list_catalogs(tmp_path, runner, keystone_version="0.5.0", lock={})
+    assert again.code == 0, again.error
+    assert all(item["id"] != "default_catalog_behind" for item in again.warnings)
+
+
+def test_default_catalog_behind_absent_for_sha_pin(tmp_path: Path) -> None:
+    from keystonectl.catalog import DEFAULT_SOURCES
+    from keystonectl.sources import list_catalogs
+    from tests.support.served_catalog import catalog_runner
+
+    document = {
+        "schema_version": 1,
+        "sources": [
+            {
+                "name": "keystone-codes",
+                "url": DEFAULT_SOURCES[0].url,
+                "ref": SHA,
+                "priority": 100,
+            }
+        ],
+    }
+    (tmp_path / "sources.yaml").write_text(
+        yaml.safe_dump(document, sort_keys=False), encoding="utf-8"
+    )
+    listed = list_catalogs(tmp_path, catalog_runner(), keystone_version="0.5.0", lock={})
+    assert all(item["id"] != "default_catalog_behind" for item in listed.warnings)
