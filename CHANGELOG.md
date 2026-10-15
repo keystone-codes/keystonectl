@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `output.schema.json` types `result` for apply, list, status, remove, bundle and catalog list; `service apply` reports `result.resources`.
+
+### Fixed
+
+- Docs: `service list --json` returns lock entries, not names.
+- Skill fixtures match the real `result` of catalog list, status and apply.
+
 ## [0.1.1] - 2026-10-15
 
 ### Changed

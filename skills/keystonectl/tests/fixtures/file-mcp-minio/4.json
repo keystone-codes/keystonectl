@@ -22,12 +22,13 @@
   "error": null,
   "retryable": false,
   "result": {
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "version": "1.0.0",
     "namespace": "files",
     "tools": [
-      "files_create_upload_url",
-      "files_get_download_link",
-      "files_get_file_info"
+      "create_upload_url",
+      "get_download_link",
+      "get_file_info"
     ],
     "critical_tools": [
       "files_create_upload_url",
@@ -36,12 +37,14 @@
     "resources": [
       {
         "kind": "s3",
-        "mode": "catalog",
-        "package": "minio"
+        "origin": "catalog",
+        "provider": "minio"
       }
     ],
     "public": {
+      "state": "ready",
       "domain": "files.example.com",
+      "last_error": null,
       "tls": "certbot"
     },
     "recommended_policy": {
