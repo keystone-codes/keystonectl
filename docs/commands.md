@@ -838,10 +838,12 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | cert_expiring | warning | false | Renew it before it expires. service status warns again until you do. |
 | cert_may_not_cover_domain | warning | false | Check the certificate names. A wildcard covers one label only. |
 | chain_missing | warning | false | Add the intermediate certificates to the full chain. |
+| check_skipped_no_docker | warning | false | Install Docker to run this check. |
 | comments_dropped | warning | false | A one-time .orig copy was saved next to the file. |
 | compat_mismatch | warning | false | The manifest range is the one that is enforced. |
 | compose_file_ignored | warning | false | The installer never reads it. |
 | compose_variable_unset | warning | false | Set the variable in the environment or in the deployment .env file. |
+| compose_version_unknown | warning | false | Install the Docker Compose plugin 2.24 or newer. |
 | discovery_pending | warning | false | keystone-mcp will try again on its own. Check keystonectl service status. |
 | dns_system_resolver | warning | false | Install dig for a check against 1.1.1.1. The system resolver can be cached. |
 | extra_hosts_manual | warning | false | Add the host line yourself in the override or in your own compose file. |
@@ -852,6 +854,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | local_source | warning | false | file:// is for tests and local development, not for a shared catalog. |
 | orphan_fragment | warning | false | Remove the file or install the package that owns it. |
 | override_not_included | warning | false | Run keystonectl service apply <name> to include it. |
+| override_unchecked | warning | false | Fix the compose files and run keystonectl check again. |
 | override_widens_access | warning | false | This is the operator's choice. Review ports, privileges, and host mounts. |
 | package_name_shadowed | warning | false | Install it by full name source/name. |
 | policy_already_inconsistent | warning | false | The new snapshot does not add unmatched patterns. Fix the policy when you can. |
@@ -875,6 +878,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | tls_untrusted | warning | false | The service answered. Install the certificate in the system trust store if clients should trust it. |
 | tools_unreachable | warning | false | Ask an administrator to add policy rows (see the recommended policy below). |
 | unmanaged_upstream | warning | false | The entry is left as-is. It belongs to the operator. |
+| unparsed_enddate | warning | false | Check the certificate file format and run keystonectl check again. |
 | validation_skipped_local | warning | false | Build the keystone-mcp image, then run keystonectl service apply again. |
 <!-- /generated -->
 
