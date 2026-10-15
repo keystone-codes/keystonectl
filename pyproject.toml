@@ -64,6 +64,8 @@ only-include = ["src/keystonectl", "README.md", "LICENSE", "CHANGELOG.md", "pypr
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Byte-pinned copy of stdio-box tests/support/atlassian_mock.py. Do not reformat.
+extend-exclude = ["scripts/e2e/fixtures/atlassian-mock"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/keystonectl/resources/*_probe.py" = ["BLE001", "S110"]

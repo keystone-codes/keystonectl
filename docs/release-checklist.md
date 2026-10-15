@@ -30,6 +30,7 @@ Commit K is the candidate under test for every row below, including A–H. Fill 
 |---|---|---|
 | `ci` on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539656674> |
 | Manual `e2e` workflow_dispatch on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539668689> (both layouts, success) |
+| e2e atlassian_profiles pass (ci) | scenario `atlassian_profiles` is pass on `--profile ci` | |
 | Trial `Release` run with `dry_run` on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539675781> |
 
 ## A. Clean VM, open example

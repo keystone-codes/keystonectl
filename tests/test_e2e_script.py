@@ -390,6 +390,43 @@ def test_leftover_check_covers_tmp_files_and_packages_dir() -> None:
     assert "kept.txt" in body
 
 
+def test_atlassian_profiles_is_wired_into_main() -> None:
+    body = _function_body("main")
+    assert body.index("scenario_partner_catalog") < body.index("scenario_atlassian_profiles")
+    assert body.index("scenario_legacy_gone") < body.index("scenario_atlassian_profiles")
+    assert "path: packages/atlassian" in _function_body("scenario_atlassian_profiles")
+    assert "path: packages/atlassian" in _function_body("build_local_catalogs")
+    assert re.search(
+        r"STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0\.1\.0@sha256:[0-9a-f]{64}",
+        SCRIPT,
+    )
+    assert "16. `atlassian_profiles`" in README
+    assert "| 16 `atlassian_profiles` | runs | runs | runs | runs |" in README
+
+
+def test_atlassian_check_hides_secrets_and_creds_tokens() -> None:
+    import importlib.util
+
+    path = ROOT / "scripts" / "e2e" / "atlassian_check.py"
+    text = path.read_text(encoding="utf-8")
+    assert "/creds/***" in text
+    for line in text.splitlines():
+        if "print(" in line or "json.dump" in line:
+            assert "E2E_ATL_" not in line
+    spec = importlib.util.spec_from_file_location("e2e_atlassian_check", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    shown = module.host_path("https://atlassian.e2e.test/creds/super-secret-token?x=1")
+    assert shown == "atlassian.e2e.test/creds/***"
+    assert "super-secret-token" not in shown
+    assert module._leaks({"steps": [{"form": "https://host/creds/tok"}]}, {})
+    assert not module._leaks({"steps": [{"form": "atlassian.e2e.test/creds/***"}]}, {})
+    assert module._leaks(
+        {"steps": [{"note": "secret-value"}]}, {"E2E_ATL_DEV_TOKEN": "secret-value"}
+    )
+
+
 def test_ci_profile_keeps_local_partner_catalog() -> None:
     vm_url = SCRIPT.index(
         'E2E_PARTNER_CATALOG_URL="https://github.com/keystone-codes/e2e-partner-catalog.git"'
