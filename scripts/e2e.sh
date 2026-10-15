@@ -223,6 +223,9 @@ kc() {
   KC_RC=0
   KC_OUT="$(keystonectl --root "$ROOT" "$@" --json --non-interactive 2>>"$WORK/log/kc.err")" || KC_RC=$?
   printf '%s\n' "$KC_OUT" >"$WORK/log/kc.out"
+  if [[ "$KC_RC" -eq 0 && "$1" == "service" && "$2" == "remove" ]]; then
+    jq_ kept <"$WORK/log/kc.out" >>"$WORK/state/kept.txt" 2>/dev/null || true
+  fi
 }
 
 clear_confirms() {
@@ -294,6 +297,50 @@ write_secret() {
 rand_hex() { openssl rand -hex "$1"; }
 
 sha_file() { openssl dgst -sha256 "$1" | awk '{print $NF}'; }
+
+write_operator_snapshot() {
+  python3 - "$ROOT" "$WORK/state/operator.sha" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+out = pathlib.Path(sys.argv[2])
+managed_start = "# >>> keystonectl: managed block, do not edit >>>"
+managed_end = "# <<< keystonectl <<<"
+
+
+def digest_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def digest_env(path: pathlib.Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    start = text.find(managed_start)
+    end = text.find(managed_end)
+    if start >= 0 and end > start:
+        end += len(managed_end)
+        if end < len(text) and text[end : end + 1] == "\n":
+            end += 1
+        text = text[:start] + text[end:]
+    return digest_bytes(text.encode("utf-8"))
+
+
+lines: list[str] = []
+compose = root / "docker-compose.yml"
+lines.append(f"docker-compose.yml={digest_bytes(compose.read_bytes())}")
+upstreams = root / "upstreams.yaml"
+if upstreams.is_file():
+    lines.append(f"upstreams.yaml={digest_bytes(upstreams.read_bytes())}")
+policy = root / "policy" / "rbac-policy.yaml"
+if policy.is_file():
+    lines.append(f"policy/rbac-policy.yaml={digest_bytes(policy.read_bytes())}")
+env = root / ".env"
+if env.is_file():
+    lines.append(f".env={digest_env(env)}")
+out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+}
 
 snapshot_tree() {
   local out="$1" rel path file
@@ -545,6 +592,7 @@ EOF
   KEYSTONE_SERVICE="$(lockq layout-keystone-service)"
   [[ -n "$KEYSTONE_SERVICE" ]] || fail prepare "layout has no keystone service"
   write_sources
+  write_operator_snapshot
 }
 
 prepare_deploy_ci() {
@@ -1538,14 +1586,12 @@ scenario_check_clean() {
 }
 
 scenario_legacy_gone() {
-  local started root
+  local started root service_name legacy_out leftover_out operator_out
   started="$(date +%s)"
-  if [[ "$LAYOUT" != "keystone-deploy" ]]; then
-    skip legacy_gone "only keystone-deploy"
-    return 0
-  fi
-  root="$(dirname "$ROOT")"
-  if ! legacy_out="$(python3 - "$root" <<'PY' 2>&1
+  if [[ "$LAYOUT" == "keystone-deploy" ]]; then
+    note "legacy_gone on keystone-deploy: forbidden strings, keystone-mcp build, lock on vm, shared leftovers"
+    root="$(dirname "$ROOT")"
+    if ! legacy_out="$(python3 - "$root" <<'PY' 2>&1
 import pathlib
 import sys
 
@@ -1650,22 +1696,167 @@ if problems:
     raise SystemExit("\n".join(problems))
 PY
 )"; then
-    fail legacy_gone "$legacy_out"
-  fi
-  if grep -n 'build:' "$ROOT/docker-compose.yml" | grep 'keystone-mcp' >/dev/null; then
-    fail legacy_gone "keystone-mcp still has a build"
+      fail legacy_gone "$legacy_out"
+    fi
+    service_name="keystone-mcp"
+    if grep -n 'build:' "$ROOT/docker-compose.yml" | grep 'keystone-mcp' >/dev/null; then
+      fail legacy_gone "keystone-mcp still has a build"
+    fi
+    if [[ "$PROFILE" == "vm" ]]; then
+      [[ -f "$ROOT/services.lock.yaml" ]] || fail legacy_gone "lock is missing"
+      lockq layout-version | has_line 1 || fail legacy_gone "layout_version is not 1"
+    fi
+  elif [[ "$LAYOUT" == "production-example" ]]; then
+    note "legacy_gone on production-example: operator files, keystone build, lock flavor, shared leftovers"
+    [[ -f "$WORK/state/operator.sha" ]] || fail legacy_gone "operator snapshot is missing"
+    if ! operator_out="$(python3 - "$ROOT" "$WORK/state/operator.sha" <<'PY' 2>&1
+import hashlib
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected_path = pathlib.Path(sys.argv[2])
+managed_start = "# >>> keystonectl: managed block, do not edit >>>"
+managed_end = "# <<< keystonectl <<<"
+
+
+def digest_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def digest_env(path: pathlib.Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    start = text.find(managed_start)
+    end = text.find(managed_end)
+    if start >= 0 and end > start:
+        end += len(managed_end)
+        if end < len(text) and text[end : end + 1] == "\n":
+            end += 1
+        text = text[:start] + text[end:]
+    return digest_bytes(text.encode("utf-8"))
+
+
+def current_lines() -> list[str]:
+    lines: list[str] = []
+    compose = root / "docker-compose.yml"
+    lines.append(f"docker-compose.yml={digest_bytes(compose.read_bytes())}")
+    upstreams = root / "upstreams.yaml"
+    if upstreams.is_file():
+        lines.append(f"upstreams.yaml={digest_bytes(upstreams.read_bytes())}")
+    policy = root / "policy" / "rbac-policy.yaml"
+    if policy.is_file():
+        lines.append(f"policy/rbac-policy.yaml={digest_bytes(policy.read_bytes())}")
+    env = root / ".env"
+    if env.is_file():
+        lines.append(f".env={digest_env(env)}")
+    return lines
+
+
+expected = expected_path.read_text(encoding="utf-8").splitlines()
+current = current_lines()
+if expected != current:
+    raise SystemExit("\n".join(f"mismatch: {line}" for line in sorted(set(expected) ^ set(current))))
+PY
+)"; then
+      fail legacy_gone "$operator_out"
+    fi
+    service_name="$KEYSTONE_SERVICE"
+    [[ -n "$service_name" ]] || fail legacy_gone "keystone service is unknown"
+    [[ -f "$ROOT/services.lock.yaml" ]] || fail legacy_gone "lock is missing"
+    lockq layout-flavor | has_line keystone-mcp-example || fail legacy_gone "layout flavor is wrong"
+    lockq layout-version | has_line 1 || fail legacy_gone "layout_version is not 1"
+  else
+    skip legacy_gone "unknown layout ${LAYOUT}"
+    return 0
   fi
   python3 -c '
 import pathlib, sys
 text = pathlib.Path(sys.argv[1]).read_text()
-start = text.split("keystone-mcp:", 1)[1]
+service = sys.argv[2]
+marker = f"{service}:"
+if marker not in text:
+    raise SystemExit(f"missing service {service}")
+start = text.split(marker, 1)[1]
 block = start.split("\n\n", 1)[0]
 if "build:" in block:
     raise SystemExit(1)
-' "$ROOT/docker-compose.yml" || fail legacy_gone "keystone-mcp service has build"
-  if [[ "$PROFILE" == "vm" ]]; then
-    [[ -f "$ROOT/services.lock.yaml" ]] || fail legacy_gone "lock is missing"
-    lockq layout-version | has_line 1 || fail legacy_gone "layout_version is not 1"
+' "$ROOT/docker-compose.yml" "$service_name" || fail legacy_gone "${service_name} service has build"
+  if ! leftover_out="$(uv run --project "$REPO" python - "$ROOT" "$WORK/state/kept.txt" <<'PY' 2>&1
+import fnmatch
+import pathlib
+import sys
+
+import yaml
+
+root = pathlib.Path(sys.argv[1])
+kept_path = pathlib.Path(sys.argv[2])
+problems: list[str] = []
+
+for path in root.rglob(".*.tmp"):
+    if ".keystonectl" in path.parts:
+        continue
+    problems.append(str(path.relative_to(root)))
+
+tmp_dir = root / ".keystonectl" / "tmp"
+if tmp_dir.is_dir():
+    for path in tmp_dir.rglob("*"):
+        if path.is_file():
+            problems.append(str(path.relative_to(root)))
+
+lock_path = root / "services.lock.yaml"
+if lock_path.is_file():
+    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8")) or {}
+    names = [
+        item["name"]
+        for item in lock.get("services") or []
+        if isinstance(item, dict) and item.get("name")
+    ]
+else:
+    names = []
+
+kept: set[str] = set()
+if kept_path.is_file():
+    kept = {line.strip() for line in kept_path.read_text(encoding="utf-8").splitlines() if line.strip()}
+
+allowed: set[str] = set()
+for name in names:
+    allowed.add(f"packages/{name}.yml")
+    allowed.add(f"packages/{name}.yml.bak")
+    allowed.add(f"packages/{name}.yml.ejected.bak")
+
+packages = root / "packages"
+if packages.is_dir():
+    for path in packages.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        if rel in allowed or rel in kept:
+            continue
+        if rel.endswith(".override.yml"):
+            continue
+        if any(
+            fnmatch.fnmatch(path.name, f"{name}*.env")
+            or fnmatch.fnmatch(path.name, f"{name}*.env.bak")
+            for name in names
+        ):
+            continue
+        problems.append(rel)
+
+for rel in ("services.lock.yaml",):
+    path = root / rel
+    if path.is_file() and (path.stat().st_mode & 0o777) != 0o600:
+        problems.append(f"{rel}: mode is not 600")
+
+if packages.is_dir():
+    for path in packages.rglob("*.env"):
+        if path.is_file() and (path.stat().st_mode & 0o777) != 0o600:
+            problems.append(f"{path.relative_to(root).as_posix()}: mode is not 600")
+
+if problems:
+    raise SystemExit("\n".join(sorted(problems)))
+PY
+)"; then
+    fail legacy_gone "$leftover_out"
   fi
   pass legacy_gone "$started"
 }
@@ -1766,6 +1957,7 @@ main() {
   WORK="$(mktemp -d /tmp/ks-cat-e2e.XXXXXX)"
   DIAG="${REPO}/e2e-diagnostics"
   mkdir -p "$WORK/secrets" "$WORK/log" "$WORK/state" "$WORK/src"
+  : >"$WORK/state/kept.txt"
   chmod 700 "$WORK" "$WORK/secrets" "$WORK/log"
   verify_image_pins
   uv sync --frozen --project "$REPO"
