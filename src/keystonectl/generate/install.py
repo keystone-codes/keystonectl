@@ -457,8 +457,11 @@ def _fill_secrets(
     manifest: Mapping[str, Any],
     undo: _Undo,
 ) -> None:
+    from keystonectl.lifecycle import generated_secrets_path
+
     package = str(manifest["name"])
     plan = placement(manifest)
+    kept = read_env(generated_secrets_path(ctx.root, package))
     for secret in plan.secrets:
         path = ctx.root / secret.file
         current = read_env(path)
@@ -466,7 +469,8 @@ def _fill_secrets(
             ctx.secrets.register(current[secret.name])
             continue
         if secret.generate_bytes:
-            value = token_urlsafe(secret.generate_bytes)
+            reused = kept.get(secret.name) or ""
+            value = reused if reused else token_urlsafe(secret.generate_bytes)
         elif secret.required:
             var = pkg_var(package, f"SECRET_{secret.name}_FILE")
             loaded = _lookup_secret(ctx, package, var)
@@ -1274,6 +1278,7 @@ def _save_service(
     registry_name: str | None,
     fragment: str,
 ) -> None:
+    from keystonectl.lifecycle import generated_secrets_path
     from keystonectl.resources.binding import _ensure_service, _generated_names
 
     package = ctx.resolved
@@ -1323,6 +1328,8 @@ def _save_service(
     stamp_lock_public(ctx, manifest, entry)
     ctx.lock["updated_by"] = f"keystonectl {__version__}"
     save_lock(ctx.root / "services.lock.yaml", ctx.lock, now=ctx.clock())
+    if role == "service":
+        generated_secrets_path(ctx.root, name).unlink(missing_ok=True)
 
 
 def entry_resources(ctx: Context, name: str) -> list[str]:

@@ -153,7 +153,7 @@ KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE=yes \
 keystonectl --root /srv/keystone service remove file-mcp --json
 ```
 
-Retell `result.kept`.
+Retell `result.kept`. If `generated_secrets_kept` is present, the generated secrets and the volumes both stayed. The secrets are in `.keystonectl/secrets/<name>.generated.env`. Installing the package again reuses them, and the file is removed after that install succeeds. Delete the file only together with those volumes.
 
 ## Connect a running service
 
@@ -410,6 +410,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `unmanaged_upstream` | 0 | false | An upstream registry entry is not managed by keystonectl. | The entry is left as-is. It belongs to the operator. |
 | `orphan_fragment` | 0 | false | A package fragment has no matching lock entry. | Remove the file or install the package that owns it. |
 | `fragment_modified` | 0 | false | A generated package fragment was edited by hand. | Move your changes into the override file, or eject the service. |
+| `generated_secrets_kept` | 0 | false | Generated secrets of a package with volumes are kept so a later install can reuse them. | Delete .keystonectl/secrets/<name>.generated.env only together with the volumes that still need those secrets. |
 | `s3_plain_http` | 0 | false | The S3 endpoint uses plain HTTP. | Prefer https:// for storage that is not on your own Docker network. |
 | `postgres_plain_connection` | 0 | false | The PostgreSQL connection does not require certificate verification. | Prefer sslmode require, verify-ca, or verify-full for a server you do not run here. |
 | `s3_lifecycle_unsupported` | 0 | false | Storage works, but old uploads will not be deleted automatically. | The service still runs. Add a lifecycle rule on the bucket later if you need it. |
