@@ -199,6 +199,27 @@ def test_vm_profile_defaults_to_network_partner_catalog() -> None:
     assert 'if [[ -z "${E2E_PARTNER_CATALOG_URL+x}" ]]; then' in SCRIPT
 
 
+def test_legacy_gone_runs_on_both_layouts() -> None:
+    body = _function_body("scenario_legacy_gone")
+    assert 'skip legacy_gone "only keystone-deploy"' not in body
+    assert '"$LAYOUT" == "keystone-deploy"' in body
+    assert '"$LAYOUT" == "production-example"' in body
+
+
+def test_operator_snapshot_taken_after_publish_port_rewrite() -> None:
+    body = _function_body("prepare_production_example")
+    assert body.index("rewrite_publish_port") < body.index("write_operator_snapshot")
+    assert "operator.sha" in _function_body("write_operator_snapshot")
+
+
+def test_leftover_check_covers_tmp_files_and_packages_dir() -> None:
+    body = _function_body("scenario_legacy_gone")
+    assert ".*.tmp" in body
+    assert '.keystonectl" / "tmp' in body
+    assert "packages/" in body
+    assert "kept.txt" in body
+
+
 def test_ci_profile_keeps_local_partner_catalog() -> None:
     vm_url = SCRIPT.index(
         'E2E_PARTNER_CATALOG_URL="https://github.com/keystone-codes/e2e-partner-catalog.git"'
