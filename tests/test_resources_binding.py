@@ -92,6 +92,85 @@ def test_second_consumer_reuses_provider_without_question(
     assert any(item["id"] == "consumer.provision" for item in result.actions)
 
 
+def test_external_answer_ignored_when_catalog_bound_warns(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if kind != "s3":
+        pytest.skip("catalog-bound S3 scenario")
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    first = lab.apply("file-mcp", environ={"KEYSTONE_SETUP_RESOURCE_S3": "catalog"})
+    assert first.code == 0, first.error
+    result = lab.plan("pages-mcp", environ={"KEYSTONE_SETUP_RESOURCE_S3": "external"})
+    assert result.code == 0, result.error
+    matches = [item for item in result.warnings if item["id"] == "resource_answer_ignored"]
+    assert len(matches) == 1
+    assert "minio" in matches[0]["message"]
+    assert any(item["id"] == "consumer.provision" for item in result.actions)
+
+
+def test_catalog_answer_ignored_when_external_bound_warns(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if kind != "s3":
+        pytest.skip("external-bound S3 scenario")
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    first = lab.apply("file-mcp", environ=lab.s3_answers())
+    assert first.code == 0, first.error
+    result = lab.plan("pages-mcp", environ={"KEYSTONE_SETUP_RESOURCE_S3": "catalog"})
+    assert result.code in (0, 2), result.error
+    matches = [item for item in result.warnings if item["id"] == "resource_answer_ignored"]
+    assert len(matches) == 1
+    assert "external storage" in matches[0]["message"]
+
+
+def test_matching_answer_does_not_warn(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    if kind == "s3":
+        first_env = {"KEYSTONE_SETUP_RESOURCE_S3": "catalog"}
+        second_env = {"KEYSTONE_SETUP_RESOURCE_S3": "catalog"}
+    else:
+        first_env = {"KEYSTONE_SETUP_RESOURCE_POSTGRES": "catalog"}
+        second_env = {"KEYSTONE_SETUP_RESOURCE_POSTGRES": "catalog"}
+    first = lab.apply(consumer_name(kind), environ=first_env)
+    assert first.code == 0, first.error
+    second_name = "pages-mcp" if kind == "s3" else "url-mcp"
+    result = lab.plan(second_name, environ=second_env)
+    assert result.code == 0, result.error
+    assert not any(item["id"] == "resource_answer_ignored" for item in result.warnings)
+
+
+def test_other_provider_package_answer_warns(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if kind != "s3":
+        pytest.skip("S3 provider package scenario")
+    install_ok_probes(monkeypatch)
+    extra = s3_provider("garage")
+    lab = Lab(tmp_path, standard_manifests(), extra=[extra])
+    first = lab.apply(
+        "file-mcp",
+        environ={
+            "KEYSTONE_SETUP_RESOURCE_S3": "catalog",
+            "KEYSTONE_SETUP_RESOURCE_S3_PACKAGE": "local/minio",
+        },
+    )
+    assert first.code == 0, first.error
+    result = lab.plan(
+        "pages-mcp",
+        environ={"KEYSTONE_SETUP_RESOURCE_S3_PACKAGE": "extra/garage"},
+    )
+    assert result.code in (0, 2), result.error
+    matches = [item for item in result.warnings if item["id"] == "resource_answer_ignored"]
+    assert len(matches) == 1
+    assert "garage" in matches[0]["message"]
+    assert "minio" in matches[0]["message"]
+
+
 def test_one_provider_per_kind(tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch) -> None:
     install_ok_probes(monkeypatch)
     lab = Lab(tmp_path, standard_manifests())
