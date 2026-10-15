@@ -162,6 +162,8 @@ Only `mcp.container` joins `keystone-mcp-upstreams` with a network alias equal t
 
 The manifest does not restrict the service's own outbound calls. Package networks and `keystone-resources` are ordinary bridges, so egress exists. The generator, not the manifest, builds those networks.
 
+A container runs as its image user unless `containers.<role>.user` is set, with Docker's default capabilities. keystonectl adds `no-new-privileges:true` to every container and never drops capabilities. Packages may rely on this; see [ADR 0007](../adr/0007-stdio-servers-as-boxes.md).
+
 Names of variables must be unique inside one container. The set is `env`, `secrets`, every `bind_env` value that reaches that container, and the variables the installer injects: `mcp.bearer_env`, `identity.secret_env`, and `identity.audience_env` on the facade; `public_base_url_env` on every long-running container. The same `env` name on a different container is fine.
 
 A secret `name` shared by two containers is one value. The two declarations must be identical.
