@@ -158,6 +158,29 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Fix the problems listed in result.problems and run keystonectl lint.",
         ),
         _e(
+            "provider_invalid",
+            3,
+            False,
+            "The stdio provider descriptor is not valid.",
+            "Fix the problems listed in result.problems and run "
+            "keystonectl package wrap-stdio again.",
+        ),
+        _e(
+            "discovery_failed",
+            3,
+            True,
+            "The server did not list its tools.",
+            "Read the lines in result.stderr; if the server needs a real account to start, "
+            "set discovery.mode: manual and pass --tools-snapshot.",
+        ),
+        _e(
+            "manifest_unrecognized",
+            3,
+            False,
+            "The existing manifest could not be updated in place.",
+            "Run again with --force to rewrite it.",
+        ),
+        _e(
             "catalog_invalid",
             3,
             False,
@@ -997,6 +1020,11 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "installed_version_missing",
             "An installed package version is no longer listed in its catalog.",
             "Upgrade or apply will need another version of that package.",
+        ),
+        _w(
+            "tools_snapshot_missing",
+            "The package lists only the creds_* tools.",
+            "Run wrap-stdio again without --no-discovery.",
         ),
     ]
 )

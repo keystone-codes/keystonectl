@@ -30,7 +30,7 @@ Why: [ADR 0001](../adr/0001-catalog-outside-core.md).
 | `kind` | no | `service` (default) or `resource` |
 | `summary` | no | one line, 1–200 characters |
 | `source` | yes | git URL (`https://`, `ssh://`, `git@host:path`, or `file:///` for local checks only) |
-| `path` | no | directory inside the repo that contains `keystone-service.yaml` (default `.`) |
+| `path` | no | directory inside the repo that contains `keystone-service.yaml` (default `.`). `packages/atlassian` — several packages in one repository, as in stdio-box |
 | `provides` | for `resource` | `{kind: s3 \| postgres, version: 1}` — no `container` field in the catalog |
 | `versions` | yes | 1–100 rows; each row pins one release |
 
