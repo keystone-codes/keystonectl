@@ -12,6 +12,8 @@ What it removes: every container of the package (`docker compose rm -s -f`, befo
 
 What it leaves: volumes (`ks-pkg-<name>-*`), the consumer's bucket or database, the certificate, the override file, and an ejected fragment. The summary says the override is yours. Tool names that still match a policy `allow` pattern move from `active` to `reserved` (and into `.keystonectl/retired-tools.txt`) so keystone-mcp can still start. The warning `policy_rows_orphaned` lists those patterns. A later apply or remove drops a retired name once no pattern matches it.
 
+A service with named volumes also keeps the secrets keystonectl generated (`env.generated`) in `.keystonectl/secrets/<name>.generated.env` (mode 600). The warning `generated_secrets_kept` names those secrets and the volumes. Installing the service again reuses the saved values and deletes the file once the install is recorded. Delete that file only together with the volumes. If the cached manifest is missing, the secrets are kept anyway.
+
 A provider with no consumers can be removed. Its volume and `packages/<provider>.env` stay, so a later install reuses the same root credentials.
 
 ## upgrade

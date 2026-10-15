@@ -942,6 +942,12 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "Delete these policy rows. The tool names stay reserved until you do.",
         ),
         _w(
+            "generated_secrets_kept",
+            "Generated secrets of a package with volumes are kept so a later install can reuse them.",
+            "Delete .keystonectl/secrets/<name>.generated.env only together with the volumes "
+            "that still need those secrets.",
+        ),
+        _w(
             "remote_without_identity",
             "This remote service has no bearer or identity secret.",
             "Catalog packages must check the assertion. Here that check is yours.",
