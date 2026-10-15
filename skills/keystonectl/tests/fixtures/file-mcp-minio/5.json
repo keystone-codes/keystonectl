@@ -11,19 +11,35 @@
   "error": null,
   "retryable": false,
   "result": {
-    "containers": [
+    "services": [
       {
-        "service": "file-mcp-mcp",
-        "state": "running"
+        "name": "file-mcp",
+        "managed": "generated",
+        "version": "1.0.0",
+        "namespace": "files",
+        "containers": [
+          {
+            "role": "mcp",
+            "service": "file-mcp-mcp",
+            "state": "running",
+            "health": "healthy",
+            "exit_code": 0
+          }
+        ],
+        "keystone": {
+          "ready": "ready",
+          "discovery": "available"
+        },
+        "public": {
+          "state": "ready",
+          "domain": "files.example.com",
+          "tls": "certbot",
+          "inside": "ok",
+          "not_after": "2026-12-01T00:00:00Z"
+        },
+        "problems": [],
+        "warnings": []
       }
-    ],
-    "discovery": "available",
-    "public": {
-      "domain": "files.example.com",
-      "tls": "certbot",
-      "not_after": "2026-12-01T00:00:00Z",
-      "renewal": "certbot"
-    },
-    "problems": []
+    ]
   }
 }
