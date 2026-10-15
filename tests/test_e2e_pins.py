@@ -1,5 +1,6 @@
 """The e2e script pins the published release and does not patch layout A."""
 
+import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,3 +30,10 @@ def test_script_pins_published_refs() -> None:
         assert pin in SCRIPT
     assert (ROOT / "scripts" / "e2e.sh").is_file()
     assert ":latest" not in SCRIPT
+
+
+def test_atlassian_mock_matches_sha256() -> None:
+    fixture = ROOT / "scripts" / "e2e" / "fixtures" / "atlassian-mock"
+    digest = (fixture / "SHA256").read_text(encoding="utf-8").strip()
+    actual = hashlib.sha256((fixture / "atlassian_mock.py").read_bytes()).hexdigest()
+    assert actual == digest
