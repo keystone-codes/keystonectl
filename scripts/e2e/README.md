@@ -4,7 +4,7 @@
 
 ## Machine
 
-Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile needs a public name, port 80 for certbot, and `sudo` for the same nginx vhost the CI profile uses for manual TLS (a self-signed certificate on the sample vhost; keystonectl only checks that TLS answers, not that the chain is trusted). The VM profile checks PyPI for the requested `keystonectl` version (`curl https://pypi.org/pypi/keystonectl/<version>/json`); `--keystonectl <wheel or checkout>` is optional once that version is published and required for an unpublished candidate. Without `curl` the script only warns and continues; the install itself then fails with a clear error if the version is missing. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
+Linux with Docker, `uv`, `git`, `openssl`, and `curl`. The CI profile also needs `sudo` to install nginx, write `/etc/hosts`, and trust the generated certificate. The VM profile requires an explicit `--domain` and, with `--tls certbot`, a real `E2E_TLS_EMAIL` (Let's Encrypt rejects `@example.com`, `@example.org`, and `@example.net`). It needs port 80 for certbot and `sudo` for the same nginx vhost the CI profile uses for manual TLS (a self-signed certificate on the sample vhost; keystonectl only checks that TLS answers, not that the chain is trusted). The VM profile installs the checkout's `[project].version` from PyPI unless you pass `--keystonectl <wheel or checkout>`; it checks that version with `curl https://pypi.org/pypi/keystonectl/<version>/json`. Without `curl` the script only warns and continues; the install itself then fails with a clear error if the version is missing. Do not run the VM profile unless that machine is the one you are recording in `docs/release-checklist.md`.
 
 Port 8080 must be free. If it is not, pass `--publish-port` with a free loopback port. The script rewrites only its own copy of the compose file and records that as a note in the report.
 
@@ -19,7 +19,7 @@ Containers and the temp directory use the `ks-cat-e2e-` prefix. Networks require
 | `--storage` | `both` | `minio`, `external`, or `both` |
 | `--postgres` | `both` | `provider`, `external`, or `both` |
 | `--tls` | `custom` | `custom` or `certbot` (`certbot` only with `--profile vm`) |
-| `--domain` | `files.e2e.test` in CI | public name |
+| `--domain` | `files.e2e.test` in CI; required on `vm` | public name |
 | `--publish-port` | `8080` | host port for keystone-mcp |
 | `--report` | `e2e-report.jsonl` | one JSON object per line |
 | `--keep` | off | leave the deployment in place after a passing run |
@@ -58,6 +58,29 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 15. Forbidden leftovers on both layouts. Shared checks: no `.*.tmp` files outside `.keystonectl/`, an empty `.keystonectl/tmp/`, no unexplained files under `packages/` (lock names, operator `*.override.yml`, and paths kept by `service remove` are allowed), and mode `600` on `services.lock.yaml` and `packages/*.env`. On **keystone-deploy**, the script also scans `setup.sh`, `start.sh`, docs, and `mcp/**` for legacy external-API strings, refuses a `build:` on `keystone-mcp`, and on the vm profile checks `layout_version`. On **production-example**, it compares operator-file digests to a snapshot taken at the end of prepare (compose, optional `upstreams.yaml`, policy, and `.env` outside the managed block), refuses a `build:` on the layout keystone service, and checks `layout.flavor` and `layout_version`. The report notes which branch ran.
 
 On the VM profile with `--tls certbot`, an unnumbered scenario runs between 12 and 13: the certificate for `--domain` was issued by Let's Encrypt, and re-applying does not change its serial number (certbot did not re-issue).
+
+### Scenario matrix
+
+The table lists each numbered scenario plus the certbot step. Cells assume default `--storage both` and `--postgres both`. Use `--tls custom` on the `ci` profile and `--tls certbot` on the `vm` profile (as in `docs/release-checklist.md`).
+
+| Scenario | production-example ci | production-example vm | keystone-deploy ci | keystone-deploy vm |
+|---|---|---|---|---|
+| 1 `agent_path_missing` | runs | runs | runs | skipped (setup.sh already installed bundle minimal) |
+| 2 `install_file_mcp_minio` | runs | runs | runs | runs |
+| 3 `policy_untouched` | runs | runs | runs | runs |
+| 4 `rerun_no_questions` | runs | runs | runs | runs |
+| 5 `docs_service_postgres_provider` | runs | runs | runs | runs |
+| 6 `override_survives_upgrade` | runs | runs | runs | runs |
+| 7 `direct_edit_is_caught` | runs | runs | runs | runs |
+| 8 `eject_and_adopt` | runs | runs | runs | runs |
+| 9 `remove_and_reinstall` | runs | runs | runs | runs |
+| 10 `external_s3` | runs | runs | runs | runs |
+| 11 `external_postgres` | runs | runs | runs | runs |
+| 12 `partner_catalog` | runs | runs | runs | runs |
+| certbot `tls_certbot` | skipped (certbot runs only on the vm profile) | runs | skipped (certbot runs only on the vm profile) | runs |
+| 13 `tls_manual` | runs | runs | skipped (only the production example) | skipped (only the production example) |
+| 14 `check_clean` | runs | runs | runs | runs |
+| 15 `legacy_gone` | runs | runs | runs | runs |
 
 ## Report
 
