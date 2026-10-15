@@ -182,6 +182,33 @@ def test_unreachable_tools_is_warning(tmp_path: Path) -> None:
     assert any(item["id"] == "tools_unreachable" for item in result.warnings)
 
 
+def test_live_names_failure_warns_when_keystone_running(tmp_path: Path) -> None:
+    policy = tmp_path / "policy.yaml"
+    box = _policy_box(policy)
+    box.keystone_id = "cid\n"
+    box.live_catalog_code = 1
+    box.live_catalog_stderr = "ModuleNotFoundError: No module named 'keystone_mcp.rbac.catalog'\n"
+    result, _runner, _box = apply_package(
+        tmp_path / "root", "file-mcp", {"file-mcp": _facade()}, box=box
+    )
+    assert result.code == 0, result.error
+    warning = next(item for item in result.warnings if item["id"] == "builtin_tools_unavailable")
+    assert "ModuleNotFoundError" in warning["message"]
+
+
+def test_live_names_failure_silent_when_keystone_stopped(tmp_path: Path) -> None:
+    policy = tmp_path / "policy.yaml"
+    box = _policy_box(policy)
+    box.keystone_id = ""
+    box.live_catalog_code = 1
+    box.live_catalog_stderr = "ModuleNotFoundError: missing\n"
+    result, _runner, _box = apply_package(
+        tmp_path / "root", "file-mcp", {"file-mcp": _facade()}, box=box
+    )
+    assert result.code == 0, result.error
+    assert not any(item["id"] == "builtin_tools_unavailable" for item in result.warnings)
+
+
 def test_live_names_used_when_keystone_running(tmp_path: Path) -> None:
     policy = tmp_path / "policy.yaml"
     box = _policy_box(policy)

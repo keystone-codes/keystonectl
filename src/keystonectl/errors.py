@@ -739,6 +739,12 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "the final check is upstream validate during apply.",
         ),
         _w(
+            "builtin_tools_unavailable",
+            "The live built-in tool list could not be read during apply.",
+            "Check that keystone-mcp is healthy and its version is supported (see `keystonectl check`), "
+            "then run apply again.",
+        ),
+        _w(
             "keystone_compose_missing",
             "No keystone-mcp compose file was found.",
             "Put keystone-mcp's docker-compose.yml and .env here "

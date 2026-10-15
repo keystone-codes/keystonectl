@@ -388,6 +388,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `compose_file_ignored` | 0 | false | A compose file in the package is ignored. | The installer never reads it. |
 | `published_name_long` | 0 | false | A published tool name is longer than 64 characters. | Many MCP clients reject names longer than 64 characters. |
 | `builtin_list_may_be_stale` | 0 | false | built-in tool names are known up to keystone-mcp 0.5.0 | built-in tool names are known up to keystone-mcp 0.5.0; the final check is upstream validate during apply. |
+| `builtin_tools_unavailable` | 0 | false | The live built-in tool list could not be read during apply. | Say the policy check was partial; suggest `check`. |
 | `keystone_compose_missing` | 0 | false | No keystone-mcp compose file was found. | Put keystone-mcp's docker-compose.yml and .env here (see keystone-mcp examples/production) and run keystonectl init again. |
 | `layout_changed` | 0 | false | The recognized layout differs from the lock. | Review the listed fields. The lock was updated to match the compose file. |
 | `compose_variable_unset` | 0 | false | A compose variable was empty because it was not set. | Set the variable in the environment or in the deployment .env file. |
