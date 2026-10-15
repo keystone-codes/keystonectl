@@ -100,12 +100,12 @@ Same checks as script scenarios 4 and 6–9, on the stand.
 
 ## G. Partner catalog
 
-Same check as script scenario 12. The partner catalog is a separate git repository, not a `file://` URL.
+Same check as script scenario 12 on the vm profile. The partner catalog is a separate git repository, not a `file://` URL.
 
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
-| Add the partner source | `catalog add https://github.com/keystone-codes/e2e-partner-catalog.git --name partner` | source added | |
-| Plan the partner package | `service plan partner/file-mcp` | the package plans on the same path as a catalog package | |
+| Add the partner source | `catalog add https://github.com/keystone-codes/e2e-partner-catalog.git --ref v1.0.0` | source added | |
+| Plan the partner package | `service plan e2e-partner/file-mcp` | the package plans on the same path as a catalog package | |
 
 ## H. Concept readiness
 
