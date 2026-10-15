@@ -832,6 +832,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | usage | 1 | false | Check the command and flags. Run keystonectl --help. |
 | version_not_found | 3 | false | Run keystonectl catalog list and pick a listed version. |
 | builtin_list_may_be_stale | warning | false | built-in tool names are known up to keystone-mcp 0.5.0; the final check is upstream validate during apply. |
+| builtin_tools_unavailable | warning | false | Check that keystone-mcp is healthy and its version is supported (see `keystonectl check`), then run apply again. |
 | bundle_name_shadowed | warning | false | Install it by full name source/name. |
 | catalog_cached | warning | false | Restore network access and run the command again to refresh the cache. |
 | catalog_ref_chosen | warning | false | Pass --ref to pin a different catalog tag. |
