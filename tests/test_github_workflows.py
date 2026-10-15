@@ -148,3 +148,32 @@ def test_no_pypi_token_secret_is_referenced() -> None:
     text = (WORKFLOWS_DIR / "release.yml").read_text(encoding="utf-8")
     assert "secrets.PYPI" not in text
     assert "password:" not in text
+
+
+def test_e2e_dispatch_accepts_partner_catalog_url() -> None:
+    doc = _load("e2e.yml")
+    on = _workflow_on(doc)
+    partner = on["workflow_dispatch"]["inputs"]["partner_catalog_url"]
+    assert partner.get("required") is False
+    assert partner.get("default", "") == ""
+    assert (
+        doc["jobs"]["e2e"]["env"]["E2E_PARTNER_CATALOG_URL"] == "${{ inputs.partner_catalog_url }}"
+    )
+    assert on["pull_request"]["paths"] == [
+        "src/**",
+        "schemas/**",
+        "nginx/**",
+        "scripts/e2e*/**",
+        "scripts/e2e.sh",
+        "tests/e2e/**",
+        "tests/test_e2e_*.py",
+        "skills/**",
+        ".github/workflows/e2e.yml",
+    ]
+    assert doc["jobs"]["e2e"]["strategy"]["matrix"]["layout"] == [
+        "production-example",
+        "keystone-deploy",
+    ]
+    runs = [step.get("run") or "" for step in doc["jobs"]["e2e"]["steps"]]
+    assert any("--profile ci" in run for run in runs)
+    assert not any("--profile vm" in run for run in runs)
