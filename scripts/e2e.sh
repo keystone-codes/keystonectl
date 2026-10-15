@@ -106,14 +106,31 @@ if [[ "$PROFILE" == "ci" && "$TLS" == "certbot" ]]; then
   echo "ci profile only runs --tls custom" >&2
   exit 1
 fi
+if [[ "$PROFILE" == "vm" && -z "$DOMAIN" ]]; then
+  echo "--domain is required for the vm profile" >&2
+  exit 1
+fi
 if [[ -z "$DOMAIN" ]]; then
   DOMAIN="files.e2e.test"
+fi
+if [[ "$PROFILE" == "vm" && "$TLS" == "certbot" ]]; then
+  if [[ -z "${E2E_TLS_EMAIL:-}" ]]; then
+    echo "set E2E_TLS_EMAIL to a real address; Let's Encrypt refuses example domains" >&2
+    exit 1
+  fi
+  case "$E2E_TLS_EMAIL" in
+    *@example.com|*@example.org|*@example.net)
+      echo "set E2E_TLS_EMAIL to a real address; Let's Encrypt refuses example domains" >&2
+      exit 1
+      ;;
+  esac
 fi
 if [[ -z "$KEYSTONECTL_SPEC" ]]; then
   if [[ "$PROFILE" == "ci" ]]; then
     KEYSTONECTL_SPEC="$REPO"
   else
-    KEYSTONECTL_SPEC="pypi:0.1.0"
+    PYPROJECT_VERSION="$(python3 -c 'import tomllib, sys; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$REPO/pyproject.toml")"
+    KEYSTONECTL_SPEC="pypi:${PYPROJECT_VERSION}"
   fi
 fi
 pypi_version_exists() {
@@ -656,8 +673,8 @@ prepare_deploy_vm() {
   export KEYSTONE_SETUP_RESOURCE_S3=catalog
   export KEYSTONE_SETUP_SERVICE_FILE_MCP_DOMAIN="$DOMAIN"
   export KEYSTONE_SETUP_SERVICE_FILE_MCP_DNS=check
-  export KEYSTONE_SETUP_TLS_EMAIL="${E2E_TLS_EMAIL:-admin@example.com}"
   if [[ "$TLS" == "certbot" ]]; then
+    export KEYSTONE_SETUP_TLS_EMAIL="$E2E_TLS_EMAIL"
     export KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS=certbot
   else
     export KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS=custom
@@ -756,7 +773,7 @@ export_file_public() {
     export KEYSTONE_SETUP_SERVICE_FILE_MCP_DNS=check
     if [[ "$TLS" == "certbot" ]]; then
       export KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS=certbot
-      export KEYSTONE_SETUP_TLS_EMAIL="${E2E_TLS_EMAIL:-admin@example.com}"
+      export KEYSTONE_SETUP_TLS_EMAIL="$E2E_TLS_EMAIL"
     else
       export KEYSTONE_SETUP_SERVICE_FILE_MCP_TLS=custom
       export KEYSTONE_SETUP_SERVICE_FILE_MCP_CERT_PATH="${E2E_CERT_PATH:?set E2E_CERT_PATH}"
