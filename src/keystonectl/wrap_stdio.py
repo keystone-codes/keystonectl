@@ -1,8 +1,4 @@
-"""Write a stdio-box package from a provider directory.
-
-``STDIO_BOX_IMAGE`` still has an open digest: 64 zeros, not a published pin.
-After the stdio-box image release, replace those zeros with the recorded digest.
-"""
+"""Write a stdio-box package from a provider directory."""
 
 from __future__ import annotations
 
@@ -28,8 +24,10 @@ from keystonectl.lint import lint_manifest
 from keystonectl.output import Result
 from keystonectl.resources import schema_text
 
-# The digest is still open. These zeros are the pre-release placeholder, not a pin.
-STDIO_BOX_IMAGE = "ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:" + ("0" * 64)
+STDIO_BOX_IMAGE = (
+    "ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:"
+    "4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519"
+)
 STDIO_BOX_REF = "v0.1.0"
 PROVIDER_SCHEMA_SHA256 = "4ffc23499879d983dd0fb8028c6f91a92fd6f4799cdd99139b02cc77d99db2b0"
 _DIGEST_PLACEHOLDER = "0" * 64
@@ -941,8 +939,6 @@ def _render_manifest(
     ]
     if derived_image:
         lines.append("    # placeholder until the release workflow pins the digest")
-    else:
-        lines.append("    # placeholder until the stdio-box image release records the digest")
     lines.extend(
         [
             f"    image: {json.dumps(image)}",
