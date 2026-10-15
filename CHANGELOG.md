@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `CONTRIBUTING.md` sets the changelog line rules; a test checks `[Unreleased]`.
 - e2e: scenario 12 adds the partner catalog over the network when `E2E_PARTNER_CATALOG_URL` is set; the vm profile does so by default.
 - `check` reports `override_unchecked`, `compose_version_unknown` and `check_skipped_no_docker` instead of reusing check ids; every warning id is in the registry.
+- `output.schema.json` types `result` for apply, list, status, remove, bundle and catalog list; `service apply` reports `result.resources`.
 
 ### Added
 
@@ -23,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Bundle results read the policy of the installed package version; cached versions are compared as versions.
 - ``.keystonectl/`` gets its ``.gitignore`` whichever command creates it first.
 - A failed apply re-enables the nginx sites it disabled in that run.
+- Docs: `service list --json` returns lock entries, not names.
+- Skill fixtures match the real `result` of catalog list, status and apply.
 
 ## [0.1.1] - 2026-10-15
 
