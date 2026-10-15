@@ -96,6 +96,8 @@ class Context:
     chosen_port: int | None = None
     started_project: str | None = None
     lock_services_before: frozenset[str] = field(default_factory=frozenset)
+    # (link name, previous target) for nginx sites disabled in this run.
+    taken_over_now: list[tuple[str, str]] = field(default_factory=list)
 
 
 def register_step(step: Any, after: str | None = None) -> None:

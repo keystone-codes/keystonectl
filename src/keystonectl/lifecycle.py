@@ -591,12 +591,14 @@ def _remove_vhost(
     *,
     nginx_root: Path | None = None,
 ) -> None:
-    from keystonectl.public import _nginx_dirs, site_name
+    from datetime import UTC, datetime
+
+    from keystonectl.public import _nginx_dirs, _restore_symlinks, site_name
     from keystonectl.tls import Tls
 
     available, enabled, _conf = _nginx_dirs(_Host(root, nginx_root))
     site = site_name(name)
-    tls = Tls(runner, clock=lambda: __import__("datetime").datetime.now(__import__("datetime").UTC))
+    tls = Tls(runner, clock=lambda: datetime.now(UTC))
     link = enabled / site
     if link.exists() or link.is_symlink():
         tls._run(["rm", "-f", str(link)])
@@ -609,16 +611,11 @@ def _remove_vhost(
     else:
         took = public.get("took_over")
         restored_names = [took] if isinstance(took, str) and took else []
-    for name_to_restore in restored_names:
-        restored = enabled / name_to_restore
-        destination = available / name_to_restore
-        if destination.is_file() and not restored.exists():
-            tls._run(["ln", "-s", str(destination), str(restored)])
-    ok, _detail = __import__("keystonectl.public", fromlist=["_nginx_test"])._nginx_test(tls)
-    if ok:
-        from keystonectl.public import _reload
-
-        _reload(tls)
+    _restore_symlinks(
+        tls,
+        enabled,
+        [(name_to_restore, str(available / name_to_restore)) for name_to_restore in restored_names],
+    )
 
 
 class _Host:
