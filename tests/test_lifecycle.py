@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 import yaml
 
+from keystonectl.envfiles import read_env
 from keystonectl.lifecycle import (
     adopt_service,
     eject_service,
@@ -23,7 +26,7 @@ from keystonectl.output import SecretRegistry
 from keystonectl.runner import CommandResult, FakeCommandRunner
 from keystonectl.sources import package_cache
 from tests.support import catalog_text
-from tests.support.deploylab import CLOCK, apply_package
+from tests.support.deploylab import CLOCK, DockerBox, apply_package
 from tests.support.resources import Lab, s3_provider
 
 PACKAGES = Path(__file__).resolve().parent / "data" / "packages"
@@ -332,6 +335,159 @@ def test_remove_provider_keeps_volume_and_env(tmp_path: Path) -> None:
     assert result.code == 0, result.error
     assert env.is_file()
     assert "ks-pkg-minio-data" in result.result["kept"]
+
+
+_REMOVE_YES = {"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE": "yes"}
+
+
+def _box_text(*, volume: bool, operator: bool = False) -> str:
+    document = yaml.safe_load((PACKAGES / "file-mcp" / "keystone-service.yaml").read_text())
+    document.pop("needs", None)
+    mcp = document["containers"]["mcp"]
+    mcp.pop("env", None)
+    mcp.pop("volumes", None)
+    secrets: list[dict[str, object]] = [{"name": "BOX_STORE_KEY", "generate": {"bytes": 32}}]
+    if operator:
+        secrets.append({"name": "OPERATOR_KEY", "required": True})
+    mcp["secrets"] = secrets
+    if volume:
+        mcp["volumes"] = [{"name": "store", "path": "/var/lib/box"}]
+    return yaml.safe_dump(document)
+
+
+def _apply_box(
+    root: Path,
+    text: str,
+    *,
+    sets: dict[str, str] | None = None,
+    box: DockerBox | None = None,
+    reset: bool = True,
+):
+    return apply_package(root, "file-mcp", {"file-mcp": text}, sets=sets, box=box, reset=reset)
+
+
+def test_remove_keeps_generated_secret_of_package_with_volume(tmp_path: Path) -> None:
+    text = _box_text(volume=True)
+    root = tmp_path / "root"
+    applied, _runner, _box = _apply_box(root, text)
+    assert applied.code == 0, applied.error
+    env_path = root / "packages" / "file-mcp.env"
+    original = read_env(env_path)["BOX_STORE_KEY"]
+    lock = load_lock(root / "services.lock.yaml")
+    assert lock["services"][0]["env"]["generated"] == ["BOX_STORE_KEY"]
+    result = _remove(root, sets=_REMOVE_YES)
+    assert result.code == 0, result.error
+    saved = root / ".keystonectl" / "secrets" / "file-mcp.generated.env"
+    assert stat.S_IMODE(saved.stat().st_mode) == 0o600
+    assert read_env(saved) == {"BOX_STORE_KEY": original}
+    assert not env_path.exists()
+    assert ".keystonectl/secrets/file-mcp.generated.env" in result.result["kept"]
+    warning = next(item for item in result.warnings if item["id"] == "generated_secrets_kept")
+    assert "BOX_STORE_KEY" in warning["message"]
+    assert "ks-pkg-file-mcp-store" in warning["message"]
+    assert "Installing file-mcp again reuses them." in warning["message"]
+    assert "Delete the file only together with those volumes." in warning["message"]
+    assert original not in json.dumps(result.to_dict())
+
+
+def test_remove_without_volumes_keeps_nothing(tmp_path: Path) -> None:
+    text = _box_text(volume=False)
+    root = tmp_path / "root"
+    applied, _runner, _box = _apply_box(root, text)
+    assert applied.code == 0, applied.error
+    assert "BOX_STORE_KEY" in read_env(root / "packages" / "file-mcp.env")
+    result = _remove(root, sets=_REMOVE_YES)
+    assert result.code == 0, result.error
+    assert not (root / ".keystonectl" / "secrets" / "file-mcp.generated.env").exists()
+    assert not any(item["id"] == "generated_secrets_kept" for item in result.warnings)
+
+
+def test_remove_does_not_keep_operator_secrets(tmp_path: Path) -> None:
+    secret_file = tmp_path / "operator.key"
+    fd = os.open(secret_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, b"operator-chosen\n")
+    finally:
+        os.close(fd)
+    text = _box_text(volume=True, operator=True)
+    root = tmp_path / "root"
+    applied, _runner, _box = _apply_box(
+        root,
+        text,
+        sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_SECRET_OPERATOR_KEY_FILE": str(secret_file)},
+    )
+    assert applied.code == 0, applied.error
+    env = read_env(root / "packages" / "file-mcp.env")
+    assert env["OPERATOR_KEY"] == "operator-chosen"
+    result = _remove(root, sets=_REMOVE_YES)
+    assert result.code == 0, result.error
+    saved = read_env(root / ".keystonectl" / "secrets" / "file-mcp.generated.env")
+    assert list(saved) == ["BOX_STORE_KEY"]
+    assert saved["BOX_STORE_KEY"] == env["BOX_STORE_KEY"]
+    assert "operator-chosen" not in json.dumps(result.to_dict())
+
+
+def test_reinstall_reuses_kept_generated_secret(tmp_path: Path) -> None:
+    text = _box_text(volume=True)
+    root = tmp_path / "root"
+    applied, _runner, _box = _apply_box(root, text)
+    assert applied.code == 0, applied.error
+    original = read_env(root / "packages" / "file-mcp.env")["BOX_STORE_KEY"]
+    assert _remove(root, sets=_REMOVE_YES).code == 0
+    again, _runner, _box = _apply_box(root, text, reset=False)
+    assert again.code == 0, again.error
+    assert read_env(root / "packages" / "file-mcp.env")["BOX_STORE_KEY"] == original
+    assert not (root / ".keystonectl" / "secrets" / "file-mcp.generated.env").exists()
+
+
+def test_failed_reinstall_keeps_the_saved_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = _box_text(volume=True)
+    root = tmp_path / "root"
+    applied, _runner, _box = _apply_box(root, text)
+    assert applied.code == 0, applied.error
+    original = read_env(root / "packages" / "file-mcp.env")["BOX_STORE_KEY"]
+    assert _remove(root, sets=_REMOVE_YES).code == 0
+    saved = root / ".keystonectl" / "secrets" / "file-mcp.generated.env"
+    clock = {"t": 0.0}
+    monkeypatch.setattr("keystonectl.generate.install._monotonic", lambda: clock["t"])
+
+    def advance(_seconds: float = 3) -> None:
+        clock["t"] += 10000
+
+    monkeypatch.setattr("keystonectl.generate.install.pause", advance)
+    box = DockerBox()
+    box.inspect_health = "unhealthy"
+    failed, _runner, _box = _apply_box(root, text, box=box, reset=False)
+    assert failed.code == 3
+    assert failed.error is not None
+    assert failed.error["id"] == "service_unhealthy"
+    assert failed.result["rollback"]["lock_entry"] == "dropped"
+    assert read_env(saved)["BOX_STORE_KEY"] == original
+
+
+def test_remove_keeps_generated_secret_when_manifest_is_not_cached(tmp_path: Path) -> None:
+    text = _box_text(volume=True)
+    root = tmp_path / "root"
+    applied, _runner, _box = _apply_box(root, text)
+    assert applied.code == 0, applied.error
+    original = read_env(root / "packages" / "file-mcp.env")["BOX_STORE_KEY"]
+    entry = load_lock(root / "services.lock.yaml")["services"][0]
+    cache = package_cache(
+        root,
+        str(entry["source"]),
+        str(entry.get("package") or entry["name"]),
+        str(entry["version"]),
+    )
+    (cache / "keystone-service.yaml").unlink()
+    result = _remove(root, sets=_REMOVE_YES)
+    assert result.code == 0, result.error
+    saved = read_env(root / ".keystonectl" / "secrets" / "file-mcp.generated.env")
+    assert saved == {"BOX_STORE_KEY": original}
+    warning = next(item for item in result.warnings if item["id"] == "generated_secrets_kept")
+    assert "cached manifest is missing" in warning["message"]
+    assert original not in warning["message"]
 
 
 def _upgrade(root: Path, ref: str = "file-mcp", *, sets: dict | None = None, runner=None):
