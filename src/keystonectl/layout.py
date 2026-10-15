@@ -23,6 +23,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
 from keystonectl import __version__
+from keystonectl.cachedir import CACHE_GITIGNORE, GITIGNORE_MODE, PRIVATE_DIR_MODE
 
 LAYOUT_VERSION = 1
 UPSTREAMS_NETWORK = "keystone-mcp-upstreams"
@@ -835,10 +836,10 @@ def _file_plan(
 
     want_dir("packages", _MODE_DIR)
     want_dir(KEYSTONECTL_DIR, _MODE_DIR)
-    want_dir(".keystonectl", _MODE_PRIVATE_DIR)
-    want_dir(".keystonectl/secrets", _MODE_PRIVATE_DIR)
-    want_dir(".keystonectl/tmp", _MODE_PRIVATE_DIR)
-    want_file(".keystonectl/.gitignore", "*\n", _MODE_FILE)
+    want_dir(".keystonectl", PRIVATE_DIR_MODE)
+    want_dir(".keystonectl/secrets", PRIVATE_DIR_MODE)
+    want_dir(".keystonectl/tmp", PRIVATE_DIR_MODE)
+    want_file(".keystonectl/.gitignore", CACHE_GITIGNORE, GITIGNORE_MODE)
     if inspection.registry_text is not None:
         want_file(
             f"{KEYSTONECTL_DIR}/upstreams.yaml",
