@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `catalog set-ref <name> <ref>` moves a source to another tag or commit; `default_catalog_behind` warns when the default catalog is pinned behind this keystonectl.
+
 ## [0.1.1] - 2026-10-15
 
 ### Changed

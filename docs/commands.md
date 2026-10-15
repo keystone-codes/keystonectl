@@ -210,6 +210,49 @@ Writes: `sources.yaml` and `sources.yaml.bak`.
 }
 ```
 
+### keystonectl catalog set-ref
+
+    keystonectl catalog set-ref <name> <ref>
+
+Moves one source in `sources.yaml` to another tag or commit. The name and the ref are both required. The new ref is fetched and checked the same way as `catalog add`: a missing tag is `tag_not_found` (the message names the URL and the ref) and `sources.yaml` is left untouched. An unknown name is `source_not_found` (code 3, not retryable) and names the sources that do exist. The same ref exits 0 with `changes: 0` and does not contact the network. Package and bundle names that the new catalog shares with another source are warnings `package_name_shadowed` and `bundle_name_shadowed`. An installed package whose version disappeared from this source is `installed_version_missing`; the lock is not rewritten. When `sources.yaml` is missing, the built-in sources are written with this one ref changed.
+
+Writes: `sources.yaml` and, when that file already existed, `sources.yaml.bak`.
+
+```json
+{
+  "ok": true,
+  "code": 0,
+  "command": "catalog set-ref",
+  "target": "https://github.com/keystone-codes/keystone-catalog.git",
+  "summary": "Moved source keystone-codes to v1.1.0.",
+  "actions": [
+    {
+      "id": "catalog-set-ref",
+      "title": "Move source keystone-codes from v1.0.0 to v1.1.0",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [
+    {
+      "id": "installed_version_missing",
+      "message": "file-mcp 1.0.0 is installed from keystone-codes, and keystone-codes v1.1.0 no longer lists it; upgrade or apply will need another version"
+    }
+  ],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "name": "keystone-codes",
+    "url": "https://github.com/keystone-codes/keystone-catalog.git",
+    "ref": "v1.1.0",
+    "previous_ref": "v1.0.0",
+    "packages": 1,
+    "conflicts": []
+  }
+}
+```
+
 ### keystonectl catalog list
 
     keystonectl catalog list
@@ -825,6 +868,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | service_unhealthy | 3 | true | Read the container log and run the command again. |
 | source_exists | 3 | false | Pick another --name, or edit sources.yaml. |
 | source_invalid | 3 | false | Use an https://, ssh://, git@host:path, or file:// URL. http:// is refused. |
+| source_not_found | 3 | false | Run keystonectl catalog list and pass a name from that list. |
 | source_unreachable | 3 | true | Check the network and the URL, then run the command again. |
 | sudo_required | 3 | false | Allow sudo -n for nginx and certbot, or answer TLS=manual. |
 | tag_moved | 3 | false | Refuse the move. Pin a commit, or upgrade on purpose with service upgrade. |
@@ -842,11 +886,13 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | compat_mismatch | warning | false | The manifest range is the one that is enforced. |
 | compose_file_ignored | warning | false | The installer never reads it. |
 | compose_variable_unset | warning | false | Set the variable in the environment or in the deployment .env file. |
+| default_catalog_behind | warning | false | Run keystonectl catalog set-ref with the tag named in the warning. |
 | discovery_pending | warning | false | keystone-mcp will try again on its own. Check keystonectl service status. |
 | dns_system_resolver | warning | false | Install dig for a check against 1.1.1.1. The system resolver can be cached. |
 | extra_hosts_manual | warning | false | Add the host line yourself in the override or in your own compose file. |
 | fragment_modified | warning | false | Move your changes into the override file, or eject the service. |
 | inline_registry_ignored | warning | false | Upstreams are read from keystonectl/upstreams.yaml. |
+| installed_version_missing | warning | false | Upgrade or apply will need another version of that package. |
 | keystone_compose_missing | warning | false | Put keystone-mcp's docker-compose.yml and .env here (see keystone-mcp examples/production) and run keystonectl init again. |
 | layout_changed | warning | false | Review the listed fields. The lock was updated to match the compose file. |
 | local_source | warning | false | file:// is for tests and local development, not for a shared catalog. |
@@ -889,6 +935,6 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | `packages/<name>.env` and `packages/<name>.<kind>.env` | keystonectl. Mode 600. A remote handoff file uses the same `packages/<name>.env` name and is not a Compose `env_file`. |
 | `.env` | keystonectl owns the managed block (bearer and identity names, and `KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP` when a remote URL is `http://`). Mode 600. |
 | `services.lock.yaml` | keystonectl. A remote entry is `managed: remote` and includes `env.generated`. |
-| `sources.yaml` | keystonectl on `catalog add`. Removing a source is a hand edit. |
+| `sources.yaml` | keystonectl on `catalog add`. Removing a source is a hand edit; changing a source's ref is `catalog set-ref`. |
 | `keystonectl/upstreams.yaml` | keystonectl. |
 | `keystonectl/catalog-snapshot.yaml` | keystonectl. `add-remote` changes it only when `--tools` is passed. |

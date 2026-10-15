@@ -10,6 +10,7 @@ DATA = Path(__file__).resolve().parents[1] / "data" / "catalogs"
 SHA = "a" * 40
 
 URLS = {
+    "https://github.com/keystone-codes/keystone-catalog.git": DATA / "keystone-codes",
     "https://example.com/keystone-codes.git": DATA / "keystone-codes",
     "https://example.com/partner.git": DATA / "partner",
     "https://example.com/other.git": DATA / "partner",
