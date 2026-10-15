@@ -334,6 +334,66 @@ def _lookup(
     return None
 
 
+def _explicit_answer(ctx: Context, var: str) -> str | None:
+    """Answer from --set or the environment only (not lock answers)."""
+    if var in ctx.sets:
+        if is_secret_var(var):
+            raise AnswerError(
+                "secret_in_argument",
+                "Refusing to accept a secret on the command line.",
+            )
+        return ctx.sets[var]
+    raw = ctx.environ.get(var)
+    if raw:
+        return str(raw)
+    return None
+
+
+def _check_ignored_resource_answers(
+    ctx: Context,
+    work: _Work,
+    *,
+    kind: str,
+    package: str,
+    bound: Mapping[str, Any],
+) -> None:
+    choice = _choice_question(kind, package)
+    answer = _explicit_answer(ctx, choice.var)
+    origin = bound.get("origin")
+    if answer is not None and answer != origin:
+        if origin == "catalog":
+            provider = _origin_label(bound)
+            detail = f"{kind} on this installation is already provided by {provider} (catalog)."
+        else:
+            detail = f"{kind} on this installation is already external storage."
+        work.warnings.append(
+            warning(
+                "resource_answer_ignored",
+                f"{choice.var}={answer} is ignored: {detail}",
+            )
+        )
+    if origin != "catalog":
+        return
+    provider = str(bound.get("provider") or "")
+    if not provider:
+        return
+    service = _service(ctx.lock, provider)
+    if service is None:
+        return
+    source = str(service.get("source") or "")
+    expected = f"{source}/{provider}"
+    var = f"KEYSTONE_SETUP_RESOURCE_{kind.upper()}_PACKAGE"
+    package_answer = _explicit_answer(ctx, var)
+    if package_answer is not None and package_answer != expected:
+        work.warnings.append(
+            warning(
+                "resource_answer_ignored",
+                f"{var}={package_answer} is ignored: {kind} on this installation is already "
+                f"provided by {provider} (catalog).",
+            )
+        )
+
+
 def _remember_question(work: _Work, question: Question, value: str | None) -> str | None:
     if value is None:
         work.questions.append(question)
@@ -637,6 +697,7 @@ def _decide_need(ctx: Context, manifest: Mapping[str, Any], need: Mapping[str, A
         if problem:
             _fail(ctx, "manifest_invalid", problem)
             return work
+        _check_ignored_resource_answers(ctx, work, kind=kind, package=package, bound=bound)
     extensions = _extensions(need)
     relpath = _env_relpath(package, manifest, need)
     keys = _bind_keys(need)

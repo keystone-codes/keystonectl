@@ -331,11 +331,23 @@ def _has_deploy(steps: list[Any]) -> bool:
     )
 
 
+def _dedupe_warnings(warnings: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[tuple[str, str]] = set()
+    kept: list[dict[str, str]] = []
+    for item in warnings:
+        key = (item["id"], item.get("message", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(item)
+    return kept
+
+
 def _bundle(
     plans: list[StepPlan],
 ) -> tuple[list[Question], list[dict[str, str]], list[dict[str, str]]]:
     questions = _dedupe_questions([question for plan in plans for question in plan.questions])
-    warnings = [item for plan in plans for item in plan.warnings]
+    warnings = _dedupe_warnings([item for plan in plans for item in plan.warnings])
     actions = [item for plan in plans for item in plan.actions]
     return questions, warnings, actions
 
