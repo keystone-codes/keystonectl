@@ -424,6 +424,7 @@ _STATE_CHANGING_SERVICE_COMMANDS = {
     "eject",
     "adopt",
     "add-remote",
+    "rotate-secret",
 }
 
 
@@ -577,6 +578,7 @@ def _dispatch(
         "rollback",
         "eject",
         "adopt",
+        "rotate-secret",
     }:
         assert root is not None
         from datetime import UTC, datetime
@@ -588,6 +590,7 @@ def _dispatch(
             rollback_service,
             upgrade_service,
         )
+        from keystonectl.resources.rotate import rotate_secret
 
         clock = lambda: datetime.now(UTC)
         if args.service_command == "remove":
@@ -616,6 +619,18 @@ def _dispatch(
             result = rollback_service(root, args.name, runner=build_runner(), clock=clock)
         elif args.service_command == "eject":
             result = eject_service(root, args.name, clock=clock)
+        elif args.service_command == "rotate-secret":
+            result = rotate_secret(
+                root,
+                args.name,
+                args.kind,
+                runner=build_runner(),
+                secrets=secrets,
+                sets=sets,
+                environ=os.environ,
+                interactive=interactive,
+                clock=clock,
+            )
         else:
             result = adopt_service(
                 root,

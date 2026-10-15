@@ -26,6 +26,7 @@ Global flags apply to every command. `init` and `lint` do not search for a deplo
 | `service plan <ref>` | Show what would change. Writes only the cache. |
 | `service apply <ref>` | Apply the plan. Without a deploy step this exits 1, `not_implemented`. |
 | `service install <ref>` | Same as `service apply`. |
+| `service rotate-secret <name> <kind>` | Replace a catalog consumer's bucket key or database password and restart its containers. |
 | `explain <id>` | Print what an error or warning id means. |
 | `service explain <id>` | Same as `explain`. |
 
@@ -33,4 +34,4 @@ Global flags apply to every command. `init` and `lint` do not search for a deplo
 
 `service plan` and `service apply` ask where each `needs` entry should live. Answer `KEYSTONE_SETUP_RESOURCE_S3` or `KEYSTONE_SETUP_RESOURCE_POSTGRES` with `external` or `catalog`. Secret values are read from mode 600 files (`*_FILE`); `--set` refuses those names. See `docs/resources.md`.
 
-Later commands (`service status`, `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `add-remote`, `bundle install`) are added by their own modules through `register(subparsers)`.
+Later commands (`service status`, `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `rotate-secret`, `add-remote`, `bundle install`) are added by their own modules through `register(subparsers)`.

@@ -155,6 +155,23 @@ keystonectl --root /srv/keystone service remove file-mcp --json
 
 Retell `result.kept`. If `generated_secrets_kept` is present, the generated secrets and the volumes both stayed. The secrets are in `.keystonectl/secrets/<name>.generated.env`. Installing the package again reuses them, and the file is removed after that install succeeds. Delete the file only together with those volumes. When `provider_unused` appears, the catalog provider still runs with data on disk; suggest `service remove` on that provider when the operator is done. When `provider_data_kept` appears, name the volumes in the warning and say data stays until they back up and run `docker volume rm` themselves — do not run that command for them.
 
+## Rotate a secret
+
+Ask first (rule 5). Say that this service's containers restart and anything else using the old key or password stops working. This is only for a catalog provider on this server. An external bucket or database is `rotate_external_unsupported`: the operator changes the key at their provider, then the service is removed and installed again. Do not read env files and do not ask for the secret value.
+
+Code 2 asks for the confirm variable. Answer `yes`:
+
+```
+keystonectl --root /srv/keystone service rotate-secret file-mcp s3 --json
+```
+
+```
+KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_ROTATE=yes \
+keystonectl --root /srv/keystone service rotate-secret file-mcp s3 --json
+```
+
+Retell `result.rotated` (`kind` and `provider`) and `result.restarted`.
+
 ## Connect a running service
 
 Use this only when the operator wants a service they already run, and they give the URL. Add filter flags only when they named them (`--tool-prefix`, `--include-prefixes`, `--exclude-prefixes`, `--strip-prefix`).
@@ -244,7 +261,7 @@ Retell `problems` inside each item of `result.services`. They can include `conta
 | `KEYSTONE_SETUP_TLS_EMAIL` | Which email should Let's Encrypt use for expiry reminders? |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_TAKEOVER` | Site <file> serves <domain>. keystonectl will disable that site entirely: only the service paths and /healthz will answer on this name, everything else returns 404. Disable it? If apply then fails, the site is enabled again: tell the operator and read the names from `result.public.restored_sites`. |
 | `KEYSTONE_SETUP_SERVICE_{PKG}_NAMESPACE` | The tool-name prefix is taken. Which prefix should be used instead? |
-| `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_REMOVE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_UPGRADE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_ADOPT` | Confirm only after you have retold the question and the consequences. `CONFIRM_REMOVE` and `CONFIRM_ADOPT` are `yes`. `CONFIRM_UPGRADE` is the target version. `eject` and `rollback` have no confirm variable. |
+| `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_REMOVE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_UPGRADE`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_ADOPT`, `KEYSTONE_SETUP_SERVICE_{PKG}_CONFIRM_ROTATE` | Confirm only after you have retold the question and the consequences. `CONFIRM_REMOVE`, `CONFIRM_ADOPT`, and `CONFIRM_ROTATE` are `yes`. `CONFIRM_UPGRADE` is the target version. `eject` and `rollback` have no confirm variable. |
 | `package` (`kind: argument`) | This package name is in two catalogs. Which one? Repeat the command as `source/name`. |
 
 ## Rules
@@ -260,7 +277,7 @@ install -m 600 /dev/null /root/keystone-secrets/pg-url && nano /root/keystone-se
 Pass the path in a `…_FILE` variable. Do not read the file and do not print it. If the operator pastes a secret anyway, do not repeat it, do not use it, and tell them to rotate that key or password.
 3. Never pass a secret as a command argument or as a variable value. Only a path, and only in a name that ends with `_FILE`.
 4. **Do not touch policy.** Do not edit the policy file and do not call `policy_*`. Hand the recommended rows to the policy skill (Policy).
-5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`. If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
+5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `rotate-secret`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`. If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
@@ -379,6 +396,9 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `dns_mismatch` | 3 | true | The domain does not point at this host. | Update the A record or wait for DNS to propagate (often 1-10 min), then run apply again. |
 | `certbot_failed` | 3 | true | certbot could not issue the certificate. | Check DNS, port 80, and /var/log/letsencrypt/letsencrypt.log, then run apply again. |
 | `public_unreachable` | 3 | true | https on the public domain did not answer. | Finish the proxy and certificate, then run apply again. |
+| `resource_not_bound` | 3 | false | This service is not bound to that resource. | Pass a kind this service lists, s3 or postgres. |
+| `rotate_external_unsupported` | 3 | false | An external resource secret cannot be rotated from here. | Remove the service and install it again. |
+| `rotate_failed` | 3 | true | The secret could not be rotated. | Run the command again. |
 | `internal_error` | 3 | false | An unexpected error occurred. | Report this with the command and the keystonectl version. |
 
 When `service apply` ends in `service_unhealthy` or `init_failed`, read `result.rollback` and tell the operator what is left. With `lock_entry` `dropped`, the containers in `containers` were stopped and removed, the package is not in `services.lock.yaml`, and only data stays: the resource, its env file, the secrets, volumes, buckets, and databases. With `lock_entry` `kept`, the service was installed before, its files were restored, and its containers were not touched. Running the command again is safe and does not ask about the resource a second time.

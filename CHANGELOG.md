@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `service rotate-secret <name> <kind>` replaces a consumer's bucket key or database password from a catalog provider.
 - Warning `resource_answer_ignored` when a resource answer disagrees with the provider already bound.
 - Warning `builtin_tools_unavailable` when apply cannot read keystone-mcp's live tool list.
 - `catalog set-ref <name> <ref>` moves a source to another tag or commit.
@@ -16,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Provider contract: the secret file is the desired secret.
 - Removing a provider uses one consumer check; warnings `provider_unused` and `provider_data_kept` name the volumes that stay.
 - `CONTRIBUTING.md` sets the changelog line rules; a test checks `[Unreleased]`.
 - e2e: Scenario 12 adds the partner catalog over the network when `E2E_PARTNER_CATALOG_URL` is set; the vm profile does so by default.

@@ -76,7 +76,7 @@ PostgreSQL arguments: `--host <provider>-<container> --port <port> --database <i
 
 The installer does not pass `--region`, `--sslmode`, or `--ready-timeout`.
 
-`<tmp>` is mode 700 and is removed when the script returns. `<package>.secret` is mode 600. If the consumer already has a secret (the `secret_key` or `password` binding, or the password inside a `url` binding), that value is reused. Otherwise the file contains `token_hex(32)`.
+`<tmp>` is mode 700 and is removed when the script returns. `<package>.secret` is mode 600. If the consumer already has a secret (the `secret_key` or `password` binding, or the password inside a `url` binding), that value is reused. Otherwise the file contains `token_hex(32)`. The secret file is the desired secret. A repeat with the same value changes nothing; a different value replaces the consumer's key or password. `service apply` keeps passing the saved value.
 
 Stdout is one JSON object, on its last non-empty line.
 
@@ -98,8 +98,16 @@ Exit codes:
 
 | Code | Meaning |
 |---|---|
-| 0 | Access is ready. A repeat must not rotate the password. |
+| 0 | Access is ready. The secret file is the desired secret. A repeat with the same value changes nothing; a different value replaces the consumer's key or password. |
 | 2 | `provision_failed`, not retryable. The package or the installer is wrong. |
 | 3 | `provision_failed`, retryable. The provider is not ready yet, or the admin key was rejected. |
 
 Anything that is not JSON, has the wrong `interface`, or omits a field is `provision_failed`. The error text is the last 20 lines of stderr with secrets removed.
+
+## Rotating a consumer secret
+
+`service rotate-secret <name> <kind>` replaces the bucket key or database password of one catalog consumer. `<name>` is the installed service and `<kind>` is `s3` or `postgres`. The command confirms with `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ROTATE=yes`, generates a new secret, runs provision with that secret, updates the service env file, checks access, and recreates the containers that receive the file. It does not print the secret. `service apply` still reuses the saved secret.
+
+An external binding is refused (`rotate_external_unsupported`). keystonectl did not create that key. Remove the service and install it again with the new secret. A second apply does not pick up a new `KEYSTONE_SETUP_<KIND>_…_FILE` answer while the env file is already complete.
+
+If the access check fails, the previous secret is written back and the error is `rotate_failed` (retryable). If that write-back also fails, the env files hold the new secret and the provider is in an unknown state; run `service apply <name>`.
