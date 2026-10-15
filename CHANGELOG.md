@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- e2e: Scenario 16 installs the atlassian package from a catalog subdirectory and checks profiles, role order, and a service account.
 - docs: ADR 0007 records stdio MCP servers as HTTP boxes; profiles live in the box, and containers keep the image user and default capabilities.
 - `service rotate-secret <name> <kind>` replaces a consumer's bucket key or database password from a catalog provider.
 - `keystonectl package wrap-stdio` writes a box package (manifest with the server's tools, tool snapshot, policy example) from a stdio provider directory.
