@@ -17,38 +17,43 @@
   "error": null,
   "retryable": false,
   "result": {
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "version": "1.0.0",
     "namespace": "docs",
     "tools": [
-      "docs_search_docs",
-      "docs_read_page"
+      "search_docs",
+      "read_page"
     ],
     "containers": [
       {
         "role": "migrate",
-        "init": true,
-        "status": "completed"
+        "service": "docs-service-migrate",
+        "image": "ghcr.io/example/docs-service:1.0.0",
+        "init": true
       },
       {
         "role": "api",
-        "init": false,
-        "status": "running"
+        "service": "docs-service-api",
+        "image": "ghcr.io/example/docs-service:1.0.0",
+        "init": false
       },
       {
         "role": "mcp",
-        "init": false,
-        "status": "running"
+        "service": "docs-service-mcp",
+        "image": "ghcr.io/example/docs-service:1.0.0",
+        "init": false
       }
     ],
     "resources": [
       {
         "kind": "postgres",
-        "mode": "external"
+        "origin": "external",
+        "provider": null
       },
       {
         "kind": "s3",
-        "mode": "catalog",
-        "package": "minio"
+        "origin": "catalog",
+        "provider": "minio"
       }
     ]
   }
