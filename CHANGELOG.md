@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - `CONTRIBUTING.md` sets the changelog line rules; a test checks `[Unreleased]`.
+- e2e: scenario 12 adds the partner catalog over the network when `E2E_PARTNER_CATALOG_URL` is set; the vm profile does so by default.
 
 ## [0.1.1] - 2026-10-15
 
