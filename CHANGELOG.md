@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `check` reports `override_unchecked`, `compose_version_unknown` and `check_skipped_no_docker` instead of reusing check ids; every warning id is in the registry.
+
 ## [0.1.1] - 2026-10-15
 
 ### Changed

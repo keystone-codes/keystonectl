@@ -85,7 +85,11 @@ def test_check_warns_override_widens_access(
     from keystonectl.generate import checks as checks_mod
 
     payload = '{"services": {"file-mcp-mcp": {"privileged": true, "ports": ["0.0.0.0:8081:8081"]}}}'
-    monkeypatch.setattr(checks_mod, "read_compose_config", lambda _root: (0, payload))
+    monkeypatch.setattr(
+        checks_mod,
+        "read_compose_config",
+        lambda _root, layout=None: (0, payload),
+    )
     monkeypatch.setattr(checks_mod, "read_compose_version", lambda: (0, "2.29.1\n"))
     result = run_check(root)
     warning = next(item for item in result.warnings if item["id"] == "override_widens_access")
@@ -97,7 +101,11 @@ def test_check_warns_override_widens_access(
 def _patch_compose(monkeypatch: pytest.MonkeyPatch, payload: str, *, code: int = 0) -> None:
     from keystonectl.generate import checks as checks_mod
 
-    monkeypatch.setattr(checks_mod, "read_compose_config", lambda _root: (code, payload))
+    monkeypatch.setattr(
+        checks_mod,
+        "read_compose_config",
+        lambda _root, layout=None: (code, payload),
+    )
     monkeypatch.setattr(checks_mod, "read_compose_version", lambda: (0, "2.29.1\n"))
 
 
@@ -165,12 +173,38 @@ def test_compose_config_without_json_is_not_success(
     result = run_check(root)
     checks = result.result["checks"]
     assert any(
-        item["id"] == "override_access"
+        item["id"] == "override_unchecked"
         and item["status"] == "warning"
         and "JSON" in item["message"]
         for item in checks
     )
     assert not any(item["id"] == "override_access" and item["status"] == "ok" for item in checks)
+
+
+def test_compose_config_uses_layout_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    from keystonectl.generate import checks as checks_mod
+
+    root = tmp_path / "root"
+    apply_package(root, "file-mcp", {"file-mcp": _facade()})
+    lock = yaml.safe_load((root / "services.lock.yaml").read_text())
+    lock["layout"]["compose_files"] = ["compose.yaml", "docker-compose.packages.yml"]
+    (root / "services.lock.yaml").write_text(yaml.safe_dump(lock), encoding="utf-8")
+    (root / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+
+    captured: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        captured.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, json.dumps({"services": {}}), "")
+
+    monkeypatch.setattr(checks_mod, "subprocess", subprocess)
+    monkeypatch.setattr(checks_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(checks_mod, "read_compose_version", lambda: (0, "2.29.1\n"))
+    run_check(root)
+    compose_yaml = str(root / "compose.yaml")
+    assert any(compose_yaml in cmd for cmd in captured)
 
 
 def test_reapply_of_provider_stops_on_hand_edited_fragment(tmp_path: Path) -> None:
