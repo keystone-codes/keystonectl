@@ -53,7 +53,7 @@ For consumer `<consumer>` (package name):
 6. Re-provisioning the same consumer is idempotent (same database, role, and password).
 
 Not part of v1: superuser access, creating other databases, access to other consumers’ databases,
-logical replication, cross-service `LISTEN/NOTIFY`, backups, or extensions not listed in
+logical replication, cross-service `LISTEN/NOTIFY`, backups (see [Backups](../../resources.md#backups)), or extensions not listed in
 `needs[].extensions`.
 
 ## Consumer obligations
