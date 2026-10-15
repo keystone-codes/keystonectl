@@ -462,9 +462,9 @@ def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result
         if getattr(fn, "needs_docker", False) and not docker_available():
             checks.append(
                 _item(
-                    str(check_id),
+                    "check_skipped_no_docker",
                     "warning",
-                    "Docker is not available; this check was skipped.",
+                    f"Docker is not available; check {check_id} was skipped.",
                     "Install Docker to run this check.",
                 )
             )
