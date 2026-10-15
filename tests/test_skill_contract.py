@@ -29,6 +29,7 @@ _SCENARIOS = {
     "dns-retry",
     "eject",
     "remove",
+    "atlassian-profiles",
 }
 
 
