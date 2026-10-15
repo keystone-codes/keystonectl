@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Removing a provider uses one consumer check; warnings `provider_unused` and `provider_data_kept` name the volumes that stay.
 - `CONTRIBUTING.md` sets the changelog line rules; a test checks `[Unreleased]`.
 - e2e: Scenario 12 adds the partner catalog over the network when `E2E_PARTNER_CATALOG_URL` is set; the vm profile does so by default.
 - e2e: The leftovers check also runs on the production-example layout.

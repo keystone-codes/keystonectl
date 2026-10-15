@@ -55,7 +55,7 @@ A catalog provider's admin credentials stay in `packages/<provider>.env`.
 
 `services.lock.yaml` records the resource address (endpoint, region, and path style, or host, port, and sslmode) and the consumer's bucket or database name. It does not record access keys, passwords, or URLs.
 
-Removing a service drops it from `resources[].consumers`. The bucket, database, and user are kept. Removing a provider that still has consumers is refused (`resource_in_use`).
+Removing a service drops it from `resources[].consumers`. The bucket, database, and user are kept. When the last consumer goes, `provider_unused` says so; removing the provider warns `provider_data_kept`. Removing a provider that still has consumers is refused (`resource_in_use`).
 
 ## Provider contract
 

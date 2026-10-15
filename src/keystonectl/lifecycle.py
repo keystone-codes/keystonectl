@@ -37,7 +37,13 @@ from keystonectl.generate.registry import (
 from keystonectl.layout import drop_managed_env_keys
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.output import Result, SecretRegistry
-from keystonectl.resources.binding import unbind_consumer
+from keystonectl.resources.binding import (
+    idle_catalog_providers,
+    provider_data_kept_message,
+    provider_removal_error,
+    provider_unused_message,
+    unbind_consumer,
+)
 from keystonectl.runner import CommandRunner
 from keystonectl.sources import package_cache
 
@@ -155,6 +161,26 @@ def _requires_names(document: Mapping[str, Any]) -> list[str]:
         elif isinstance(item, dict) and isinstance(item.get("package"), str):
             found.append(str(item["package"]))
     return found
+
+
+def _provider_volume_names(root: Path, lock: Mapping[str, Any], provider: str) -> list[str]:
+    entry = _entry(lock, provider)
+    if entry is None:
+        return []
+    manifest = _manifest_at(root, entry)
+    if not isinstance(manifest, dict):
+        return []
+    containers_doc = (
+        manifest.get("containers") if isinstance(manifest.get("containers"), dict) else {}
+    )
+    names: list[str] = []
+    for spec in containers_doc.values():
+        if not isinstance(spec, dict):
+            continue
+        for volume in spec.get("volumes") or []:
+            if isinstance(volume, dict) and isinstance(volume.get("name"), str):
+                names.append(f"ks-pkg-{provider}-{volume['name']}")
+    return names
 
 
 def _required_by(root: Path, lock: Mapping[str, Any], name: str) -> list[str]:
@@ -471,18 +497,15 @@ def remove_service(
             hint="Remove those services first.",
         )
     if entry.get("role") == "resource":
-        for resource in lock.get("resources") or []:
-            if not isinstance(resource, dict) or resource.get("provider") != name:
-                continue
-            consumers = [item for item in resource.get("consumers") or [] if isinstance(item, dict)]
-            if consumers:
-                listed = ", ".join(str(item.get("service")) for item in consumers)
-                return _error(
-                    command,
-                    name,
-                    "resource_in_use",
-                    f"{name} still has consumers: {listed}.",
-                )
+        refusal = provider_removal_error(lock, name)
+        if refusal is not None:
+            return _error(
+                command,
+                name,
+                refusal.error_id,
+                refusal.message,
+                hint=refusal.hint,
+            )
     layout = _layout(lock)
     project = str(layout.get("project") or "")
     containers = entry.get("containers") if isinstance(entry.get("containers"), dict) else {}
@@ -555,6 +578,15 @@ def remove_service(
     prune_retired_names(root, lock)
     kept_messages = unbind_consumer(lock, name)
     kept.extend(kept_messages)
+    if not provider:
+        for prov, kind in idle_catalog_providers(lock):
+            volumes = _provider_volume_names(root, lock, prov)
+            warnings.append(
+                {
+                    "id": "provider_unused",
+                    "message": provider_unused_message(prov, kind, volumes),
+                }
+            )
     manifest = _manifest_at(root, entry)
     if isinstance(manifest, dict):
         containers_doc = (
@@ -595,6 +627,15 @@ def remove_service(
             ERRORS["service_unhealthy"].title,
             hint=ERRORS["service_unhealthy"].action,
         )
+    if provider:
+        volume_kept = [item for item in kept if item.startswith(f"ks-pkg-{name}-")]
+        if volume_kept:
+            warnings.append(
+                {
+                    "id": "provider_data_kept",
+                    "message": provider_data_kept_message(name, volume_kept),
+                }
+            )
     note = _OVERRIDE_NOTE.format(name=name) if override.is_file() else ""
     summary = f"Removed {name}."
     if note:
