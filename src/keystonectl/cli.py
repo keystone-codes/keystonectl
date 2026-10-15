@@ -20,6 +20,7 @@ from keystonectl.output import Result, SecretRegistry, emit
 from keystonectl.plan import run_service
 from keystonectl.runner import build_runner
 from keystonectl.sources import add_source, list_catalogs, set_source_ref
+from keystonectl.wrap_stdio import STDIO_BOX_IMAGE, run_wrap_stdio
 
 ROOT_HINT = "Run `keystonectl init --adopt <dir>`."
 
@@ -75,6 +76,20 @@ def build_parser() -> KeystoneParser:
     _add_common(package_lint)
     package_lint.add_argument("target")
     package_lint.add_argument("--keystone-mcp-version", default=None)
+    wrap = package_sub.add_parser(
+        "wrap-stdio",
+        help="Write a box package from a stdio provider directory",
+    )
+    _add_common(wrap)
+    wrap.add_argument("provider_dir")
+    wrap.add_argument("--image", default=STDIO_BOX_IMAGE)
+    discovery = wrap.add_mutually_exclusive_group()
+    discovery.add_argument("--tools-snapshot", metavar="FILE", default=None)
+    discovery.add_argument("--no-discovery", action="store_true")
+    wrap.add_argument("--name", default=None)
+    wrap.add_argument("--namespace", default=None)
+    wrap.add_argument("--derived-image", action="store_true")
+    wrap.add_argument("--force", action="store_true")
 
     check = sub.add_parser("check", help="Check a deployment directory")
     _add_common(check)
@@ -512,6 +527,19 @@ def _dispatch(
         result = run_lint(Path(args.target), keystone_version=version)
         if args.command == "package":
             result.command = "package lint"
+    elif args.command == "package" and args.package_command == "wrap-stdio":
+        snapshot = getattr(args, "tools_snapshot", None)
+        result = run_wrap_stdio(
+            Path(args.provider_dir),
+            image=args.image,
+            tools_snapshot=Path(snapshot) if snapshot else None,
+            no_discovery=bool(args.no_discovery),
+            name=args.name,
+            namespace=args.namespace,
+            derived_image=bool(args.derived_image),
+            force=bool(args.force),
+            runner=build_runner(),
+        )
     elif args.command == "check":
         assert root is not None
         result = run_check(root, environ=os.environ)
