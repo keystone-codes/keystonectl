@@ -23,6 +23,10 @@ MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:63ba7ba9b7ba59af56cb52d9052
 PG_IMAGE="postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 # redis:7-alpine index, docker buildx imagetools inspect on 2026-10-13.
 REDIS_IMAGE="redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
+# Scenario 12 partner catalog. E2E_PARTNER_CATALOG_URL is filled in after
+# --profile is known: vm uses the published repository, ci leaves the URL
+# empty and builds a file:// catalog. An explicit value, including empty, wins.
+E2E_PARTNER_CATALOG_REF="${E2E_PARTNER_CATALOG_REF:-v1.0.0}"
 
 LAYOUT="production-example"
 PROFILE="ci"
@@ -79,6 +83,13 @@ case "$PROFILE" in
   ci|vm) ;;
   *) echo "unknown profile: $PROFILE" >&2; exit 1 ;;
 esac
+if [[ -z "${E2E_PARTNER_CATALOG_URL+x}" ]]; then
+  if [[ "$PROFILE" == "vm" ]]; then
+    E2E_PARTNER_CATALOG_URL="https://github.com/keystone-codes/e2e-partner-catalog.git"
+  else
+    E2E_PARTNER_CATALOG_URL=""
+  fi
+fi
 case "$STORAGE" in
   minio|external|both) ;;
   *) echo "unknown storage: $STORAGE" >&2; exit 1 ;;
@@ -1348,27 +1359,40 @@ scenario_external_postgres() {
 scenario_partner_catalog() {
   local started cache hello_source hello_ref file_source file_ref
   started="$(date +%s)"
-  cache="$ROOT/.keystonectl/catalogs/keystone-codes/catalog.yaml"
-  [[ -f "$cache" ]] || fail partner_catalog "keystone-codes catalog is not cached"
-  hello_source="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["hello-upstream"]["source"])' "$cache")"
-  hello_ref="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["hello-upstream"]["versions"][0]["ref"])' "$cache")"
-  file_source="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["file-mcp"]["source"])' "$cache")"
-  file_ref="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["file-mcp"]["versions"][0]["ref"])' "$cache")"
-  mkdir -p "$WORK/partner-catalog"
-  sed \
-    -e "s|@HELLO_SOURCE@|${hello_source}|" \
-    -e "s|@HELLO_REF@|${hello_ref}|" \
-    -e "s|@FILE_SOURCE@|${file_source}|" \
-    -e "s|@FILE_REF@|${file_ref}|" \
-    "$HERE/e2e/fixtures/partner-catalog.yaml.tmpl" >"$WORK/partner-catalog/catalog.yaml"
-  git init -q "$WORK/partner-catalog"
-  git -C "$WORK/partner-catalog" add catalog.yaml
-  git_identity -C "$WORK/partner-catalog" commit -q -m "partner catalog"
-  git -C "$WORK/partner-catalog" tag v1.0.0
-  kc catalog add "file://${WORK}/partner-catalog"
-  [[ "$KC_RC" -eq 0 ]] || fail partner_catalog "catalog add exited ${KC_RC}"
-  jq_ warning-ids <"$WORK/log/kc.out" | has_line local_source \
-    || fail partner_catalog "local_source was not warned"
+  if [[ -n "$E2E_PARTNER_CATALOG_URL" ]]; then
+    note "partner catalog ${E2E_PARTNER_CATALOG_URL} ref ${E2E_PARTNER_CATALOG_REF}"
+    kc catalog add "$E2E_PARTNER_CATALOG_URL" --ref "$E2E_PARTNER_CATALOG_REF"
+    [[ "$KC_RC" -eq 0 ]] || fail partner_catalog "catalog add exited ${KC_RC}"
+    if jq_ warning-ids <"$WORK/log/kc.out" | has_line local_source; then
+      fail partner_catalog "local_source was warned"
+    fi
+    if jq_ warning-ids <"$WORK/log/kc.out" | has_line catalog_ref_chosen; then
+      fail partner_catalog "catalog_ref_chosen was warned"
+    fi
+  else
+    note "partner catalog file://"
+    cache="$ROOT/.keystonectl/catalogs/keystone-codes/catalog.yaml"
+    [[ -f "$cache" ]] || fail partner_catalog "keystone-codes catalog is not cached"
+    hello_source="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["hello-upstream"]["source"])' "$cache")"
+    hello_ref="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["hello-upstream"]["versions"][0]["ref"])' "$cache")"
+    file_source="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["file-mcp"]["source"])' "$cache")"
+    file_ref="$(uv run --project "$REPO" python -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(d["packages"]["file-mcp"]["versions"][0]["ref"])' "$cache")"
+    mkdir -p "$WORK/partner-catalog"
+    sed \
+      -e "s|@HELLO_SOURCE@|${hello_source}|" \
+      -e "s|@HELLO_REF@|${hello_ref}|" \
+      -e "s|@FILE_SOURCE@|${file_source}|" \
+      -e "s|@FILE_REF@|${file_ref}|" \
+      "$HERE/e2e/fixtures/partner-catalog.yaml.tmpl" >"$WORK/partner-catalog/catalog.yaml"
+    git init -q "$WORK/partner-catalog"
+    git -C "$WORK/partner-catalog" add catalog.yaml
+    git_identity -C "$WORK/partner-catalog" commit -q -m "partner catalog"
+    git -C "$WORK/partner-catalog" tag v1.0.0
+    kc catalog add "file://${WORK}/partner-catalog"
+    [[ "$KC_RC" -eq 0 ]] || fail partner_catalog "catalog add exited ${KC_RC}"
+    jq_ warning-ids <"$WORK/log/kc.out" | has_line local_source \
+      || fail partner_catalog "local_source was not warned"
+  fi
   kc service plan file-mcp || true
   [[ "$KC_RC" -eq 2 ]] || fail partner_catalog "plan exited ${KC_RC}"
   jq_ missing-kind <"$WORK/log/kc.out" | has_line argument \
