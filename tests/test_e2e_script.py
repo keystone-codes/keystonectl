@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (ROOT / "scripts" / "e2e.sh").read_text(encoding="utf-8")
+README = (ROOT / "scripts" / "e2e" / "README.md").read_text(encoding="utf-8")
 
 
 def _function_body(name: str) -> str:
@@ -110,8 +113,15 @@ def test_certbot_reissue_is_checked_by_serial_not_log_size() -> None:
 
 def test_vm_profile_checks_pypi_before_installing() -> None:
     lines = SCRIPT.splitlines()
+    pyproject_index = next(
+        index
+        for index, line in enumerate(lines)
+        if "PYPROJECT_VERSION=" in line and "tomllib" in line
+    )
     spec_default_index = next(
-        index for index, line in enumerate(lines) if 'KEYSTONECTL_SPEC="pypi:0.1.0"' in line
+        index
+        for index, line in enumerate(lines)
+        if 'KEYSTONECTL_SPEC="pypi:${PYPROJECT_VERSION}"' in line
     )
     guard_index = next(
         index
@@ -119,12 +129,172 @@ def test_vm_profile_checks_pypi_before_installing() -> None:
         if 'echo "keystonectl $pypi_version is not on PyPI:' in line
     )
     main_index = next(index for index, line in enumerate(lines) if line.startswith("main()"))
-    assert spec_default_index < guard_index < main_index
+    assert pyproject_index < spec_default_index < guard_index < main_index
     guard_block = "\n".join(lines[guard_index - 3 : guard_index + 2])
     assert 'KEYSTONECTL_SPEC" == pypi:*' in guard_block
     assert "pypi_version_exists" in guard_block
     assert "exit 1" in guard_block
     assert "pass --keystonectl <wheel or checkout>" in guard_block
+
+
+def test_vm_profile_requires_domain() -> None:
+    env = os.environ.copy()
+    env["E2E_PYPI_CHECK_CMD"] = "true"
+    env.pop("E2E_TLS_EMAIL", None)
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "e2e.sh"),
+            "--profile",
+            "vm",
+            "--tls",
+            "certbot",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "--domain is required for the vm profile" in result.stderr
+
+
+def test_vm_certbot_requires_real_email() -> None:
+    env = os.environ.copy()
+    env["E2E_PYPI_CHECK_CMD"] = "true"
+    base_cmd = [
+        "bash",
+        str(ROOT / "scripts" / "e2e.sh"),
+        "--profile",
+        "vm",
+        "--tls",
+        "certbot",
+        "--domain",
+        "files.example.com",
+    ]
+    for email in (None, "admin@example.com"):
+        run_env = env.copy()
+        if email is None:
+            run_env.pop("E2E_TLS_EMAIL", None)
+        else:
+            run_env["E2E_TLS_EMAIL"] = email
+        result = subprocess.run(
+            base_cmd,
+            cwd=ROOT,
+            env=run_env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 1
+        assert "set E2E_TLS_EMAIL to a real address" in result.stderr
+
+
+def test_vm_default_spec_follows_pyproject_version() -> None:
+    expected = tomllib.load((ROOT / "pyproject.toml").open("rb"))["project"]["version"]
+    assert 'KEYSTONECTL_SPEC="pypi:${PYPROJECT_VERSION}"' in SCRIPT
+    assert "tomllib.load(open(sys.argv[1]" in SCRIPT
+    read_version = subprocess.run(
+        [
+            "python3",
+            "-c",
+            'import tomllib, sys; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])',
+            str(ROOT / "pyproject.toml"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert read_version.stdout.strip() == expected
+
+
+_MATRIX_COLUMNS = (
+    "production-example ci",
+    "production-example vm",
+    "keystone-deploy ci",
+    "keystone-deploy vm",
+)
+
+_SKIP_RULES: dict[str, list[tuple[str, str]]] = {
+    "scenario_agent_path_missing": [
+        (
+            '[[ "$LAYOUT" == "keystone-deploy" && "$PROFILE" == "vm" ]]',
+            "setup.sh already installed bundle minimal",
+        ),
+    ],
+    "scenario_tls_certbot": [
+        ('[[ "$PROFILE" != "vm" || "$TLS" != "certbot" ]]', "certbot runs only on the vm profile"),
+    ],
+    "scenario_tls_manual": [
+        ('[[ "$LAYOUT" != "production-example" ]]', "only the production example"),
+    ],
+}
+
+
+def _layout_profile_tls(column: str) -> tuple[str, str, str]:
+    layout, profile = column.rsplit(" ", 1)
+    tls = "certbot" if profile == "vm" else "custom"
+    return layout, profile, tls
+
+
+def _condition_applies(condition: str, layout: str, profile: str, tls: str) -> bool:
+    if condition == '[[ "$LAYOUT" == "keystone-deploy" && "$PROFILE" == "vm" ]]':
+        return layout == "keystone-deploy" and profile == "vm"
+    if condition == '[[ "$PROFILE" != "vm" || "$TLS" != "certbot" ]]':
+        return profile != "vm" or tls != "certbot"
+    if condition == '[[ "$LAYOUT" != "production-example" ]]':
+        return layout != "production-example"
+    raise AssertionError(f"unknown matrix condition: {condition}")
+
+
+def _parse_scenario_matrix() -> list[tuple[str, str, dict[str, str | None]]]:
+    section = README.split("### Scenario matrix", 1)[1]
+    table_lines = [
+        line
+        for line in section.splitlines()
+        if line.startswith("|")
+        and not line.startswith("| Scenario")
+        and not line.startswith("|---")
+    ]
+    rows: list[tuple[str, str, dict[str, str | None]]] = []
+    for line in table_lines:
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        label, *values = cells
+        assert len(values) == len(_MATRIX_COLUMNS)
+        parsed: dict[str, str | None] = {}
+        for column, cell in zip(_MATRIX_COLUMNS, values, strict=True):
+            if cell == "runs":
+                parsed[column] = None
+            else:
+                match = re.fullmatch(r"skipped \((.+)\)", cell)
+                assert match, f"unexpected cell {cell!r} in {label}"
+                parsed[column] = match.group(1)
+        match = re.search(r"`([^`]+)`", label)
+        assert match, label
+        rows.append((f"scenario_{match.group(1)}", label, parsed))
+    return rows
+
+
+def test_scenario_matrix_matches_skips() -> None:
+    for function_name, _label, cells in _parse_scenario_matrix():
+        rules = _SKIP_RULES.get(function_name, [])
+        body = _function_body(function_name)
+        skip_token = function_name.removeprefix("scenario_")
+        for condition, reason in rules:
+            assert f'skip {skip_token} "{reason}"' in body
+            assert condition in body
+        for column, expected_reason in cells.items():
+            layout, profile, tls = _layout_profile_tls(column)
+            triggered = [
+                reason
+                for condition, reason in rules
+                if _condition_applies(condition, layout, profile, tls)
+            ]
+            if expected_reason is None:
+                assert triggered == [], (function_name, column, triggered)
+            else:
+                assert triggered == [expected_reason], (function_name, column, triggered)
 
 
 def test_pypi_version_exists_defers_to_the_check_command_override() -> None:
