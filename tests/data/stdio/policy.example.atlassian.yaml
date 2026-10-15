@@ -1,0 +1,40 @@
+# Example only. keystonectl prints this file and never merges it into your policy.
+# The box does not check roles: whoever the policy lets call atlassian_creds_* manages
+# everyone's accounts in this box. Do not give a non-administrator role atlassian_* :
+# it also matches atlassian_creds_*.
+version: "2.0.0"
+default_deny: true
+roles:
+  atlassian_reader:
+    description: "Read Jira and Confluence through the atlassian box."
+    allow:
+      - atlassian_jira_get_issue
+      - atlassian_jira_search
+      - atlassian_confluence_get_page
+      - atlassian_creds_whoami
+      - atlassian_creds_providers
+  atlassian_writer:
+    description: "Read and change Jira and Confluence through the atlassian box."
+    allow:
+      - atlassian_jira_get_issue
+      - atlassian_jira_search
+      - atlassian_confluence_get_page
+      - atlassian_creds_whoami
+      - atlassian_creds_providers
+  atlassian_box_admin:
+    description: "Manage accounts and bindings in the atlassian box."
+    allow:
+      - "atlassian_creds_*"
+critical_tools:
+  - atlassian_creds_profile_create
+  - atlassian_creds_profile_rotate
+  - atlassian_creds_profile_delete
+  - atlassian_creds_bind
+  - atlassian_creds_unbind
+# Only a signed-in person may change accounts; API keys and service accounts may not.
+requires_human_identity:
+  - atlassian_creds_profile_create
+  - atlassian_creds_profile_rotate
+  - atlassian_creds_profile_delete
+  - atlassian_creds_bind
+  - atlassian_creds_unbind

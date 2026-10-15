@@ -117,6 +117,39 @@ Same check as `keystonectl lint`.
 }
 ```
 
+### keystonectl package wrap-stdio
+
+    keystonectl package wrap-stdio <provider-dir> [--image REF] [--tools-snapshot FILE | --no-discovery] [--name NAME] [--namespace NS] [--derived-image] [--force]
+
+Writes a box package into a stdio provider directory. It does not install anything and does not read credential profiles. With neither `--tools-snapshot` nor `--no-discovery`, it runs `snapshot-tools` in the stdio-box image and writes `tools.snapshot.json`. `--no-discovery` lists only the `creds_*` tools and warns `tools_snapshot_missing`. An existing manifest is updated in place (`mcp.tools`, `mcp.critical`, and the `BOX_COMMAND` default) unless `--force` rewrites it. `--derived-image` also writes a two-line `Dockerfile`.
+
+The default `--image` is `ghcr.io/keystone-codes/stdio-box:0.1.0` with a placeholder digest of 64 zeros. That digest is still open: it is not the published image. The stdio-box image release replaces it.
+
+```json
+{
+  "ok": true,
+  "code": 0,
+  "command": "package wrap-stdio",
+  "target": "packages/atlassian",
+  "summary": "Wrote package atlassian (13 tools).",
+  "actions": [],
+  "changes": 3,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "atlassian",
+    "namespace": "atlassian",
+    "dir": "packages/atlassian",
+    "files": ["tools.snapshot.json", "keystone-service.yaml", "policy.example.yaml"],
+    "tools": 13,
+    "discovery": "file",
+    "warnings": []
+  }
+}
+```
+
 ### keystonectl check
 
     keystonectl check
@@ -857,6 +890,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | compose_not_found | 3 | false | Add docker-compose.yml (or compose.yaml) and run init --adopt. |
 | compose_too_old | 3 | false | Upgrade the Docker Compose plugin to 2.24 or newer. |
 | compose_unparseable | 3 | false | Fix the compose file and run init --adopt again. |
+| discovery_failed | 3 | true | Read the lines in result.stderr; if the server needs a real account to start, set discovery.mode: manual and pass --tools-snapshot. |
 | dns_mismatch | 3 | true | Update the A record or wait for DNS to propagate (often 1-10 min), then run apply again. |
 | dns_no_record | 3 | true | Add an A record for the domain pointing at this host, then run apply again. |
 | docker_unavailable | 3 | true | Start Docker. The keystone-resources network is created when a service is deployed. |
@@ -878,6 +912,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | layout_unsupported | 3 | false | layout_version must be 1. |
 | lock_corrupt | 3 | false | Restore services.lock.yaml.bak or run keystonectl init again on a copy. |
 | manifest_invalid | 3 | false | Fix the problems listed in result.problems and run keystonectl lint. |
+| manifest_unrecognized | 3 | false | Run again with --force to rewrite it. |
 | namespace_change_unsupported | 3 | false | Run keystonectl service remove, then install the service again. |
 | nginx_config_invalid | 3 | false | Read the nginx -t output. The previous site file was restored. |
 | nginx_missing | 3 | false | Install nginx, or answer TLS=manual. |
@@ -902,6 +937,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | postgres_url_invalid | 3 | false | Add sslmode to the URL, for example ?sslmode=require. |
 | postgres_version_too_old | 3 | false | Use a PostgreSQL server that is version 14 or newer. |
 | priority_taken | 3 | false | Pick another --priority. Priority only affects listing order. |
+| provider_invalid | 3 | false | Fix the problems listed in result.problems and run keystonectl package wrap-stdio again. |
 | provision_failed | 3 | false | If the provider was not ready yet, run the command again. Otherwise fix the provider package. |
 | public_ip_unknown | 3 | true | Check outbound HTTPS and run the command again, or answer DNS=skip. |
 | public_unreachable | 3 | true | Finish the proxy and certificate, then run apply again. |
@@ -987,6 +1023,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | s3_plain_http | warning | false | Prefer https:// for storage that is not on your own Docker network. |
 | snapshot_moved | warning | false | keystone-mcp now reads the snapshot from keystonectl/. |
 | tls_untrusted | warning | false | The service answered. Install the certificate in the system trust store if clients should trust it. |
+| tools_snapshot_missing | warning | false | Run wrap-stdio again without --no-discovery. |
 | tools_unreachable | warning | false | Ask an administrator to add policy rows (see the recommended policy below). |
 | unmanaged_upstream | warning | false | The entry is left as-is. It belongs to the operator. |
 | unparsed_enddate | warning | false | Check the certificate file format and run keystonectl check again. |

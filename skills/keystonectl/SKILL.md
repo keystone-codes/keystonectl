@@ -303,6 +303,9 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `tag_not_found` | 3 | false | That git tag does not exist. | Check the ref in sources.yaml or catalog.yaml. For the default source, update keystonectl or add sources.yaml with a ref that exists. |
 | `tag_moved` | 3 | false | The tag now points at a different commit than the one recorded in the lock. | Refuse the move. Pin a commit, or upgrade on purpose with service upgrade. |
 | `manifest_invalid` | 3 | false | The package manifest is not valid. | Fix the problems listed in result.problems and run keystonectl lint. |
+| `provider_invalid` | 3 | false | The stdio provider descriptor is not valid. | Fix the problems listed in result.problems and run keystonectl package wrap-stdio again. |
+| `discovery_failed` | 3 | true | The server did not list its tools. | Read the lines in result.stderr; if the server needs a real account to start, set discovery.mode: manual and pass --tools-snapshot. |
+| `manifest_unrecognized` | 3 | false | The existing manifest could not be updated in place. | Run again with --force to rewrite it. |
 | `catalog_invalid` | 3 | false | The catalog file is not valid. | Fix catalog.yaml and run keystonectl lint on it. |
 | `incompatible_keystone_mcp` | 3 | false | The package does not support this keystone-mcp version. | Choose a version whose range includes the running keystone-mcp, or upgrade it. |
 | `requires_missing` | 3 | false | A required package is not installed. | Install them first or use bundle install. |
@@ -445,6 +448,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `provider_data_kept` | 0 | false | Provider volumes still hold every former consumer's data. | Say reinstall reuses the volumes; backup first, then `docker volume rm` only if they will not reinstall — never run it yourself. |
 | `package_name_shadowed` | 0 | false | A package name now exists in more than one catalog. | Install it by full name source/name. |
 | `bundle_name_shadowed` | 0 | false | A bundle name now exists in more than one catalog. | Install it by full name source/name. |
+| `tools_snapshot_missing` | 0 | false | The package lists only the creds_* tools. | Run wrap-stdio again without --no-discovery. |
 
 ## Examples
 

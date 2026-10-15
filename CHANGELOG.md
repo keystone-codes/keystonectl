@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `keystonectl package wrap-stdio` writes a box package (manifest with the server's tools, tool snapshot, policy example) from a stdio provider directory.
 - Warning `resource_answer_ignored` when a resource answer disagrees with the provider already bound.
 - Warning `builtin_tools_unavailable` when apply cannot read keystone-mcp's live tool list.
 - `catalog set-ref <name> <ref>` moves a source to another tag or commit.
