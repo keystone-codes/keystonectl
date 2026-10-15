@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `package wrap-stdio` pins the default `--image` to the published stdio-box 0.1.0 digest.
 - Provider contract: the secret file is the desired secret.
 - docs: Backups of catalog providers, `tools_unreachable` as the state before policy, confirmations as a contract, manual registry edits during apply.
 - Removing a provider uses one consumer check; warnings `provider_unused` and `provider_data_kept` name the volumes that stay.
