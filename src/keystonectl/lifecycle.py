@@ -20,6 +20,8 @@ from packaging.version import InvalidVersion, Version
 
 from keystonectl import __version__
 from keystonectl.answers import Question, pkg_var
+from keystonectl.cachedir import private_subdir
+from keystonectl.envfiles import read_env, upsert_env
 from keystonectl.errors import ERRORS
 from keystonectl.generate.compose import fragment_digest, render_fragment
 from keystonectl.generate.docker import compose_prefix, run
@@ -263,6 +265,119 @@ def _published(namespace: str | None, tools: list[Any]) -> list[str]:
     return tool_names(namespace, [str(item) for item in tools if isinstance(item, str)])
 
 
+def generated_secrets_path(root: Path, name: str) -> Path:
+    """``.keystonectl/secrets/<name>.generated.env`` — not created by this call."""
+
+    return Path(root) / ".keystonectl" / "secrets" / f"{name}.generated.env"
+
+
+def _generated_secret_names(entry: Mapping[str, Any]) -> list[str]:
+    env = entry.get("env") if isinstance(entry.get("env"), dict) else {}
+    raw = env.get("generated")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, str) and item]
+
+
+def _docker_volume_names(name: str, manifest: Mapping[str, Any]) -> list[str]:
+    """Compose volume names for named volumes. Same predicate as ``_named_volumes``."""
+
+    containers = manifest.get("containers") if isinstance(manifest.get("containers"), dict) else {}
+    found: list[str] = []
+    for spec in containers.values():
+        if not isinstance(spec, dict):
+            continue
+        for item in spec.get("volumes") or []:
+            if not isinstance(item, dict):
+                continue
+            volume = item.get("name")
+            target = item.get("path")
+            if not isinstance(volume, str) or not isinstance(target, str) or "/" in volume:
+                continue
+            docker_name = f"ks-pkg-{name}-{volume}"
+            if docker_name not in found:
+                found.append(docker_name)
+    return found
+
+
+def _generated_secrets_kept_message(
+    name: str,
+    secret_names: list[str],
+    volumes: list[str] | None,
+    relative: str,
+) -> str:
+    listed = ", ".join(secret_names)
+    if volumes:
+        reason = f"because volumes {', '.join(volumes)} still hold data that needs them"
+    else:
+        reason = (
+            "because the cached manifest is missing and volumes may still hold data that needs them"
+        )
+    return (
+        f"Generated secrets of {name} ({listed}) are kept in {relative} {reason}. "
+        f"Installing {name} again reuses them. "
+        "Delete the file only together with those volumes."
+    )
+
+
+def _preserve_generated_secrets(
+    root: Path,
+    entry: Mapping[str, Any],
+    name: str,
+    secrets: SecretRegistry,
+) -> tuple[str, dict[str, str]] | None:
+    """Copy generated secrets of a service with volumes before its env files are deleted.
+
+    A missing cached manifest still saves: keeping a secret is cheaper than losing it.
+    Operator secrets and ordinary env values are not copied. An existing file is
+    overwritten only when the current env files still hold values.
+    """
+
+    if entry.get("managed") == "remote" or entry.get("role") != "service":
+        return None
+    generated = _generated_secret_names(entry)
+    if not generated:
+        return None
+    manifest = _manifest_at(root, entry)
+    volumes: list[str] | None
+    if manifest is None:
+        volumes = None
+    else:
+        volumes = _docker_volume_names(name, manifest)
+        if not volumes:
+            return None
+    env = entry.get("env") if isinstance(entry.get("env"), dict) else {}
+    found: dict[str, str] = {}
+    for relative in env.get("files") or []:
+        if not isinstance(relative, str):
+            continue
+        current = read_env(root / relative)
+        for secret_name in generated:
+            if secret_name in found:
+                continue
+            value = current.get(secret_name) or ""
+            if not value:
+                continue
+            secrets.register(value)
+            found[secret_name] = value
+    path = generated_secrets_path(root, name)
+    if found:
+        private_subdir(root, "secrets")
+        stale = set(read_env(path)) - set(found)
+        upsert_env(path, found, remove=stale)
+    elif not path.is_file():
+        return None
+    stored = read_env(path)
+    shown = [item for item in generated if stored.get(item)]
+    if not shown:
+        return None
+    relative_path = f".keystonectl/secrets/{name}.generated.env"
+    return relative_path, {
+        "id": "generated_secrets_kept",
+        "message": _generated_secrets_kept_message(name, shown, volumes, relative_path),
+    }
+
+
 def _wait_keystone_healthy(
     runner: CommandRunner,
     root: Path,
@@ -395,6 +510,9 @@ def remove_service(
     env = entry.get("env") if isinstance(entry.get("env"), dict) else {}
     files = [str(item) for item in env.get("files") or [] if isinstance(item, str)]
     provider = entry.get("role") == "resource"
+    preserved = _preserve_generated_secrets(root, entry, name, secrets)
+    if preserved is not None:
+        kept.append(preserved[0])
     for relative in files:
         path = root / relative
         if provider and path.name == f"{name}.env":
@@ -422,6 +540,8 @@ def remove_service(
             retired.append(tool)
     _write_retired(root, retired)
     warnings = []
+    if preserved is not None:
+        warnings.append(preserved[1])
     if orphaned:
         warnings.append(
             {

@@ -954,6 +954,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | dns_system_resolver | warning | false | Install dig for a check against 1.1.1.1. The system resolver can be cached. |
 | extra_hosts_manual | warning | false | Add the host line yourself in the override or in your own compose file. |
 | fragment_modified | warning | false | Move your changes into the override file, or eject the service. |
+| generated_secrets_kept | warning | false | Delete .keystonectl/secrets/<name>.generated.env only together with the volumes that still need those secrets. |
 | inline_registry_ignored | warning | false | Upstreams are read from keystonectl/upstreams.yaml. |
 | installed_version_missing | warning | false | Upgrade or apply will need another version of that package. |
 | keystone_compose_missing | warning | false | Put keystone-mcp's docker-compose.yml and .env here (see keystone-mcp examples/production) and run keystonectl init again. |
