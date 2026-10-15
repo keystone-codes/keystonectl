@@ -37,7 +37,7 @@ scripts/e2e.sh --layout production-example --profile ci --storage both --postgre
 - **production-example** copies `examples/production` from keystone-mcp `6b04a198101dac22815b17d5bcf55b0e1c6463d8` and adopts it. The one-time patch is `scripts/e2e/fixtures/production-example.patch`. That file has no diff. An empty diff means the open example needs no one-time edit: `init --adopt` already adds the second compose file and the upstream network.
 - **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `ffd719701f3bb0eb53bdd212447bcd43bbd07c43`. CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend. That profile skips `agent_path_missing` because setup already installed the minimal bundle.
 
-Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upstream are GHCR digests. MinIO, mc, Postgres, and Redis are the foreign digests from the package manifests (Redis from `docker buildx imagetools inspect`).
+Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upstream are GHCR digests. MinIO, mc, Postgres, and Redis are the foreign digests from the package manifests (Redis from `docker buildx imagetools inspect`). stdio-box is `ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519` from commit `1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f` (tag `atlassian/v1.0.0`, read from `IMAGE` on 2026-10-15).
 
 ## Scenarios
 
@@ -56,6 +56,7 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 13. On the open example, manual TLS: the first apply is retryable `public_unreachable`. Both profiles then install the sample nginx vhost with a self-signed certificate; apply reaches ready. On the VM profile this runs after the certbot scenario, so a certbot-issued certificate cannot be mistaken for the manual one.
 14. `check` allows `tls_untrusted`, `s3_plain_http`, and `postgres_plain_connection`. Any other warning fails.
 15. Forbidden leftovers on both layouts. Shared checks: no `.*.tmp` files outside `.keystonectl/`, an empty `.keystonectl/tmp/`, no unexplained files under `packages/` (lock names, operator `*.override.yml`, and paths kept by `service remove` are allowed), and mode `600` on `services.lock.yaml` and `packages/*.env`. On **keystone-deploy**, the script also scans `setup.sh`, `start.sh`, docs, and `mcp/**` for legacy external-API strings, refuses a `build:` on `keystone-mcp`, and on the vm profile checks `layout_version`. On **production-example**, it compares operator-file digests to a snapshot taken at the end of prepare (compose, optional `upstreams.yaml`, policy, and `.env` outside the managed block), refuses a `build:` on the layout keystone service, and checks `layout.flavor` and `layout_version`. The report notes which branch ran.
+16. `atlassian_profiles`: install the `atlassian` package from the local catalog subdirectory `packages/atlassian`, then check per-person profiles, role order, a service-account profile, and a reinstall that keeps those profiles. The ci profile submits the credential form through nginx. The vm profile imports the same secrets with `credsctl`. Number 17 is reserved for `second_instance` in 0.3.
 
 On the VM profile with `--tls certbot`, an unnumbered scenario runs between 12 and 13: the certificate for `--domain` was issued by Let's Encrypt, and re-applying does not change its serial number (certbot did not re-issue).
 
@@ -81,6 +82,7 @@ The table lists each numbered scenario plus the certbot step. Cells assume defau
 | 13 `tls_manual` | runs | runs | skipped (only the production example) | skipped (only the production example) |
 | 14 `check_clean` | runs | runs | runs | runs |
 | 15 `legacy_gone` | runs | runs | runs | runs |
+| 16 `atlassian_profiles` | runs | runs | runs | runs |
 
 ## Report
 

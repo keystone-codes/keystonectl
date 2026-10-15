@@ -145,6 +145,10 @@ def query_lines(document: Mapping[str, Any], query: str, arg: str | None) -> lis
         if not arg:
             raise ValueError("package-status needs a package name")
         return _package_status(document, arg)
+    if query == "box-service":
+        if not arg:
+            raise ValueError("box-service needs a package name")
+        return _box_service(document, arg)
     raise ValueError(f"unknown query {query}")
 
 
@@ -155,6 +159,19 @@ def _public_field(document: Mapping[str, Any], field: str) -> list[str]:
     public = result.get("public")
     if isinstance(public, Mapping) and public.get(field) is not None:
         return [str(public[field])]
+    return []
+
+
+def _box_service(document: Mapping[str, Any], name: str) -> list[str]:
+    service = _service(document, name)
+    if service is None:
+        return []
+    for container in service.get("containers") or []:
+        if not isinstance(container, Mapping) or container.get("role") != "mcp":
+            continue
+        compose_service = container.get("service")
+        if isinstance(compose_service, str) and compose_service:
+            return [compose_service]
     return []
 
 
@@ -199,7 +216,8 @@ def main(argv: list[str] | None = None) -> int:
             "usage: jsonq.py QUERY [ARG]\n"
             "queries: code missing-vars missing-kind missing-choices confirm-vars "
             "error-id retryable changes kept warning-ids problems compose-command "
-            "public-state public-tls packages has-recommended-policy package-status",
+            "public-state public-tls packages has-recommended-policy package-status "
+            "box-service",
             file=sys.stderr,
         )
         return 2
