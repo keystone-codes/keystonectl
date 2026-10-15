@@ -969,6 +969,8 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | policy_not_configured | warning | false | check will skip the policy comparison until a policy file is configured. |
 | policy_rows_orphaned | warning | false | Delete these policy rows. The tool names stay reserved until you do. |
 | postgres_plain_connection | warning | false | Prefer sslmode require, verify-ca, or verify-full for a server you do not run here. |
+| provider_data_kept | warning | false | Back up first, then delete volumes with docker volume rm if you will not reinstall. |
+| provider_unused | warning | false | Remove the provider with service remove when you no longer need its data on disk. |
 | public_check_failed | warning | false | The service is installed. Check the proxy and run apply again. |
 | public_pending | warning | false | Run service apply again with a domain when you want the public paths published. |
 | published_name_long | warning | false | Many MCP clients reject names longer than 64 characters. |
