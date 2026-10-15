@@ -59,6 +59,8 @@ The first time a file that contains comments is rewritten, copy it once to
 `<file>.orig` and report the warning `comments_dropped`. Later rewrites do not
 refresh `.orig`.
 
+**Manual edits while keystonectl runs.** The `.lck` file stops a second keystonectl from changing state; it does not stop a person from editing `keystonectl/upstreams.yaml` on disk. If you edit that registry during `service apply`, your edit can be written without `upstream validate`, or overwritten by keystonectl's merge. Edit the registry only when keystonectl is idle, then run `keystonectl check`.
+
 `init` creates missing files and does not rewrite a file that is already
 present, except `services.lock.yaml` when recognition produced a different
 `layout`, and `docker-compose.packages.yml` when the rendered bytes differ.
