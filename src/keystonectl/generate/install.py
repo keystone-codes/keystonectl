@@ -708,7 +708,7 @@ def _validate_mcp(
         _cleanup_staging(staging)
 
 
-def _live_names(ctx: Context, namespace: str) -> list[str]:
+def _live_names(ctx: Context, namespace: str) -> tuple[list[str], str | None]:
     layout = _layout(ctx)
     service = str(layout.get("keystone_service") or "")
     result = run(
@@ -725,10 +725,14 @@ def _live_names(ctx: Context, namespace: str) -> list[str]:
         cwd=ctx.root,
     )
     if result.returncode != 0:
-        return []
+        detail = result.stderr.strip().splitlines()
+        problem = ctx.secrets.redact(detail[0] if detail else "command failed")
+        if len(problem) > 200:
+            problem = problem[:200]
+        return [], problem
     names = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     prefix = f"{namespace}_"
-    return [name for name in names if not name.startswith(prefix)]
+    return [name for name in names if not name.startswith(prefix)], None
 
 
 def _validate_policy(
@@ -744,7 +748,17 @@ def _validate_policy(
     if mode == "off" or policy is None or not policy.is_file():
         ctx.extra_warnings.append(warning("policy_check_skipped", "The policy check was skipped."))
         return True
-    live = _live_names(ctx, namespace)
+    layout = _layout(ctx)
+    project = str(layout.get("project") or "")
+    live, problem = _live_names(ctx, namespace)
+    if problem is not None and _keystone_running(ctx, project):
+        ctx.extra_warnings.append(
+            warning(
+                "builtin_tools_unavailable",
+                f"Could not read the tools keystone-mcp publishes now ({problem}). "
+                "The policy check ran without them.",
+            )
+        )
     (staging / "live.txt").write_text("".join(f"{name}\n" for name in live), encoding="utf-8")
     current = _load_yaml(ctx.root / "keystonectl" / "catalog-snapshot.yaml")
     services = [item for item in (ctx.lock.get("services") or []) if isinstance(item, dict)]

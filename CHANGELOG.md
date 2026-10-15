@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Warning `resource_answer_ignored` when a resource answer disagrees with the provider already bound.
+- Warning `builtin_tools_unavailable` when apply cannot read keystone-mcp's live tool list.
 
 ## [0.1.1] - 2026-10-15
 

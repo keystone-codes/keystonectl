@@ -66,6 +66,8 @@ class DockerBox:
         self.metrics = ""
         self.logs = ""
         self.live_names = ""
+        self.live_catalog_code = 0
+        self.live_catalog_stderr = ""
         self.init_fail: set[str] = set()
         self.started: list[str] = []
         self.inspect_health = "healthy"
@@ -142,7 +144,12 @@ class DockerBox:
             return CommandResult(tuple(args), 0, "\n".join(lines) + ("\n" if lines else ""), "")
         if args[0] == "docker" and args[1] == "compose" and "exec" in args:
             if "keystone_mcp.rbac.catalog" in args:
-                return CommandResult(tuple(args), 0, self.live_names, "")
+                return CommandResult(
+                    tuple(args),
+                    self.live_catalog_code,
+                    self.live_names,
+                    self.live_catalog_stderr,
+                )
             if "healthcheck" in args:
                 return CommandResult(tuple(args), 0, "", "")
             if "metrics" in " ".join(args):
