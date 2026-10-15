@@ -847,6 +847,26 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "This is the operator's choice. Review ports, privileges, and host mounts.",
         ),
         _w(
+            "override_unchecked",
+            "Override access could not be checked.",
+            "Fix the compose files and run keystonectl check again.",
+        ),
+        _w(
+            "compose_version_unknown",
+            "Docker Compose version could not be read.",
+            "Install the Docker Compose plugin 2.24 or newer.",
+        ),
+        _w(
+            "check_skipped_no_docker",
+            "A check that needs Docker was skipped.",
+            "Install Docker to run this check.",
+        ),
+        _w(
+            "unparsed_enddate",
+            "The certificate end date could not be read.",
+            "Check the certificate file format and run keystonectl check again.",
+        ),
+        _w(
             "tls_untrusted",
             "The public certificate is not trusted by the system trust store.",
             "The service answered. Install the certificate in the system trust store "

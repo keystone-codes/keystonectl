@@ -157,9 +157,31 @@ def test_docker_checks_warn_without_docker(
     code, document = _json(capsys, ["--json", "--root", str(root), "check"])
     assert code == 0
     assert any(
-        item["id"] == "containers" and item["status"] == "warning"
+        item["id"] == "check_skipped_no_docker" and item["status"] == "warning"
         for item in document["result"]["checks"]
     )
+    assert any(item["id"] == "check_skipped_no_docker" for item in document["warnings"])
+
+
+def test_check_warning_ids_are_registered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from keystonectl.errors import WARNINGS
+    from keystonectl.generate import checks as checks_mod
+
+    monkeypatch.setattr("keystonectl.check.docker_available", lambda: False)
+    monkeypatch.setattr(
+        checks_mod,
+        "read_compose_config",
+        lambda _root, layout=None: (1, ""),
+    )
+    monkeypatch.setattr(checks_mod, "read_compose_version", lambda: (1, ""))
+    root = tmp_path / "root"
+    _write(root, _lock(_service()))
+    code, document = _json(capsys, ["--json", "--root", str(root), "check"])
+    assert code == 0
+    for item in document["warnings"]:
+        assert item["id"] in WARNINGS, item["id"]
 
 
 def test_missing_layout_file_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
