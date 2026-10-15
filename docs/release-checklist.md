@@ -37,7 +37,7 @@ Commit K is the candidate under test for every row below, including A–H. Fill 
 Ubuntu 22.04. Install keystone-mcp from `examples/production` by following `docs/paths/production-docker.md` in keystone-mcp. Build the wheel from the commit under test (`uv build`), copy it to the VM, then:
 
 ```bash
-scripts/e2e.sh --layout production-example --profile vm --tls certbot --domain <vm-domain>
+E2E_TLS_EMAIL=<address> scripts/e2e.sh --layout production-example --profile vm --tls certbot --domain <vm-domain>
 ```
 
 (or add `--keystonectl <wheel>` for an unpublished candidate)
@@ -47,7 +47,7 @@ Attach the JSONL report next to this file when the run exists.
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
 | Install keystone-mcp | Follow `docs/paths/production-docker.md` | Gateway answers on the VM | |
-| Run the script | command above | `keystonectl` installs from PyPI (or the wheel, if passed); exit 0; scenarios 1–15 pass; certbot issued the certificate | |
+| Run the script | command above | `keystonectl` installs from PyPI (or the wheel, if passed); exit 0; every scenario marked `runs` for this layout and profile in `scripts/e2e/README.md` passes; certbot issued the certificate | |
 
 ## B. Clean VM, keystone-deploy
 
@@ -55,8 +55,8 @@ Same script, layout `keystone-deploy`, profile `vm`, `--tls certbot`, on Ubuntu 
 
 | Step | Command or action | Expected | Result |
 |---|---|---|---|
-| Ubuntu 22.04 | `scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain>` (or add `--keystonectl <wheel>` for an unpublished candidate) | Exit 0; scenarios 1–15 pass | |
-| Debian 12 | same command | Exit 0; scenarios 1–15 pass | |
+| Ubuntu 22.04 | `E2E_TLS_EMAIL=<address> scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain>` (or add `--keystonectl <wheel>` for an unpublished candidate) | Exit 0; every scenario marked `runs` for this layout and profile in `scripts/e2e/README.md` passes | |
+| Debian 12 | same command | Exit 0; every scenario marked `runs` for this layout and profile in `scripts/e2e/README.md` passes | |
 | bats | Run `tests/bash/run.sh` in keystone-deploy on the commit under test | all bats files pass | |
 
 ## C. Owner stand, through chat
