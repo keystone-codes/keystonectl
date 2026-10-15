@@ -46,3 +46,11 @@ keystone-mcp `upstream validate` and `catalog validate` run in `docker run --net
 ## Restart
 
 A change to the keystone-mcp wiring in `docker-compose.packages.yml` recreates that service with `up -d --no-deps`. A registry change restarts it (`docker compose restart`), because this keystone-mcp does not reload the registry on `SIGHUP`. A snapshot-only change sends `SIGHUP`. If keystone-mcp is not running, apply says so and does not start it. An unchanged apply does not pull, start, or signal anything.
+
+## When apply fails
+
+A first install that does not become healthy leaves only data behind. The containers of the package are stopped and removed (`docker compose rm -s -f`, while the fragment is still on disk), the fragment and the include in `docker-compose.packages.yml` are restored, and the lock has no entry for the package. The same holds when an init container fails or when a resource provider started for the package does not become healthy. The resource, its env file `packages/<name>.<kind>.env`, the consumer secret in `.keystonectl/secrets/`, and the bucket, database, and volumes stay, so the next apply uses the same credentials and does not ask about the resource again. The consumer record in `resources[]` is dropped, as `service remove` drops it, because the lock cannot name a service it does not list.
+
+A failed apply of an already installed service restores the files and leaves the containers as Docker left them. Its lock entry stays; use `service rollback` after a failed upgrade.
+
+The error carries `result.rollback`: `containers` lists the Compose services that were stopped, and `lock_entry` is `dropped` or `kept`. `error.message` says the same in a sentence.
