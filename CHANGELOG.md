@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - e2e: The leftovers check also runs on the production-example layout.
 - `check` reports `override_unchecked`, `compose_version_unknown` and `check_skipped_no_docker` instead of reusing check ids; every warning id is in the registry.
 - `output.schema.json` types `result` for apply, list, status, remove, bundle and catalog list; `service apply` reports `result.resources`.
+- `service remove` keeps generated secrets of a package with volumes in `.keystonectl/secrets/<name>.generated.env`; reinstalling reuses them.
 
 ### Fixed
 
