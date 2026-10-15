@@ -1,0 +1,97 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "catalog list",
+  "target": "/srv/keystone",
+  "summary": "1 catalog.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "keystone_mcp_version": "0.5.0",
+    "sources": [
+      {
+        "name": "keystone-codes",
+        "url": "https://example.com/keystone-codes.git",
+        "ref": "v1.0.0",
+        "priority": 100
+      }
+    ],
+    "packages": [
+      {
+        "source": "keystone-codes",
+        "name": "atlassian",
+        "kind": "service",
+        "installed": null,
+        "versions": [
+          {
+            "version": "1.0.0",
+            "ref": "atlassian/v1.0.0",
+            "keystone_mcp": ">=0.5.0,<2",
+            "compatible": true
+          }
+        ]
+      },
+      {
+        "source": "keystone-codes",
+        "name": "notion",
+        "kind": "service",
+        "installed": null,
+        "versions": [
+          {
+            "version": "1.0.0",
+            "ref": "notion/v1.0.0",
+            "keystone_mcp": ">=0.5.0,<2",
+            "compatible": true
+          }
+        ]
+      },
+      {
+        "source": "keystone-codes",
+        "name": "tavily",
+        "kind": "service",
+        "installed": null,
+        "versions": [
+          {
+            "version": "1.0.0",
+            "ref": "tavily/v1.0.0",
+            "keystone_mcp": ">=0.5.0,<2",
+            "compatible": true
+          }
+        ]
+      },
+      {
+        "source": "keystone-codes",
+        "name": "yandex-tracker",
+        "kind": "service",
+        "installed": null,
+        "versions": [
+          {
+            "version": "1.0.0",
+            "ref": "yandex-tracker/v1.0.0",
+            "keystone_mcp": ">=0.5.0,<2",
+            "compatible": true
+          }
+        ]
+      },
+      {
+        "source": "keystone-codes",
+        "name": "yandex-wiki",
+        "kind": "service",
+        "installed": null,
+        "versions": [
+          {
+            "version": "1.0.0",
+            "ref": "yandex-wiki/v1.0.0",
+            "keystone_mcp": ">=0.5.0,<2",
+            "compatible": true
+          }
+        ]
+      }
+    ],
+    "bundles": []
+  }
+}
