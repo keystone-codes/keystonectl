@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from packaging.version import InvalidVersion
 
 from keystonectl.catalog import CatalogError, load_sources
-from keystonectl.compat import detect_keystone_mcp_version
+from keystonectl.compat import detect_keystone_mcp_version, version_sort_key
 from keystonectl.errors import ERRORS
 from keystonectl.fetch import FetchError, describe_fetch_error, fetch_tree
 from keystonectl.lock import load_lock
@@ -191,8 +192,8 @@ def install_bundle(
         else:
             statuses[index]["status"] = "planned" if plan_only else "installed"
             changes += package_changes
-        policy_rows.extend(_policy_from(root, source_name, name, outcome))
-        critical_rows.extend(_critical_from(root, source_name, name, outcome))
+        policy_rows.extend(_policy_from(root, source_name, name, outcome, lock))
+        critical_rows.extend(_critical_from(root, source_name, name, outcome, lock))
     return Result(
         code=0,
         command=command,
@@ -505,21 +506,52 @@ def _body(
     return body
 
 
-def _manifest_cached(root: Path, source: str, name: str) -> dict[str, Any] | None:
-    base = root / ".keystonectl" / "packages" / source / name
-    if not base.is_dir():
-        return None
-    versions = sorted(path for path in base.iterdir() if path.is_dir())
-    if not versions:
-        return None
-    path = versions[-1] / "keystone-service.yaml"
+def _installed_version(lock: Mapping[str, Any], source: str, name: str) -> str | None:
+    for item in lock.get("services") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("name") == name and item.get("source") == source:
+            version = item.get("version")
+            if isinstance(version, str) and version:
+                return version
+    return None
+
+
+def _cached_manifest_yaml(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     return loaded if isinstance(loaded, dict) else None
 
 
-def _policy_from(root: Path, source: str, name: str, outcome: Result) -> list[dict[str, Any]]:
+def _manifest_cached(
+    root: Path, source: str, name: str, lock: Mapping[str, Any]
+) -> dict[str, Any] | None:
+    base = root / ".keystonectl" / "packages" / source / name
+    if not base.is_dir():
+        return None
+    installed = _installed_version(lock, source, name)
+    if installed is not None:
+        manifest = _cached_manifest_yaml(base / installed / "keystone-service.yaml")
+        if manifest is not None:
+            return manifest
+    ranked: list[tuple[Any, Path]] = []
+    for path in base.iterdir():
+        if not path.is_dir():
+            continue
+        try:
+            ranked.append((version_sort_key(path.name), path))
+        except InvalidVersion:
+            continue
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: item[0])
+    return _cached_manifest_yaml(ranked[-1][1] / "keystone-service.yaml")
+
+
+def _policy_from(
+    root: Path, source: str, name: str, outcome: Result, lock: Mapping[str, Any]
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     blob = outcome.result.get("recommended_policy")
     if isinstance(blob, dict):
@@ -528,8 +560,8 @@ def _policy_from(root: Path, source: str, name: str, outcome: Result) -> list[di
             row["content"] = blob["content"]
         rows.append(row)
         return rows
-    manifest = _manifest_cached(root, source, name)
-    if not isinstance(manifest, dict):
+    manifest = _manifest_cached(root, source, name, lock)
+    if manifest is None:
         return rows
     relative = manifest.get("recommended_policy")
     if isinstance(relative, str) and relative:
@@ -537,12 +569,14 @@ def _policy_from(root: Path, source: str, name: str, outcome: Result) -> list[di
     return rows
 
 
-def _critical_from(root: Path, source: str, name: str, outcome: Result) -> list[dict[str, Any]]:
+def _critical_from(
+    root: Path, source: str, name: str, outcome: Result, lock: Mapping[str, Any]
+) -> list[dict[str, Any]]:
     tools = outcome.result.get("critical_tools")
     if isinstance(tools, list) and tools:
         return [{"package": name, "name": str(item)} for item in tools]
-    manifest = _manifest_cached(root, source, name)
-    if not isinstance(manifest, dict):
+    manifest = _manifest_cached(root, source, name, lock)
+    if manifest is None:
         return []
     mcp = manifest.get("mcp") if isinstance(manifest.get("mcp"), dict) else {}
     namespace = str(mcp.get("namespace") or "")
