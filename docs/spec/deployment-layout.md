@@ -347,7 +347,9 @@ empty. `env.files` contains only `packages/<name>.env`,
 `tls` (`keep`, `certbot`, `custom`, or `manual`), and `host_port` in
 47600–47699. The other `public` fields are the ones in the example.
 `dns` is `checked` or `skipped`. `disabled_sites` lists the nginx sites a
-takeover disabled, by file name; `service remove` restores all of them.
+successful takeover disabled, by file name. A failed apply removes the names
+it disabled in that run and enables those sites again. `service remove`
+restores every name still in the list.
 `took_over` is the single-site field written before `disabled_sites`
 existed; a lock that still has it and no `disabled_sites` is valid, and
 keystonectl treats it as a one-item list.

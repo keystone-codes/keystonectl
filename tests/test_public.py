@@ -261,6 +261,47 @@ def _written_site(nginx: Path) -> Path:
     return nginx / "sites-available" / "keystone-svc-file-mcp"
 
 
+def _foreign_link(nginx: Path, name: str) -> tuple[Path, Path]:
+    available = nginx / "sites-available" / name
+    available.write_text(f"server_name {DOMAIN};\n", encoding="utf-8")
+    link = nginx / "sites-enabled" / name
+    link.symlink_to(available)
+    return available, link
+
+
+def _nginx_reloaded(host: Host) -> bool:
+    return any(
+        args[-2:] == ("reload", "nginx") or args[-2:] == ("-s", "reload")
+        for args, _stdin in host.calls
+    )
+
+
+def _apply_host(
+    root: Path,
+    text: str,
+    catalog: str,
+    nginx: Path,
+    host: Host,
+    *,
+    http: httpx.Client | None = None,
+):
+    return run_service(
+        root,
+        "apply",
+        "file-mcp",
+        runner=Combo(runner_for({"file-mcp": text}, DockerBox(), catalog), host),
+        secrets=SecretRegistry(),
+        sets={},
+        environ=_env(KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER="yes"),
+        interactive=False,
+        clock=lambda: CLOCK,
+        deployer=ComposeDeployer(),
+        http=http or _http(),
+        nginx_root=nginx,
+        le_live=root.parent / "le",
+    )
+
+
 def _ctx(tmp_path: Path) -> Context:
     return Context(
         root=tmp_path,
@@ -911,6 +952,93 @@ def test_takeover_asks_again_for_a_different_foreign_site(tmp_path: Path) -> Non
     assert second.code == 2, second.error
     assert any(item["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_TAKEOVER" for item in second.missing)
     assert second_link.is_symlink()
+
+
+def test_failed_cert_after_takeover_restores_foreign_site(tmp_path: Path) -> None:
+    root, text, catalog = _installed(tmp_path)
+    nginx = _nginx(tmp_path)
+    available, link = _foreign_link(nginx, "other.conf")
+    host = Host()
+    result = _apply_host(root, text, catalog, nginx, host)
+    assert result.code == 3
+    assert result.error["id"] == "cert_unreadable"
+    assert link.is_symlink()
+    assert link.resolve() == available.resolve()
+    assert available.read_text(encoding="utf-8") == f"server_name {DOMAIN};\n"
+    public = load_lock(root / "services.lock.yaml")["services"][0]["public"]
+    assert "other.conf" not in (public.get("disabled_sites") or [])
+    assert result.result["public"]["restored_sites"] == ["other.conf"]
+    assert "Site other.conf was enabled again." in result.error["message"]
+    assert _nginx_reloaded(host)
+
+
+def test_failed_external_check_after_takeover_restores_foreign_site(tmp_path: Path) -> None:
+    root, text, catalog = _installed(tmp_path)
+    _certs(tmp_path)
+    nginx = _nginx(tmp_path)
+    available, link = _foreign_link(nginx, "other.conf")
+    host = Host()
+    result = _apply_host(
+        root,
+        text,
+        catalog,
+        nginx,
+        host,
+        http=_http_loopback_ok_external_down(),
+    )
+    assert result.code == 3, result.error
+    assert result.error["id"] == "public_unreachable"
+    assert result.retryable is True
+    assert link.is_symlink()
+    assert link.resolve() == available.resolve()
+    assert available.read_text(encoding="utf-8") == f"server_name {DOMAIN};\n"
+    public = load_lock(root / "services.lock.yaml")["services"][0]["public"]
+    assert "other.conf" not in (public.get("disabled_sites") or [])
+    assert result.result["public"]["restored_sites"] == ["other.conf"]
+    assert "Site other.conf was enabled again." in result.error["message"]
+
+
+def test_restore_keeps_sites_disabled_by_earlier_apply(tmp_path: Path) -> None:
+    root, text, catalog = _installed(tmp_path)
+    _certs(tmp_path)
+    nginx = _nginx(tmp_path)
+    _first_available, first_link = _foreign_link(nginx, "first.conf")
+    host = Host()
+    first = _apply_host(root, text, catalog, nginx, host)
+    assert first.code == 0, first.error
+    assert not first_link.exists()
+    live = tmp_path / "le" / DOMAIN
+    (live / "fullchain.pem").unlink()
+    (live / "privkey.pem").unlink()
+    second_available, second_link = _foreign_link(nginx, "second.conf")
+    second = _apply_host(root, text, catalog, nginx, host)
+    assert second.code == 3, second.error
+    assert not first_link.exists()
+    assert second_link.is_symlink()
+    assert second_link.resolve() == second_available.resolve()
+    public = load_lock(root / "services.lock.yaml")["services"][0]["public"]
+    assert public["disabled_sites"] == ["first.conf"]
+    assert second.result["public"]["restored_sites"] == ["second.conf"]
+
+
+def test_restore_skips_reload_when_nginx_test_fails(tmp_path: Path) -> None:
+    root, text, catalog = _installed(tmp_path)
+    nginx = _nginx(tmp_path)
+    available, link = _foreign_link(nginx, "other.conf")
+    host = Host()
+    host.nginx_ok = False
+    result = _apply_host(root, text, catalog, nginx, host)
+    assert result.code == 3
+    assert result.error["id"] == "nginx_config_invalid"
+    assert link.is_symlink()
+    assert link.resolve() == available.resolve()
+    assert available.read_text(encoding="utf-8") == f"server_name {DOMAIN};\n"
+    assert not _nginx_reloaded(host)
+    assert "restored other.conf; nginx -t failed, reload skipped" in result.error["message"]
+    assert "Site other.conf was enabled again." in result.error["message"]
+    assert result.result["public"]["restored_sites"] == ["other.conf"]
+    public = load_lock(root / "services.lock.yaml")["services"][0]["public"]
+    assert "other.conf" not in (public.get("disabled_sites") or [])
 
 
 def test_tls_keep_skips_certbot(tmp_path: Path) -> None:
