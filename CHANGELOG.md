@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- ``.keystonectl/`` gets its ``.gitignore`` whichever command creates it first.
+
 ## [0.1.1] - 2026-10-15
 
 ### Changed
