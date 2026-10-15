@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service apply",
+  "target": "atlassian",
+  "summary": "Installed atlassian 1.0.0.",
+  "actions": [
+    {
+      "id": "deploy",
+      "title": "Install atlassian 1.0.0",
+      "status": "done"
+    }
+  ],
+  "changes": 1,
+  "missing": [],
+  "warnings": [
+    {
+      "id": "tools_unreachable",
+      "message": "No role can call these tools yet."
+    }
+  ],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "version": "1.0.0",
+    "namespace": "atlassian",
+    "tools": [
+      "jira_get_issue",
+      "confluence_search",
+      "creds_whoami",
+      "creds_profiles",
+      "creds_bindings",
+      "creds_profile_create",
+      "creds_bind",
+      "creds_check"
+    ],
+    "critical_tools": [
+      "atlassian_jira_delete_issue",
+      "atlassian_confluence_delete_page",
+      "atlassian_creds_profile_create",
+      "atlassian_creds_profile_rotate",
+      "atlassian_creds_profile_delete",
+      "atlassian_creds_bind",
+      "atlassian_creds_unbind"
+    ],
+    "public": {
+      "state": "ready",
+      "domain": "jira.example.com",
+      "last_error": null,
+      "tls": "certbot"
+    },
+    "recommended_policy": {
+      "path": "policy.example.yaml",
+      "content": "version: \"2.0.0\"\ndefault_deny: true\nroles:\n  atlassian_reader:\n    allow:\n      - atlassian_jira_get_issue\n      - atlassian_creds_whoami\n      - atlassian_creds_providers\n  atlassian_writer:\n    allow:\n      - atlassian_jira_*\n      - atlassian_confluence_*\n      - atlassian_creds_whoami\n      - atlassian_creds_providers\n  atlassian_box_admin:\n    allow:\n      - atlassian_creds_*\n"
+    }
+  }
+}
