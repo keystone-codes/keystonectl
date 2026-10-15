@@ -223,7 +223,7 @@ A new optional field keeps `schema_version: 1`. A new required field, or a chang
 
 ## Reserved, not in this release
 
-`transport: stdio` is rejected even though keystone-mcp can register a stdio upstream. This release does not ship stdio packages: the child process has no sandbox, and the keystone-mcp image does not include Node. Use `transport: http`.
+A stdio-only server is packaged as an HTTP box on the stdio-box image; see [packaging-a-service.md](../packaging-a-service.md#wrapping-a-stdio-server). `transport: stdio` stays rejected: the manifest only allows `http`.
 
 There is no Redis resource interface in this version. `needs[].kind` is `s3` or `postgres`.
 

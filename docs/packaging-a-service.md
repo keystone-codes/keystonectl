@@ -256,6 +256,16 @@ containers:
 
 Packages without an MCP facade omit `mcp` entirely; `keystonectl` installs them as dependencies only.
 
+## Wrapping a stdio server
+
+Use a box when the server speaks only stdio. One image, [`stdio-box`](https://github.com/keystone-codes/stdio-box/tree/v0.1.0/packages), runs every such server. In that repository each server is a directory `packages/<name>/` with a provider descriptor (`provider.yaml`) and a lock file (`requirements.txt` for `uvx`, or `package-lock.json` beside `package.json` for `npx`).
+
+`keystonectl package wrap-stdio <provider-dir>` asks that image for the server's tools once, then writes `tools.snapshot.json`, `keystone-service.yaml` (with `mcp.tools` filled in), and `policy.example.yaml`. A catalog row points at the directory with `path`, for example `packages/atlassian`, so one repository holds several packages. keystonectl does not know about credential profiles; the command only writes files.
+
+`--derived-image` writes a two-line `Dockerfile` (`FROM` the stdio-box image, `COPY` into `/opt/box/packages/<name>/`) for an author who publishes from their own repository.
+
+The image reference written into a new manifest is `ghcr.io/keystone-codes/stdio-box:0.1.0` plus a placeholder digest of 64 zeros. That digest is still open. It is not a published pin; the stdio-box image release replaces it.
+
 ## Check it locally
 
 From your package directory:
@@ -304,7 +314,7 @@ Use semantic versioning for the package `version` field and git tags `v<version>
 
 Bump the **major** version when you remove or rename tools in `mcp.tools`, break env or role names operators rely on, or change resource interfaces.
 
-Not yet supported in keystonectl 0.1: stdio-only packages, signed catalogs, Helm charts, and automatic Caddy vhost generation (use TLS modes documented in [public-paths.md](public-paths.md)).
+stdio-only servers are packaged as boxes; see [Wrapping a stdio server](#wrapping-a-stdio-server).
 
 ## Releasing a new version
 
