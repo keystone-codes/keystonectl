@@ -560,6 +560,31 @@ def _reload(tls: Tls) -> tuple[bool, str]:
     return False, detail or "nginx failed to reload"
 
 
+def _restore_symlinks(
+    tls: Tls, enabled: Path, links: list[tuple[str, str]]
+) -> tuple[list[str], bool]:
+    """Put sites-enabled symlinks back, then reload when ``nginx -t`` passes.
+
+    Each item is ``(link name, target path)``. A link is created only when the
+    target is a file and the symlink is absent. The returned names are the ones
+    linked; the bool is whether ``nginx -t`` passed.
+    """
+
+    restored: list[str] = []
+    for name, target in links:
+        destination = Path(target)
+        link = enabled / name
+        if not destination.is_file() or link.exists() or link.is_symlink():
+            continue
+        created = tls._run(["ln", "-s", str(destination), str(link)])
+        if created.returncode == 0:
+            restored.append(name)
+    ok, _detail = _nginx_test(tls)
+    if ok:
+        _reload(tls)
+    return restored, ok
+
+
 def _write_site(ctx: Context, tls: Tls, package: str, content: str) -> str | None:
     available, enabled, _conf = _nginx_dirs(ctx)
     path = available / site_name(package)
@@ -768,6 +793,7 @@ def _takeover(ctx: Context, package: str, domain: str) -> bool:
         if removed.returncode != 0:
             _fail(ctx, "domain_in_use", removed.stderr or f"could not disable {path.name}")
             return False
+        ctx.taken_over_now.append((path.name, target))
         if index == 0:
             first_target = target
         if path.name not in disabled:
@@ -780,6 +806,35 @@ def _takeover(ctx: Context, package: str, domain: str) -> bool:
     # `service remove` can restore every one of them.
     _write_public(ctx, package, disabled_sites=disabled, took_over=None)
     return True
+
+
+def _restore_taken_over(ctx: Context, tls: Tls, package: str) -> None:
+    """Enable the sites this run disabled, and drop those names from the lock.
+
+    Names disabled by an earlier successful apply stay disabled. Links are put
+    back even when ``nginx -t`` fails; reload is skipped in that case.
+    """
+
+    pairs = list(ctx.taken_over_now)
+    if not pairs:
+        return
+    ctx.taken_over_now = []
+    _available, enabled, _conf = _nginx_dirs(ctx)
+    restored, nginx_ok = _restore_symlinks(tls, enabled, pairs)
+    drop = {name for name, _target in pairs}
+    disabled = [item for item in _disabled_sites(ctx, package) if item not in drop]
+    _write_public(ctx, package, disabled_sites=disabled)
+    if not restored or ctx.failure is None:
+        return
+    listed = ", ".join(restored)
+    note = f"Site {listed} was enabled again."
+    if not nginx_ok:
+        note = f"{note} restored {listed}; nginx -t failed, reload skipped"
+    ctx.failure.message = f"{ctx.failure.message} {note}".strip()
+    public = ctx.failure.result.get("public")
+    shown = dict(public) if isinstance(public, dict) else {}
+    shown["restored_sites"] = restored
+    ctx.failure.result = {**ctx.failure.result, "public": shown}
 
 
 def _cert_paths(
@@ -962,7 +1017,10 @@ def _external_check(ctx: Context, tls: Tls, domain: str, healthz: str, *, manual
         detail = f"HTTP {status}"
     if status == 200:
         return True
-    if manual:
+    # A site disabled in this run must not stay down when nothing answers on the
+    # domain. That is a failure, so publish can put the site back. Without a
+    # takeover in this run the check stays a warning and the service is installed.
+    if manual or ctx.taken_over_now:
         _fail(ctx, "public_unreachable", detail or ERRORS["public_unreachable"].title)
         return False
     ctx.extra_warnings.append(
@@ -1049,105 +1107,129 @@ def publish(ctx: Context) -> None:
                     ctx, name, state="pending", domain=domain, host_port=port, last_error=None
                 )
             return
-        http = render_vhost(
-            "http",
-            vhost_substitutions(
-                manifest,
-                domain=domain,
-                host_port=port,
-                cert_path="",
-                key_path="",
-            ),
-        )
-        if _write_site(ctx, tls, name, http):
-            _write_public(
-                ctx,
-                name,
-                state="pending",
-                domain=domain,
-                host_port=port,
-                last_error="nginx_config_invalid",
-            )
-            return
-        _action(ctx, "public.tls", f"Get a certificate for {domain} ({mode})", "planned")
+        failed = False
         try:
-            paths = _cert_paths(ctx, tls, name, domain, mode)
-        except TlsError as exc:
-            _action(ctx, "public.tls", f"Get a certificate for {domain} ({mode})", "failed")
+            http = render_vhost(
+                "http",
+                vhost_substitutions(
+                    manifest,
+                    domain=domain,
+                    host_port=port,
+                    cert_path="",
+                    key_path="",
+                ),
+            )
+            if _write_site(ctx, tls, name, http):
+                _write_public(
+                    ctx,
+                    name,
+                    state="pending",
+                    domain=domain,
+                    host_port=port,
+                    last_error="nginx_config_invalid",
+                )
+                return
+            _action(ctx, "public.tls", f"Get a certificate for {domain} ({mode})", "planned")
+            try:
+                paths = _cert_paths(ctx, tls, name, domain, mode)
+            except TlsError as exc:
+                _action(ctx, "public.tls", f"Get a certificate for {domain} ({mode})", "failed")
+                for item in tls.warnings:
+                    ctx.extra_warnings.append(item)
+                _write_public(
+                    ctx,
+                    name,
+                    state="pending",
+                    domain=domain,
+                    host_port=port,
+                    dns="skipped" if dns_mode == "skip" else "checked",
+                    tls=mode,
+                    vhost=str(_nginx_dirs(ctx)[0] / site_name(name)),
+                    last_error=exc.error_id,
+                )
+                _fail(
+                    ctx,
+                    exc.error_id,
+                    exc.message,
+                    hint=exc.hint,
+                    result={"public": _view(ctx, name)},
+                )
+                return
+            if paths is None or ctx.failure is not None:
+                return
+            cert_path, key_path = paths
+            https = render_vhost(
+                "https",
+                vhost_substitutions(
+                    manifest,
+                    domain=domain,
+                    host_port=port,
+                    cert_path=cert_path,
+                    key_path=key_path,
+                ),
+            )
+            if _write_site(ctx, tls, name, https):
+                _write_public(
+                    ctx, name, state="pending", domain=domain, last_error="nginx_config_invalid"
+                )
+                return
+            renewal = tls.renewal_check(domain)
             for item in tls.warnings:
                 ctx.extra_warnings.append(item)
+            info = getattr(ctx, "cert_info", None)
+            not_after = None
+            if info is not None and info.not_after is not None:
+                not_after = info.not_after.astimezone().strftime("%Y-%m-%dT%H:%M:%SZ")
+                from datetime import UTC
+
+                not_after = info.not_after.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            _action(ctx, "public.tls", f"Get a certificate for {domain} ({mode})", "done")
+            if not _base_url(ctx, manifest, domain):
+                return
+            _rewrite_extra_hosts(ctx, manifest, domain)
+            if not _ensure_loopback_ready(ctx, manifest, port):
+                return
+            if not _external_check(ctx, tls, domain, healthz_path(manifest), manual=False):
+                _write_public(
+                    ctx,
+                    name,
+                    state="pending",
+                    domain=domain,
+                    host_port=port,
+                    dns="skipped" if dns_mode == "skip" else "checked",
+                    tls=mode,
+                    last_error="public_unreachable",
+                )
+                if ctx.failure is not None:
+                    ctx.failure.result = {**ctx.failure.result, "public": _view(ctx, name)}
+                return
             _write_public(
                 ctx,
                 name,
-                state="pending",
+                state="ready",
                 domain=domain,
                 host_port=port,
                 dns="skipped" if dns_mode == "skip" else "checked",
                 tls=mode,
-                vhost=str(_nginx_dirs(ctx)[0] / site_name(name)),
-                last_error=exc.error_id,
-            )
-            _fail(
-                ctx, exc.error_id, exc.message, hint=exc.hint, result={"public": _view(ctx, name)}
-            )
-            return
-        if paths is None or ctx.failure is not None:
-            return
-        cert_path, key_path = paths
-        https = render_vhost(
-            "https",
-            vhost_substitutions(
-                manifest,
-                domain=domain,
-                host_port=port,
+                cert_kind=info.kind if info is not None else None,
                 cert_path=cert_path,
                 key_path=key_path,
-            ),
-        )
-        if _write_site(ctx, tls, name, https):
-            _write_public(
-                ctx, name, state="pending", domain=domain, last_error="nginx_config_invalid"
+                not_after=not_after,
+                vhost=str(_nginx_dirs(ctx)[0] / site_name(name)),
+                last_error=None,
             )
+            ctx.output_result["public"] = _view(ctx, name)
+            if renewal.mode == "missing":
+                ctx.extra_warnings.append(
+                    warning("renewal_timer_missing", WARNINGS["renewal_timer_missing"].title)
+                )
             return
-        renewal = tls.renewal_check(domain)
-        for item in tls.warnings:
-            ctx.extra_warnings.append(item)
-        info = getattr(ctx, "cert_info", None)
-        not_after = None
-        if info is not None and info.not_after is not None:
-            not_after = info.not_after.astimezone().strftime("%Y-%m-%dT%H:%M:%SZ")
-            from datetime import UTC
-
-            not_after = info.not_after.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        _action(ctx, "public.tls", f"Get a certificate for {domain} ({mode})", "done")
-        if not _base_url(ctx, manifest, domain):
-            return
-        _rewrite_extra_hosts(ctx, manifest, domain)
-        if not _ensure_loopback_ready(ctx, manifest, port):
-            return
-        if not _external_check(ctx, tls, domain, healthz_path(manifest), manual=False):
-            return
-        _write_public(
-            ctx,
-            name,
-            state="ready",
-            domain=domain,
-            host_port=port,
-            dns="skipped" if dns_mode == "skip" else "checked",
-            tls=mode,
-            cert_kind=info.kind if info is not None else None,
-            cert_path=cert_path,
-            key_path=key_path,
-            not_after=not_after,
-            vhost=str(_nginx_dirs(ctx)[0] / site_name(name)),
-            last_error=None,
-        )
-        ctx.output_result["public"] = _view(ctx, name)
-        if renewal.mode == "missing":
-            ctx.extra_warnings.append(
-                warning("renewal_timer_missing", WARNINGS["renewal_timer_missing"].title)
-            )
-        return
+        except Exception:
+            failed = True
+            raise
+        finally:
+            if failed or ctx.failure is not None:
+                _restore_taken_over(ctx, tls, name)
     cert_guess = f"/etc/ssl/keystone/{domain}/fullchain.pem"
     key_guess = f"/etc/ssl/keystone/{domain}/privkey.pem"
     sample = _sample(ctx, manifest, domain, port, cert_guess, key_guess)
