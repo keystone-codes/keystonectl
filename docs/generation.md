@@ -45,6 +45,8 @@ When keystone-mcp is running but `python -m keystone_mcp.rbac.catalog` inside th
 
 keystone-mcp `upstream validate` and `catalog validate` run in `docker run --network none` from the image recorded in the lock. `--strict-unreachable` is not passed: tools that no role can call are a warning (`tools_unreachable`), not a failure. If the candidate registry makes previously valid policy fail in a new way, apply stops with `policy_breaks`. The same unmatched set that already failed is a warning (`policy_already_inconsistent`). keystonectl parses the text these commands print on stderr/stdout to find those outcomes; `docs/adr/0001-catalog-outside-core.md`, "What keystonectl relies on beyond the frozen contract" lists why that text is not a contract.
 
+`tools_unreachable` is normal right after install: the service runs, but no role can call its tools until an administrator adds rows from `recommended_policy`. keystonectl does not merge policy, does not remind you beyond `check`, and sets no deadline — the state can last until policy is updated.
+
 ## Restart
 
 A change to the keystone-mcp wiring in `docker-compose.packages.yml` recreates that service with `up -d --no-deps`. A registry change restarts it (`docker compose restart`), because this keystone-mcp does not reload the registry on `SIGHUP`. A snapshot-only change sends `SIGHUP`. If keystone-mcp is not running, apply says so and does not start it. An unchanged apply does not pull, start, or signal anything.

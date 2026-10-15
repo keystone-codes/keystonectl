@@ -563,7 +563,7 @@ Replaces the bucket key or database password of one catalog consumer. `<name>` i
 
     keystonectl service upgrade <name>[@version]
 
-Moves a package to a newer catalog version. The command takes the installed service name only (`file-mcp`, not `source/file-mcp`); after confirmation it applies using the lock entry's catalog source. A remote service is `not_package`: it has no package; use `add-remote` to change its url.
+Moves a package to a newer catalog version. The command takes the installed service name only (`file-mcp`, not `source/file-mcp`); after confirmation it applies using the lock entry's catalog source. Asks `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_UPGRADE` set to the target version exactly (in a terminal, type that version). A remote service is `not_package`: it has no package; use `add-remote` to change its url.
 
 ```json
 {
@@ -644,7 +644,7 @@ Stops keystonectl from rewriting `packages/<name>.yml`. A remote service is `not
 
     keystonectl service adopt <name>
 
-Generates the fragment again after eject. A service that was not ejected is `not_ejected`.
+Generates the fragment again after eject. Asks `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ADOPT=yes`. A service that was not ejected is `not_ejected`.
 
 ```json
 {

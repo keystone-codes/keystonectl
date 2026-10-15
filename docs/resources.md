@@ -57,6 +57,30 @@ A catalog provider's admin credentials stay in `packages/<provider>.env`.
 
 Removing a service drops it from `resources[].consumers`. The bucket, database, and user are kept. When the last consumer goes, `provider_unused` says so; removing the provider warns `provider_data_kept`. Removing a provider that still has consumers is refused (`resource_in_use`).
 
+## Backups
+
+keystonectl does not back up data. Catalog resource providers keep state in Docker named volumes `ks-pkg-<provider>-<vol>` (for example `ks-pkg-minio-data`, `ks-pkg-postgres-data`). Compose services are `<provider>-<role>` (`minio-server`, `postgres-db`; with another instance name, `<name>-<role>`).
+
+**MinIO** — stop the container, then archive the volume:
+
+```bash
+docker compose --project-directory <root> -f docker-compose.yml -f docker-compose.packages.yml stop minio-server
+docker run --rm -v ks-pkg-minio-data:/data -v "$PWD":/backup busybox tar czf /backup/minio-data.tgz -C /data .
+```
+
+Or mirror with `mc` when that fits your process.
+
+**PostgreSQL** — dump from the running service (replace `<POSTGRES_USER>` with the value in `packages/postgres.env`):
+
+```bash
+docker compose --project-directory <root> -f docker-compose.yml -f docker-compose.packages.yml \
+  exec -T postgres-db pg_dumpall -U <POSTGRES_USER> > all.sql
+```
+
+Save `packages/<provider>.env` with the volume: admin keys from the installer live there and the data is useless without them. Save `.keystonectl/secrets/` as well: consumer credentials keystonectl generated for installed services.
+
+Packages that both declare `secrets[].generate` and named volumes (section S stdio boxes) encrypt the `store` volume with `BOX_STORE_KEY` in `packages/<box>.env`. Encryption protects a backup only when the key is stored separately from the volume copy. Put the volume archive in one place and `packages/<box>.env` plus the saved `.keystonectl/secrets/<box>.generated.env` in another (password manager or separate media). Without the key the volume copy is useless; with the key beside it, encryption adds nothing. Do not back up the `cache` volume (`ks-pkg-<box>-cache` on the installed server role): it is a cache the server rebuilds on the next start. Resource providers (`minio`, `postgres`) are not encrypted; env and volume can be stored together. See the package README for migration and `credsctl store rekey`.
+
 ## Provider contract
 
 `provision.sh` is the same shape for `s3/v1` and `postgres/v1`. keystonectl runs it after the provider is healthy. Secrets are not arguments and not an env file. Each `provision.admin_env` name is passed as `-e NAME` with no `=`. The value is in the environment of `docker run`.
