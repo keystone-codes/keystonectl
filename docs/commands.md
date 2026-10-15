@@ -15,6 +15,8 @@ These flags exist on every command:
 
 Exit codes: `0` done, `1` usage or a missing deployment directory, `2` one or more answers are missing (`missing` lists them; pass them with `--set` or the environment and run the command again), `3` the command cannot proceed. `retryable` is true only when repeating the same command can succeed, for example when a catalog host did not answer.
 
+`result` is typed for `service apply|install`, `service list`, `service status`, `service remove`, `bundle plan|install`, `catalog list` when `code` is 0; other commands and failures return an object whose fields are listed per command.
+
 A `missing` item has `var`, `question`, `kind` (`text`, `choice`, `file`, `confirm`, or `argument`), `choices`, `default`, and `secret`. Question names are `KEYSTONE_SETUP_*`. A secret is only a path to a mode 600 file whose variable ends in `_FILE`. The value is never an argument, never a log line, and never a field of `--json`.
 
 ## Commands
@@ -229,7 +231,40 @@ Prints configured catalogs. Writes nothing.
   "warnings": [],
   "error": null,
   "retryable": false,
-  "result": {"sources": []}
+  "result": {
+    "keystone_mcp_version": "0.5.0",
+    "sources": [
+      {
+        "name": "keystone-codes",
+        "url": "https://example.com/keystone-codes.git",
+        "ref": "v1.0.0",
+        "priority": 100
+      }
+    ],
+    "packages": [
+      {
+        "source": "keystone-codes",
+        "name": "file-mcp",
+        "kind": "service",
+        "installed": null,
+        "versions": [
+          {
+            "version": "1.0.0",
+            "ref": "v1.0.0",
+            "keystone_mcp": ">=0.5.0,<2",
+            "compatible": true
+          }
+        ]
+      }
+    ],
+    "bundles": [
+      {
+        "source": "keystone-codes",
+        "name": "minimal",
+        "packages": ["file-mcp"]
+      }
+    ]
+  }
 }
 ```
 
@@ -262,7 +297,7 @@ Prints configured catalogs. Writes nothing.
 
     keystonectl service list
 
-Lists lock entries. Writes nothing.
+Lists lock entries. Writes nothing. `result.services` is the list of lock entries, see `docs/spec/deployment-layout.md`.
 
 ```json
 {
@@ -277,7 +312,20 @@ Lists lock entries. Writes nothing.
   "warnings": [],
   "error": null,
   "retryable": false,
-  "result": {"services": ["file-mcp"]}
+  "result": {
+    "services": [
+      {
+        "name": "file-mcp",
+        "role": "service",
+        "managed": "generated",
+        "package": "file-mcp",
+        "version": "1.0.0",
+        "namespace": "files"
+      }
+    ],
+    "resources": [],
+    "keystone_mcp_version": "0.5.0"
+  }
 }
 ```
 
@@ -336,7 +384,13 @@ Errors include `requires_missing`, `policy_breaks`, `fragment_modified`.
   "warnings": [],
   "error": null,
   "retryable": false,
-  "result": {}
+  "result": {
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "version": "1.0.0",
+    "resources": [
+      {"kind": "s3", "origin": "catalog", "provider": "minio"}
+    ]
+  }
 }
 ```
 
@@ -357,7 +411,13 @@ Another name for `service apply`.
   "warnings": [],
   "error": null,
   "retryable": false,
-  "result": {}
+  "result": {
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "version": "1.0.0",
+    "resources": [
+      {"kind": "s3", "origin": "catalog", "provider": "minio"}
+    ]
+  }
 }
 ```
 
@@ -426,7 +486,7 @@ Asks `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_REMOVE`. Drops the lock entry. A pac
   "warnings": [],
   "error": null,
   "retryable": false,
-  "result": {}
+  "result": {"kept": ["packages/analytics-mcp.override.yml"]}
 }
 ```
 

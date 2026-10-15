@@ -11,18 +11,36 @@
   "error": null,
   "retryable": false,
   "result": {
-    "containers": [
+    "services": [
       {
-        "service": "docs-service-migrate",
-        "state": "exited",
-        "init": true
-      },
-      {
-        "service": "docs-service-mcp",
-        "state": "running"
+        "name": "docs-service",
+        "managed": "generated",
+        "version": "1.0.0",
+        "namespace": "docs",
+        "containers": [
+          {
+            "role": "migrate",
+            "service": "docs-service-migrate",
+            "state": "exited",
+            "health": "",
+            "exit_code": 0
+          },
+          {
+            "role": "mcp",
+            "service": "docs-service-mcp",
+            "state": "running",
+            "health": "healthy",
+            "exit_code": 0
+          }
+        ],
+        "keystone": {
+          "ready": "ready",
+          "discovery": "available"
+        },
+        "public": null,
+        "problems": [],
+        "warnings": []
       }
-    ],
-    "discovery": "available",
-    "problems": []
+    ]
   }
 }

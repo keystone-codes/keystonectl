@@ -384,6 +384,35 @@ def _failure_result(ctx: Context, command: str, warnings: list[dict[str, str]]) 
     return result
 
 
+def _consumed_resources(ctx: Context) -> list[dict[str, Any]]:
+    """Lock resources this service consumes: kind, origin, and provider."""
+
+    package = ctx.resolved
+    if package is None:
+        return []
+    name = package.name
+    found: list[dict[str, Any]] = []
+    resources = ctx.lock.get("resources")
+    if not isinstance(resources, list):
+        return found
+    for item in resources:
+        if not isinstance(item, dict):
+            continue
+        consumers = item.get("consumers")
+        if not isinstance(consumers, list):
+            continue
+        if not any(isinstance(row, dict) and row.get("service") == name for row in consumers):
+            continue
+        found.append(
+            {
+                "kind": item.get("kind"),
+                "origin": item.get("origin"),
+                "provider": item.get("provider"),
+            }
+        )
+    return found
+
+
 def _dedupe_questions(questions: list[Question]) -> list[Question]:
     seen: set[str] = set()
     unique: list[Question] = []
@@ -815,6 +844,7 @@ def run_service(
     if ctx.probe_reports:
         result_body["probes"] = ctx.probe_reports
     result_body.update(ctx.output_result)
+    result_body["resources"] = _consumed_resources(ctx)
     changes = 0 if ctx.rerun or all(action["status"] == "unchanged" for action in actions) else None
     return Result(
         code=0,
