@@ -1376,16 +1376,23 @@ def adopt_service(
 
 
 def register_commands(subparsers: argparse._SubParsersAction) -> None:
-    for name, help_text in (
-        ("remove", "Remove a service. Volumes, buckets, and the override stay."),
-        ("upgrade", "Upgrade a service and show the policy diff."),
-        ("rollback", "Restore the previous upgrade."),
-        ("eject", "Stop generating the compose fragment."),
-        ("adopt", "Generate the fragment again after eject."),
-    ):
+    commands = (
+        ("remove", "Remove a service. Volumes, buckets, and the override stay.", ("name",)),
+        ("upgrade", "Upgrade a service and show the policy diff.", ("ref",)),
+        ("rollback", "Restore the previous upgrade.", ("name",)),
+        ("eject", "Stop generating the compose fragment.", ("name",)),
+        ("adopt", "Generate the fragment again after eject.", ("name",)),
+        (
+            "rotate-secret",
+            "Replace a consumer's bucket key or database password.",
+            ("name", "kind"),
+        ),
+    )
+    for name, help_text, positionals in commands:
         parser = subparsers.add_parser(name, help=help_text)
         parser.add_argument("--json", action="store_true")
         parser.add_argument("--root", default=None)
         parser.add_argument("--non-interactive", action="store_true")
         parser.add_argument("--set", action="append", default=None)
-        parser.add_argument("name" if name != "upgrade" else "ref")
+        for positional in positionals:
+            parser.add_argument(positional)

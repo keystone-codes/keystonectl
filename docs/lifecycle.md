@@ -20,6 +20,16 @@ When the last catalog consumer of a provider is removed, the warning `provider_u
 
 Removing a provider warns `provider_data_kept`: the `ks-pkg-<provider>-*` volumes still contain every former consumer's data. Installing the provider again reuses them. Delete volumes with `docker volume rm` only after a backup.
 
+## rotate-secret
+
+`service rotate-secret <name> <kind>` replaces the bucket key or database password of a catalog consumer. `<kind>` is `s3` or `postgres`. Confirmation is `y`, or `KEYSTONE_SETUP_SERVICE_<NAME>_CONFIRM_ROTATE=yes`.
+
+The command writes a new secret, runs the provider's provision script with that secret, updates the service env file and `.keystonectl/secrets/<name>.<kind>.env`, checks access, and recreates the containers that receive the env file. It does not print the secret. `service apply` still reuses the saved secret.
+
+An external binding is refused (`rotate_external_unsupported`). Remove the service and install it again with the new secret. A later apply does not replace a secret that is already in the env file.
+
+If the access check fails, the previous secret is restored and the error is `rotate_failed` (retryable). If that restore also fails, the env files hold the new secret and the provider is in an unknown state; run `service apply <name>`.
+
 ## upgrade
 
 `service upgrade <name>` or `service upgrade <name>@<version>` moves to a newer compatible release. When nothing newer exists, the command exits 0 with `result.up_to_date: true`.

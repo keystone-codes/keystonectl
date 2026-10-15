@@ -697,6 +697,27 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Finish the proxy and certificate, then run apply again.",
         ),
         _e(
+            "resource_not_bound",
+            3,
+            False,
+            "This service is not bound to that resource.",
+            "Pass a kind this service lists, s3 or postgres.",
+        ),
+        _e(
+            "rotate_external_unsupported",
+            3,
+            False,
+            "An external resource secret cannot be rotated from here.",
+            "Remove the service and install it again.",
+        ),
+        _e(
+            "rotate_failed",
+            3,
+            True,
+            "The secret could not be rotated.",
+            "Run the command again.",
+        ),
+        _e(
             "internal_error",
             3,
             False,
