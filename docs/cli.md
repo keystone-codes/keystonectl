@@ -20,6 +20,7 @@ Global flags apply to every command. `init` and `lint` do not search for a deplo
 | `package lint <manifest-or-directory>` | Same as `lint`. |
 | `check` | Check the deployment directory. No network and no Docker. |
 | `catalog add <url>` | Add a catalog source to `sources.yaml`. Optional `--name`, `--ref`, `--priority`. |
+| `catalog set-ref <name> <ref>` | Move one source to another tag or commit. |
 | `catalog list` | List sources, packages, and bundles. |
 | `service list` | List installed services and resources, including `keystone_mcp_version`. |
 | `service plan <ref>` | Show what would change. Writes only the cache. |

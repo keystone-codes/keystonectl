@@ -19,7 +19,7 @@ from keystonectl.lock import LockError, hold_lock, load_lock
 from keystonectl.output import Result, SecretRegistry, emit
 from keystonectl.plan import run_service
 from keystonectl.runner import build_runner
-from keystonectl.sources import add_source, list_catalogs
+from keystonectl.sources import add_source, list_catalogs, set_source_ref
 
 ROOT_HINT = "Run `keystonectl init --adopt <dir>`."
 
@@ -88,6 +88,10 @@ def build_parser() -> KeystoneParser:
     add.add_argument("--name", default=None)
     add.add_argument("--ref", default=None)
     add.add_argument("--priority", type=int, default=None)
+    set_ref = catalog_sub.add_parser("set-ref")
+    _add_common(set_ref)
+    set_ref.add_argument("name")
+    set_ref.add_argument("ref")
     catalog_list = catalog_sub.add_parser("list")
     _add_common(catalog_list)
 
@@ -435,7 +439,7 @@ def _lock_target(args: argparse.Namespace, root: Path | None) -> tuple[bool, Pat
         return False, None
     if args.command == "service" and args.service_command in _STATE_CHANGING_SERVICE_COMMANDS:
         return True, root
-    if args.command == "catalog" and args.catalog_command == "add":
+    if args.command == "catalog" and args.catalog_command in {"add", "set-ref"}:
         return True, root
     if args.command == "bundle" and args.bundle_command == "install":
         return True, root
@@ -521,6 +525,9 @@ def _dispatch(
             ref=args.ref,
             priority=args.priority,
         )
+    elif args.command == "catalog" and args.catalog_command == "set-ref":
+        assert root is not None
+        result = set_source_ref(root, args.name, args.ref, build_runner())
     elif args.command == "catalog" and args.catalog_command == "list":
         assert root is not None
         from keystonectl.compat import detect_keystone_mcp_version

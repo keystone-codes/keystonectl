@@ -448,3 +448,65 @@ def test_check_never_prints_secret_values(
     text = capsys.readouterr().out
     assert code == 0
     assert secret not in text
+
+
+def _older_tag(ref: str) -> str:
+    from packaging.version import Version
+
+    version = Version(ref.removeprefix("v"))
+    if version.micro > 0:
+        return f"v{version.major}.{version.minor}.{version.micro - 1}"
+    if version.minor > 0:
+        return f"v{version.major}.{version.minor - 1}.0"
+    return f"v{version.major - 1}.9.0"
+
+
+def _pin_default_source(root: Path, ref: str) -> None:
+    from keystonectl.catalog import DEFAULT_SOURCES
+
+    document = {
+        "schema_version": 1,
+        "sources": [
+            {
+                "name": "keystone-codes",
+                "url": DEFAULT_SOURCES[0].url,
+                "ref": ref,
+                "priority": 100,
+            }
+        ],
+    }
+    (root / "sources.yaml").write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+
+def test_default_catalog_behind_on_check_until_set_ref(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from keystonectl.catalog import DEFAULT_CATALOG_REF
+    from keystonectl.sources import set_source_ref
+    from tests.support.served_catalog import SHA as git_sha
+    from tests.support.served_catalog import catalog_runner
+
+    root = tmp_path / "root"
+    _write(root, _lock(_service()))
+    behind = _older_tag(DEFAULT_CATALOG_REF)
+    _pin_default_source(root, behind)
+    code, document = _json(capsys, ["--json", "--root", str(root), "check"])
+    assert code == 0, document
+    assert any(item["id"] == "default_catalog_behind" for item in document["warnings"])
+    tags = f"{git_sha}\trefs/tags/{behind}\n{git_sha}\trefs/tags/{DEFAULT_CATALOG_REF}\n"
+    moved = set_source_ref(root, "keystone-codes", DEFAULT_CATALOG_REF, catalog_runner(tags=tags))
+    assert moved.code == 0, moved.error
+    code, document = _json(capsys, ["--json", "--root", str(root), "check"])
+    assert code == 0, document
+    assert all(item["id"] != "default_catalog_behind" for item in document["warnings"])
+
+
+def test_check_sha_pin_has_no_default_catalog_behind(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "root"
+    _write(root, _lock(_service()))
+    _pin_default_source(root, "a" * 40)
+    code, document = _json(capsys, ["--json", "--root", str(root), "check"])
+    assert code == 0, document
+    assert all(item["id"] != "default_catalog_behind" for item in document["warnings"])
