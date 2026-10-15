@@ -869,6 +869,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | remote_without_identity | warning | false | Catalog packages must check the assertion. Here that check is yours. |
 | renewal_manual | warning | false | service status warns 30 days before expiry. |
 | renewal_timer_missing | warning | false | Enable the certbot systemd timer or /etc/cron.d/certbot. |
+| resource_answer_ignored | warning | false | The installation already has one provider for this kind; every service uses it. To move a service elsewhere, remove it and the provider first. |
 | s3_lifecycle_unsupported | warning | false | The service still runs. Add a lifecycle rule on the bucket later if you need it. |
 | s3_plain_http | warning | false | Prefer https:// for storage that is not on your own Docker network. |
 | snapshot_moved | warning | false | keystone-mcp now reads the snapshot from keystonectl/. |

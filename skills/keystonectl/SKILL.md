@@ -106,7 +106,7 @@ Ask with the Questions table.
 
 - **External** means the operator already created the bucket and key, or the database and user, and puts secrets in mode 600 files.
 - **Catalog** means keystonectl starts `minio` or `postgres` once for the whole installation. Each service gets its own bucket, or its own database and user.
-- The second service that needs the same kind of resource is not asked again. Say it will use the provider already installed.
+- The second service that needs the same kind of resource is not asked again. Say it will use the provider already installed. If the operator sets a conflicting answer anyway, retell `resource_answer_ignored` and name the provider that is already bound.
 - A service may receive both a Postgres URL and the separate host, port, database, user, and sslmode fields. Do not ask the operator to choose between those forms.
 - When several providers exist, ask `KEYSTONE_SETUP_RESOURCE_S3_PACKAGE` or `KEYSTONE_SETUP_RESOURCE_POSTGRES_PACKAGE` (`source/name`).
 
@@ -424,6 +424,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `remote_tools_not_in_snapshot` | 0 | false | Live tools are missing from the catalog snapshot. | Run keystonectl service add-remote again with --tools. |
 | `remote_tools_unknown` | 0 | false | Policy rows for this namespace are checked only while the service is up. | Start the service on the keystone-mcp-upstreams network and run check again. |
 | `remote_unreachable` | 0 | false | The remote URL did not answer from the keystone-mcp-upstreams network. | keystone-mcp will keep retrying; make sure the service is on the keystone-mcp-upstreams network. |
+| `resource_answer_ignored` | 0 | false | An answer about a resource that is already bound was ignored. | Tell the operator the service uses the provider that is already there, and name it. |
 | `package_name_shadowed` | 0 | false | A package name now exists in more than one catalog. | Install it by full name source/name. |
 | `bundle_name_shadowed` | 0 | false | A bundle name now exists in more than one catalog. | Install it by full name source/name. |
 
