@@ -129,6 +129,13 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Pick another --name, or edit sources.yaml.",
         ),
         _e(
+            "source_not_found",
+            3,
+            False,
+            "No source with that name is configured.",
+            "Run keystonectl catalog list and pass a name from that list.",
+        ),
+        _e(
             "tag_not_found",
             3,
             False,
@@ -932,6 +939,16 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "bundle_name_shadowed",
             "A bundle name now exists in more than one catalog.",
             "Install it by full name source/name.",
+        ),
+        _w(
+            "default_catalog_behind",
+            "A catalog source is pinned to an older tag than this keystonectl expects.",
+            "Run keystonectl catalog set-ref with the tag named in the warning.",
+        ),
+        _w(
+            "installed_version_missing",
+            "An installed package version is no longer listed in its catalog.",
+            "Upgrade or apply will need another version of that package.",
         ),
     ]
 )
