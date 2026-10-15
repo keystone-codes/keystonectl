@@ -1,0 +1,33 @@
+schema_version: 1
+name: atlassian
+title: Atlassian (Jira and Confluence)
+server:
+  command: "uvx mcp-atlassian==0.23.1"
+  bin: mcp-atlassian
+  lock: requirements.txt
+fields:
+  - name: JIRA_URL
+    type: url
+    secret: false
+    hint: "Jira address, for example https://example.atlassian.net"
+  - name: JIRA_API_TOKEN
+    type: string
+    secret: true
+    hint: "API token from the Atlassian account security page"
+variants:
+  - name: cloud
+    fields: [JIRA_URL, JIRA_API_TOKEN]
+    allowed_hosts: ["*.atlassian.net"]
+    checks:
+      - http:
+          method: GET
+          url: "{JIRA_URL}/rest/api/2/myself"
+          auth:
+            bearer: JIRA_API_TOKEN
+          expect_status: [200]
+          identity: displayName
+discovery:
+  mode: placeholder
+  env:
+    JIRA_URL: https://discovery.invalid
+    JIRA_API_TOKEN: discovery-placeholder

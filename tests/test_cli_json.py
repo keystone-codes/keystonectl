@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 from pathlib import Path
 
 import jsonschema
@@ -202,6 +203,27 @@ def test_version_flag_text_and_json(capsys: pytest.CaptureFixture[str]) -> None:
     code, document = _json(capsys, ["--version", "--json"])
     assert code == 0
     assert document["result"]["version"] == __version__
+
+
+def test_package_wrap_stdio_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    source = Path("tests/data/stdio/atlassian")
+    directory = tmp_path / "atlassian"
+    shutil.copytree(source, directory)
+    code, document = _json(
+        capsys,
+        [
+            "--json",
+            "package",
+            "wrap-stdio",
+            str(directory),
+            "--tools-snapshot",
+            str(directory / "tools.snapshot.json"),
+        ],
+    )
+    assert code == 0
+    assert document["command"] == "package wrap-stdio"
+    assert document["result"]["discovery"] == "file"
+    assert document["result"]["namespace"] == "atlassian"
 
 
 def test_schemas_load_via_importlib_resources() -> None:
