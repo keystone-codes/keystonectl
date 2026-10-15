@@ -830,6 +830,16 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "To move a service elsewhere, remove it and the provider first.",
         ),
         _w(
+            "provider_unused",
+            "A catalog resource provider has no consumers left.",
+            "Remove the provider with service remove when you no longer need its data on disk.",
+        ),
+        _w(
+            "provider_data_kept",
+            "Provider volumes still hold every former consumer's data.",
+            "Back up first, then delete volumes with docker volume rm if you will not reinstall.",
+        ),
+        _w(
             "policy_check_skipped",
             "The policy check was skipped.",
             "Set KEYSTONE_MCP_RBAC_MODE to something other than off and point "

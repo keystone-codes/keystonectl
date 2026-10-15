@@ -1797,6 +1797,46 @@ def provider_removal_error(lock: Mapping[str, Any], provider: str) -> Resolution
     )
 
 
+def idle_catalog_providers(lock: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """Catalog providers still installed but with no consumers left."""
+    installed = {
+        str(item.get("name"))
+        for item in _services(lock)
+        if isinstance(item, dict) and item.get("name")
+    }
+    found: list[tuple[str, str]] = []
+    for resource in _resources(lock):
+        if resource.get("origin") != "catalog":
+            continue
+        consumers = [item for item in resource.get("consumers") or [] if isinstance(item, dict)]
+        if consumers:
+            continue
+        provider = str(resource.get("provider") or "")
+        if provider not in installed:
+            continue
+        found.append((provider, str(resource.get("kind") or "")))
+    return found
+
+
+def provider_unused_message(provider: str, kind: str, volume_names: list[str]) -> str:
+    kept_label = "kept buckets" if kind == "s3" else "kept databases"
+    volumes = ", ".join(volume_names) if volume_names else "the provider volumes"
+    return (
+        f"{provider} has no consumers left. Its data, including the {kept_label}, "
+        f"is in {volumes}. Remove it with `keystonectl service remove {provider}` "
+        f"when you no longer need it."
+    )
+
+
+def provider_data_kept_message(provider: str, volume_names: list[str]) -> str:
+    listed = ", ".join(volume_names)
+    return (
+        f"Volumes {listed} still hold the data of every former consumer. "
+        f"Installing {provider} again reuses them. "
+        f"Delete them with `docker volume rm {' '.join(volume_names)}` only after a backup."
+    )
+
+
 def register_resources() -> None:
     from keystonectl.plan import _EXTRAS
 

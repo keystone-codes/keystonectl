@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from keystonectl.answers import pkg_var
 from keystonectl.envfiles import read_env
 from keystonectl.lifecycle import (
     adopt_service,
@@ -27,7 +28,7 @@ from keystonectl.runner import CommandResult, FakeCommandRunner
 from keystonectl.sources import package_cache
 from tests.support import catalog_text
 from tests.support.deploylab import CLOCK, DockerBox, apply_package
-from tests.support.resources import Lab, s3_provider
+from tests.support.resources import Lab, install_ok_probes, s3_provider, standard_manifests
 
 PACKAGES = Path(__file__).resolve().parent / "data" / "packages"
 
@@ -51,17 +52,22 @@ def _ok() -> FakeCommandRunner:
 
 def _remove(
     root: Path,
+    name: str = "file-mcp",
     *,
+    confirm: bool = True,
     sets: dict | None = None,
     runner: FakeCommandRunner | None = None,
     nginx_root: Path | None = None,
 ):
+    merged = dict(sets or {})
+    if confirm and pkg_var(name, "CONFIRM_REMOVE") not in merged:
+        merged[pkg_var(name, "CONFIRM_REMOVE")] = "yes"
     return remove_service(
         root,
-        "file-mcp",
+        name,
         runner=runner or _ok(),
         secrets=SecretRegistry(),
-        sets=sets or {},
+        sets=merged,
         environ={},
         interactive=False,
         clock=lambda: CLOCK,
@@ -71,7 +77,7 @@ def _remove(
 
 def test_remove_requires_confirmation(tmp_path: Path) -> None:
     root = _install(tmp_path)
-    result = _remove(root)
+    result = _remove(root, confirm=False)
     assert result.code == 2
     assert result.missing[0]["kind"] == "confirm"
     assert result.missing[0]["var"] == "KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE"
@@ -315,6 +321,7 @@ def test_remove_provider_refused_with_consumers(tmp_path: Path) -> None:
     )
     assert result.code == 3
     assert result.error["id"] == "resource_in_use"
+    assert "still used by" in result.error["message"]
 
 
 def test_remove_provider_keeps_volume_and_env(tmp_path: Path) -> None:
@@ -488,6 +495,95 @@ def test_remove_keeps_generated_secret_when_manifest_is_not_cached(tmp_path: Pat
     warning = next(item for item in result.warnings if item["id"] == "generated_secrets_kept")
     assert "cached manifest is missing" in warning["message"]
     assert original not in warning["message"]
+
+
+def test_remove_last_consumer_warns_provider_unused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    catalog = {"KEYSTONE_SETUP_RESOURCE_S3": "catalog"}
+    assert lab.apply("minio").code == 0
+    assert lab.apply("file-mcp", environ=catalog).code == 0
+    assert lab.apply("pages-mcp", environ=catalog).code == 0
+    first = _remove(lab.root, "file-mcp")
+    assert first.code == 0, first.error
+    assert not any(item["id"] == "provider_unused" for item in first.warnings)
+    second = _remove(lab.root, "pages-mcp")
+    assert second.code == 0, second.error
+    unused = [item for item in second.warnings if item["id"] == "provider_unused"]
+    assert len(unused) == 1
+    assert "ks-pkg-minio-data" in unused[0]["message"]
+    assert "minio" in unused[0]["message"]
+
+
+def test_remove_provider_warns_data_kept(tmp_path: Path) -> None:
+    lab = Lab(tmp_path, [s3_provider()])
+    assert lab.apply("minio").code == 0
+    result = _remove(lab.root, "minio")
+    assert result.code == 0, result.error
+    kept = [item for item in result.warnings if item["id"] == "provider_data_kept"]
+    assert len(kept) == 1
+    assert "ks-pkg-minio-data" in kept[0]["message"]
+    assert "ks-pkg-minio-data" in result.result["kept"]
+
+
+def test_remove_last_external_consumer_does_not_warn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    assert lab.apply("file-mcp", environ=lab.s3_answers()).code == 0
+    result = _remove(lab.root, "file-mcp")
+    assert result.code == 0, result.error
+    assert not any(item["id"] == "provider_unused" for item in result.warnings)
+
+
+def test_upgrade_provider_with_consumers_keeps_bindings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    catalog = {"KEYSTONE_SETUP_RESOURCE_S3": "catalog"}
+    assert lab.apply("minio").code == 0
+    assert lab.apply("file-mcp", environ=catalog).code == 0
+    assert lab.apply("pages-mcp", environ=catalog).code == 0
+    lock = load_lock(lab.root / "services.lock.yaml")
+    resources_before = copy.deepcopy(lock["resources"])
+    minio = next(item for item in lock["services"] if item["name"] == "minio")
+    source = str(minio["source"])
+    catalog_path = lab.root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
+    catalog_doc = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    catalog_doc["packages"]["minio"]["versions"].append({"version": "1.0.1", "ref": "v1.0.1"})
+    catalog_text = yaml.safe_dump(catalog_doc, sort_keys=False)
+    catalog_path.write_text(catalog_text, encoding="utf-8")
+    lab.by_url["https://example.com/catalog.git"] = catalog_text
+    document = yaml.safe_load(lab.texts["minio"])
+    document["version"] = "1.0.1"
+    document["summary"] = "minio 1.0.1"
+    minio_text = yaml.safe_dump(document, sort_keys=False)
+    lab.by_url["https://example.com/minio.git"] = minio_text
+    cache = package_cache(lab.root, source, "minio", "1.0.1")
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "keystone-service.yaml").write_text(minio_text, encoding="utf-8")
+    upgraded = upgrade_service(
+        lab.root,
+        "minio",
+        runner=lab.runner,
+        secrets=SecretRegistry(),
+        sets={pkg_var("minio", "CONFIRM_UPGRADE"): "1.0.1"},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=False,
+        clock=lambda: CLOCK,
+    )
+    assert upgraded.code == 0, upgraded.error
+    lock = load_lock(lab.root / "services.lock.yaml")
+    assert lock["resources"] == resources_before
+    resource = next(item for item in lock["resources"] if item["kind"] == "s3")
+    assert len(resource["consumers"]) == 2
+    assert resource["provider"] == "minio"
+    minio = next(item for item in lock["services"] if item["name"] == "minio")
+    assert minio["previous"]["version"] == "1.0.0"
 
 
 def _upgrade(root: Path, ref: str = "file-mcp", *, sets: dict | None = None, runner=None):

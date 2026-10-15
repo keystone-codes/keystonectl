@@ -153,7 +153,7 @@ KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE=yes \
 keystonectl --root /srv/keystone service remove file-mcp --json
 ```
 
-Retell `result.kept`. If `generated_secrets_kept` is present, the generated secrets and the volumes both stayed. The secrets are in `.keystonectl/secrets/<name>.generated.env`. Installing the package again reuses them, and the file is removed after that install succeeds. Delete the file only together with those volumes.
+Retell `result.kept`. If `generated_secrets_kept` is present, the generated secrets and the volumes both stayed. The secrets are in `.keystonectl/secrets/<name>.generated.env`. Installing the package again reuses them, and the file is removed after that install succeeds. Delete the file only together with those volumes. When `provider_unused` appears, the catalog provider still runs with data on disk; suggest `service remove` on that provider when the operator is done. When `provider_data_kept` appears, name the volumes in the warning and say data stays until they back up and run `docker volume rm` themselves — do not run that command for them.
 
 ## Connect a running service
 
@@ -441,6 +441,8 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `remote_tools_unknown` | 0 | false | Policy rows for this namespace are checked only while the service is up. | Start the service on the keystone-mcp-upstreams network and run check again. |
 | `remote_unreachable` | 0 | false | The remote URL did not answer from the keystone-mcp-upstreams network. | keystone-mcp will keep retrying; make sure the service is on the keystone-mcp-upstreams network. |
 | `resource_answer_ignored` | 0 | false | An answer about a resource that is already bound was ignored. | Tell the operator the service uses the provider that is already there, and name it. |
+| `provider_unused` | 0 | false | A catalog resource provider has no consumers left. | Name the provider and volumes; suggest `service remove` on the provider when they no longer need the data. |
+| `provider_data_kept` | 0 | false | Provider volumes still hold every former consumer's data. | Say reinstall reuses the volumes; backup first, then `docker volume rm` only if they will not reinstall — never run it yourself. |
 | `package_name_shadowed` | 0 | false | A package name now exists in more than one catalog. | Install it by full name source/name. |
 | `bundle_name_shadowed` | 0 | false | A bundle name now exists in more than one catalog. | Install it by full name source/name. |
 
