@@ -1,0 +1,39 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "service plan",
+  "target": "atlassian",
+  "summary": "2 answers are missing",
+  "actions": [],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_ATLASSIAN_DOMAIN",
+      "question": "Which hostname should links use? It must already point at this server (for example jira.example.com).",
+      "kind": "text",
+      "choices": null,
+      "default": null,
+      "secret": false
+    },
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_ATLASSIAN_TLS",
+      "question": "How should atlassian get a certificate?",
+      "kind": "choice",
+      "choices": [
+        "keep",
+        "certbot",
+        "custom",
+        "manual"
+      ],
+      "default": null,
+      "secret": false
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "atlassian",
+    "version": "1.0.0"
+  }
+}
