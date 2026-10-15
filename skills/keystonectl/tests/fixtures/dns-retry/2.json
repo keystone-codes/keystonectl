@@ -17,10 +17,20 @@
   "error": null,
   "retryable": false,
   "result": {
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "version": "1.0.0",
     "namespace": "files",
+    "resources": [
+      {
+        "kind": "s3",
+        "origin": "catalog",
+        "provider": "minio"
+      }
+    ],
     "public": {
+      "state": "ready",
       "domain": "files.example.com",
+      "last_error": null,
       "tls": "certbot"
     }
   }

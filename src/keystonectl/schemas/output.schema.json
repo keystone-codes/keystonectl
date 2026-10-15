@@ -19,43 +19,105 @@
     "result"
   ],
   "properties": {
-    "ok": { "type": "boolean" },
-    "code": { "type": "integer", "enum": [0, 1, 2, 3] },
-    "command": { "type": "string" },
-    "target": { "type": ["string", "null"] },
-    "summary": { "type": "string" },
+    "ok": {
+      "type": "boolean"
+    },
+    "code": {
+      "type": "integer",
+      "enum": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "command": {
+      "type": "string"
+    },
+    "target": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
     "actions": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "title", "status"],
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "title": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
           "status": {
-            "enum": ["planned", "done", "unchanged", "skipped", "failed"]
+            "enum": [
+              "planned",
+              "done",
+              "unchanged",
+              "skipped",
+              "failed"
+            ]
           }
         }
       }
     },
-    "changes": { "type": "integer", "minimum": 0 },
+    "changes": {
+      "type": "integer",
+      "minimum": 0
+    },
     "missing": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["var", "question", "kind", "choices", "default", "secret"],
+        "required": [
+          "var",
+          "question",
+          "kind",
+          "choices",
+          "default",
+          "secret"
+        ],
         "properties": {
-          "var": { "type": "string" },
-          "question": { "type": "string" },
-          "kind": { "enum": ["text", "choice", "file", "confirm", "argument"] },
+          "var": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "choice",
+              "file",
+              "confirm",
+              "argument"
+            ]
+          },
           "choices": {
-            "type": ["array", "null"],
-            "items": { "type": "string" }
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
           },
           "default": {},
-          "secret": { "type": "boolean" }
+          "secret": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -64,29 +126,1635 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "message"],
+        "required": [
+          "id",
+          "message"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "message": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
         }
       }
     },
     "error": {
       "oneOf": [
-        { "type": "null" },
+        {
+          "type": "null"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["id", "message", "hint"],
+          "required": [
+            "id",
+            "message",
+            "hint"
+          ],
           "properties": {
-            "id": { "type": "string" },
-            "message": { "type": "string" },
-            "hint": { "type": "string" }
+            "id": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "hint": {
+              "type": "string"
+            }
           }
         }
       ]
     },
-    "retryable": { "type": "boolean" },
-    "result": { "type": "object" }
+    "retryable": {
+      "type": "boolean"
+    },
+    "result": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "service apply"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_service_apply"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "service install"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_service_apply"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "bundle plan"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_bundle"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "bundle install"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_bundle"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "service remove"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_service_remove"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "service status"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_service_status"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "catalog list"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_catalog_list"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "command",
+          "code"
+        ],
+        "properties": {
+          "command": {
+            "const": "service list"
+          },
+          "code": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/result_service_list"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "result_service_apply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "version"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "version": {
+          "type": "string"
+        },
+        "probes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "s3": {
+              "$ref": "#/$defs/probe_s3"
+            },
+            "postgres": {
+              "$ref": "#/$defs/probe_postgres"
+            }
+          }
+        },
+        "containers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/apply_container"
+          }
+        },
+        "check": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "registry_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "discovery": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "critical_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "critical_tools_hint": {
+          "type": "string"
+        },
+        "recommended_policy": {
+          "$ref": "#/$defs/apply_policy"
+        },
+        "info": {
+          "type": "string"
+        },
+        "public": {
+          "$ref": "#/$defs/apply_public"
+        },
+        "manual_steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/apply_resource"
+          }
+        }
+      }
+    },
+    "apply_container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "service",
+        "image",
+        "init"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "init": {
+          "type": "boolean"
+        }
+      }
+    },
+    "apply_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "apply_public": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "pending",
+                "ready"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "domain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tls": {
+          "anyOf": [
+            {
+              "enum": [
+                "keep",
+                "certbot",
+                "custom",
+                "manual"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "apply_resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "origin",
+        "provider"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "s3",
+            "postgres"
+          ]
+        },
+        "origin": {
+          "enum": [
+            "catalog",
+            "external"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "probe_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "missing_extensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "probe_s3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "exit_code",
+        "endpoint",
+        "bucket",
+        "region",
+        "path_style",
+        "checks",
+        "warnings",
+        "error",
+        "missing"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/probe_error"
+            }
+          ]
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "checked_via": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "path_style": {
+          "type": "boolean"
+        }
+      }
+    },
+    "probe_postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "exit_code",
+        "host",
+        "port",
+        "database",
+        "user",
+        "sslmode",
+        "server_version",
+        "checks",
+        "warnings",
+        "error",
+        "missing"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/probe_error"
+            }
+          ]
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "checked_via": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "database": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "sslmode": {
+          "type": "string"
+        },
+        "server_version": {
+          "type": "string"
+        }
+      }
+    },
+    "result_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order",
+        "packages"
+      ],
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bundle_package"
+          }
+        },
+        "recommended_policy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bundle_policy"
+          }
+        },
+        "critical_tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bundle_critical"
+          }
+        }
+      }
+    },
+    "bundle_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "not_started",
+            "needs_answers",
+            "failed",
+            "unchanged",
+            "planned",
+            "installed"
+          ]
+        }
+      }
+    },
+    "bundle_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package",
+        "path"
+      ],
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "bundle_critical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package",
+        "name"
+      ],
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "result_service_remove": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kept"
+      ],
+      "properties": {
+        "kept": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "result_service_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "services"
+      ],
+      "properties": {
+        "services": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/status_service"
+          }
+        }
+      }
+    },
+    "status_service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "managed",
+        "version",
+        "namespace",
+        "containers",
+        "keystone",
+        "public",
+        "problems",
+        "warnings"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "managed": {
+          "enum": [
+            "generated",
+            "ejected",
+            "remote"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "containers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/status_container"
+          }
+        },
+        "keystone": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ready",
+            "discovery"
+          ],
+          "properties": {
+            "ready": {
+              "enum": [
+                "ready",
+                "down"
+              ]
+            },
+            "discovery": {
+              "enum": [
+                "available",
+                "unavailable",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "public": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/status_public"
+            }
+          ]
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/status_notice"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/status_notice"
+          }
+        }
+      }
+    },
+    "status_container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "service",
+        "state",
+        "health",
+        "exit_code"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "health": {
+          "type": "string"
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "status_notice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "message"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "status_public": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "domain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tls": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inside": {
+          "enum": [
+            "ok",
+            "down"
+          ]
+        },
+        "not_after": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "result_catalog_list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keystone_mcp_version",
+        "sources",
+        "packages",
+        "bundles"
+      ],
+      "properties": {
+        "keystone_mcp_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalog_source"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalog_package"
+          }
+        },
+        "bundles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalog_bundle"
+          }
+        }
+      }
+    },
+    "catalog_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "url",
+        "ref",
+        "priority"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer"
+        }
+      }
+    },
+    "catalog_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "name",
+        "kind",
+        "installed",
+        "versions"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "installed": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalog_version"
+          }
+        }
+      }
+    },
+    "catalog_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "ref",
+        "keystone_mcp",
+        "compatible"
+      ],
+      "properties": {
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keystone_mcp": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compatible": {
+          "type": "boolean"
+        }
+      }
+    },
+    "catalog_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "name",
+        "packages"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "result_service_list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "services",
+        "resources",
+        "keystone_mcp_version"
+      ],
+      "properties": {
+        "services": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/service"
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resource"
+          }
+        },
+        "keystone_mcp_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "env_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "image",
+        "init"
+      ],
+      "properties": {
+        "service": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "init": {
+          "type": "boolean"
+        }
+      }
+    },
+    "filters": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tool_prefix": {
+              "type": "string"
+            },
+            "include_prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "exclude_prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "strip_prefix": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keystone",
+        "files",
+        "generated"
+      ],
+      "properties": {
+        "keystone": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^KEYSTONE_MCP_UPSTREAM_[A-Z0-9_]+$"
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "generated": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/env_name"
+          }
+        }
+      }
+    },
+    "public": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "none",
+            "pending",
+            "ready"
+          ]
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host_port": {
+          "type": "integer",
+          "minimum": 47600,
+          "maximum": 47699
+        },
+        "dns": {
+          "enum": [
+            "checked",
+            "skipped"
+          ]
+        },
+        "tls": {
+          "enum": [
+            "keep",
+            "certbot",
+            "custom",
+            "manual"
+          ]
+        },
+        "cert_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cert_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "not_after": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "vhost": {
+          "type": "string",
+          "minLength": 1
+        },
+        "took_over": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disabled_sites": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "previous": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "containers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/container"
+          }
+        },
+        "fragment_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "role",
+        "managed"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        },
+        "role": {
+          "enum": [
+            "service",
+            "resource"
+          ]
+        },
+        "managed": {
+          "enum": [
+            "generated",
+            "ejected",
+            "remote"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "compat_keystone_mcp": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "containers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/container"
+          }
+        },
+        "fragment": {
+          "type": "string",
+          "pattern": "^packages/[a-z][a-z0-9-]*\\.yml$"
+        },
+        "fragment_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registry_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/filters"
+        },
+        "env": {
+          "$ref": "#/$defs/env"
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "s3",
+              "postgres"
+            ]
+          }
+        },
+        "public": {
+          "$ref": "#/$defs/public"
+        },
+        "retired_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/previous"
+            }
+          ]
+        },
+        "installed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "interface_version",
+        "origin",
+        "provider",
+        "params",
+        "consumers"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "s3",
+            "postgres"
+          ]
+        },
+        "interface_version": {
+          "const": 1
+        },
+        "origin": {
+          "enum": [
+            "catalog",
+            "external"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "params": {
+          "type": "object"
+        },
+        "consumers": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "s3"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "endpoint",
+                  "region",
+                  "path_style"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "region": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "path_style": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "consumers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "bucket",
+                    "provisioned_at"
+                  ],
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "bucket": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "provisioned_at": {
+                      "$ref": "#/$defs/timestamp"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "postgres"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "host",
+                  "port",
+                  "sslmode"
+                ],
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "sslmode": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "consumers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "database",
+                    "user",
+                    "extensions",
+                    "provisioned_at"
+                  ],
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "database": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "user": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "provisioned_at": {
+                      "$ref": "#/$defs/timestamp"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }

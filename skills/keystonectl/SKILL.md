@@ -40,7 +40,7 @@ Then repeat `result.compose_command` to the operator. keystone-mcp starts with t
 
 ## Install flow
 
-1. **Choose.** From `catalog list`, say each bundle and package in plain words: name, the `summary` sentence, and whether it fits this keystone-mcp. Ask what to install. Install only from catalogs the operator already connected. Run `catalog add` only when they ask, and only with the address they gave:
+1. **Choose.** From `catalog list`, retell `result.packages` and `result.bundles`. For each package say `source`, `name`, `kind`, `installed`, and whether a `versions` entry is `compatible` with `result.keystone_mcp_version`. For each bundle say `source`, `name`, and the `packages` it contains. Ask what to install. Install only from catalogs the operator already connected. Run `catalog add` only when they ask, and only with the address they gave:
 
 ```
 keystonectl --root /srv/keystone catalog add https://example.com/catalog.git --json
@@ -82,7 +82,7 @@ While the code is 2, go back to step 3 with the new `missing` list. Running `app
 keystonectl explain dns_mismatch --json
 ```
 
-6. **Summary.** From `result`, say what was installed, the version, namespace, new tools, which resources are external or from the catalog, the domain and certificate (until when, and who renews it), what to check, and warnings. `tools_unreachable` means nobody can call the tools until an administrator adds roles.
+6. **Summary.** From `result`, say what was installed, the `version` and `commit`, the namespace, new tools, and `resources`: each item's `origin` is `catalog` or `external`, and `provider` is the package name or null. Say the domain and certificate from `public` (`state`, `domain`, `tls`, `last_error`; expiry is `not_after` on status), what to check, and warnings. `tools_unreachable` means nobody can call the tools until an administrator adds roles.
 
 7. **Policy.** Follow Policy below.
 
@@ -92,7 +92,7 @@ keystonectl explain dns_mismatch --json
 keystonectl --root /srv/keystone service status file-mcp --json
 ```
 
-Retell the container, whether keystone-mcp can see the service, the in-network link, the certificate expiry, and `problems`. If you can call keystone-mcp, confirm the `<namespace>_*` tools are visible.
+Retell `result.services[]`: each container, `keystone.discovery` (whether keystone-mcp can see the service), `public` (`inside` is the in-network link, `not_after` is the certificate expiry), and `problems`. If you can call keystone-mcp, confirm the `<namespace>_*` tools are visible.
 
 Publishing later is `--defer-public`. Ask before you use it:
 
@@ -205,7 +205,7 @@ keystonectl --root /srv/keystone service status file-mcp --json
 keystonectl --root /srv/keystone check --json
 ```
 
-Retell `problems` on status. They can include `container_missing`, `container_unhealthy`, `init_failed`, `init_pending`, `public_upstream_down`, and `hairpin_failed`. Those are status problems, not the warning table below.
+Retell `problems` inside each item of `result.services`. They can include `container_missing`, `container_unhealthy`, `init_failed`, `init_pending`, `public_upstream_down`, and `hairpin_failed`. Those are status problems, not the warning table below.
 
 ## Questions
 
@@ -257,7 +257,7 @@ Pass the path in a `…_FILE` variable. Do not read the file and do not print it
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
-9. **Retell the result.** Do not stop at "done". Say the namespace, tools, resources, domain, warnings, and what an administrator still has to do.
+9. **Retell the result.** Do not stop at "done". Say the namespace, tools, `result.resources` (`origin` and `provider`), domain, warnings, and what an administrator still has to do.
 
 ## Policy
 
