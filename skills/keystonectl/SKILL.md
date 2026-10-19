@@ -518,6 +518,8 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `stale_external_resource` | 0 | false | An external resource binding has no consumers left. | `check` only reports this (it never writes); `service plan`/`service apply` for a package that needs this kind clears it automatically. |
 | `package_name_shadowed` | 0 | false | A package name now exists in more than one catalog. | Install it by full name source/name. |
 | `bundle_name_shadowed` | 0 | false | A bundle name now exists in more than one catalog. | Install it by full name source/name. |
+| `package_dir_missing` | 0 | false | A package_dir copy named in the lock is missing or was changed. | run service apply <name> again |
+| `package_dir_kept` | 0 | false | Package file copies stay because an ejected fragment may still mount them. | Delete .keystonectl/package-dirs/<name> together with the ejected fragment. |
 | `tools_snapshot_missing` | 0 | false | The package lists only the creds_* tools. | Run wrap-stdio again without --no-discovery. |
 
 ## Examples

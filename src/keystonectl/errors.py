@@ -1055,6 +1055,16 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "Upgrade or apply will need another version of that package.",
         ),
         _w(
+            "package_dir_missing",
+            "A package_dir copy named in the lock is missing or was changed.",
+            "run service apply <name> again",
+        ),
+        _w(
+            "package_dir_kept",
+            "Package file copies stay because an ejected fragment may still mount them.",
+            "Delete .keystonectl/package-dirs/<name> together with the ejected fragment.",
+        ),
+        _w(
             "tools_snapshot_missing",
             "The package lists only the creds_* tools.",
             "Run wrap-stdio again without --no-discovery.",

@@ -253,6 +253,24 @@
         },
         "healthcheck": {
           "$ref": "#/$defs/healthcheck"
+        },
+        "package_dir": {
+          "$ref": "#/$defs/packageDir"
+        }
+      }
+    },
+    "packageDir": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "path"],
+      "properties": {
+        "from": {
+          "type": "string",
+          "pattern": "^(?:\\.|(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,128})$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/[^\\s:]+$"
         }
       }
     },

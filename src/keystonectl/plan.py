@@ -96,6 +96,10 @@ class Context:
     chosen_port: int | None = None
     started_project: str | None = None
     lock_services_before: frozenset[str] = field(default_factory=frozenset)
+    # package_dir copies for this package: role -> {from, path, copy}. None until planned.
+    package_dirs: dict[str, dict[str, str]] | None = None
+    # Copies this apply created; a failed first apply deletes them.
+    package_dirs_created: list[str] = field(default_factory=list)
     # (link name, previous target) for nginx sites disabled in this run.
     taken_over_now: list[tuple[str, str]] = field(default_factory=list)
 
@@ -499,6 +503,37 @@ def _fetch_package(ctx: Context) -> str | None:
     return None
 
 
+def package_cache_of(ctx: Context) -> tuple[Path, str] | None:
+    """``(cache, path)``: the pinned package tree and the package's subdirectory in it."""
+
+    package = ctx.resolved
+    if package is None:
+        return None
+    cache = package_cache(ctx.root, package.source_name, package.name, package.version)
+    return cache, str(package.path or ".")
+
+
+def _package_dir_problems(ctx: Context) -> list[dict[str, str]]:
+    """``package_dir`` subtrees: plain files and folders only, within the size limits."""
+
+    from keystonectl.package_dirs import PackageDirError, declared, plan
+
+    if ctx.manifest is None or not declared(ctx.manifest):
+        return []
+    located = package_cache_of(ctx)
+    if located is None:
+        return []
+    try:
+        ctx.package_dirs = plan(ctx.manifest, *located)
+    except PackageDirError as exc:
+        ctx.package_dirs = None
+        return [
+            {"path": message.split(": ", 1)[0], "message": message, "severity": "error"}
+            for message in exc.messages
+        ]
+    return []
+
+
 def _validate_manifest(ctx: Context) -> Resolution | None:
     if ctx.manifest is None:
         return Resolution(
@@ -525,6 +560,8 @@ def _validate_manifest(ctx: Context) -> Resolution | None:
                 "severity": "error",
             }
         )
+    if not problems:
+        problems.extend(_package_dir_problems(ctx))
     ctx.problems = problems
     if problems:
         return Resolution(

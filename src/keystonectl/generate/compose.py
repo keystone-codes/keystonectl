@@ -18,6 +18,7 @@ from keystonectl.generate.placement import (
     placement,
     public_role,
 )
+from keystonectl.package_dirs import is_copy_path
 
 RESOURCES_NETWORK = "keystone-resources"
 UPSTREAMS_NETWORK = "keystone-mcp-upstreams"
@@ -159,6 +160,28 @@ def _named_volumes(spec: Mapping[str, Any]) -> list[tuple[str, str]]:
     return found
 
 
+def _package_mount(
+    name: str, role: str, spec: Mapping[str, Any], entry: Mapping[str, Any]
+) -> str | None:
+    """``../<copy>:<path>:ro`` for a ``package_dir`` (ADR 0010).
+
+    The target comes from the manifest and the source from ``entry["package_dirs"]``.
+    The source must be a copy path keystonectl writes under
+    ``.keystonectl/package-dirs/<name>/``; any other value is not mounted. The
+    path is relative to ``packages/``, where the fragment lives.
+    """
+
+    item = spec.get("package_dir")
+    if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+        return None
+    dirs = entry.get("package_dirs") if isinstance(entry.get("package_dirs"), Mapping) else {}
+    planned = dirs.get(role) if isinstance(dirs.get(role), Mapping) else {}
+    copy = planned.get("copy")
+    if not is_copy_path(copy, name):
+        return None
+    return f"../{copy}:{item['path']}:ro"
+
+
 def render_fragment(
     manifest: Mapping[str, Any],
     entry: Mapping[str, Any] | None = None,
@@ -224,13 +247,16 @@ def render_fragment(
             hosts = [f"{domain}:host-gateway" for domain in extra_hosts]
             lines.append(f"    extra_hosts: {yaml_flow(hosts)}")
         volumes = _named_volumes(spec)
-        if volumes:
+        package_mount = _package_mount(name, role, spec, document)
+        if volumes or package_mount:
             lines.append("    volumes:")
             for volume, target in volumes:
                 key = f"{name}-{volume}"
                 if key not in volume_names:
                     volume_names.append(key)
                 lines.append(f"      - {yaml_scalar(f'{key}:{target}')}")
+            if package_mount:
+                lines.append(f"      - {yaml_scalar(package_mount)}")
         lines.append("    networks:")
         lines.append(f"      {yaml_scalar(f'{name}-internal')}: {{aliases: [{yaml_scalar(role)}]}}")
         if joins_resources(manifest, role):
