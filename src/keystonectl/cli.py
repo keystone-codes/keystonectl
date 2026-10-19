@@ -45,12 +45,21 @@ class KeystoneParser(argparse.ArgumentParser):
         raise SystemExit(1)
 
 
-def _add_common(parser: argparse.ArgumentParser) -> None:
+def _names(value: str | None) -> list[str] | None:
+    """A comma-separated flag value as a list of names; ``None`` when the flag is absent."""
+    if value is None:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _add_common(parser: argparse.ArgumentParser, *, version_flag: bool = True) -> None:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--root", default=None)
     parser.add_argument("--non-interactive", action="store_true")
     parser.add_argument("--set", action="append", default=None)
-    parser.add_argument("--version", action="store_true")
+    if version_flag:
+        # ``package wrap-stdio --version X.Y.Z`` sets the package version instead.
+        parser.add_argument("--version", action="store_true")
 
 
 def build_parser() -> KeystoneParser:
@@ -80,7 +89,7 @@ def build_parser() -> KeystoneParser:
         "wrap-stdio",
         help="Write a box package from a stdio provider directory",
     )
-    _add_common(wrap)
+    _add_common(wrap, version_flag=False)
     wrap.add_argument("provider_dir")
     wrap.add_argument("--image", default=STDIO_BOX_IMAGE)
     discovery = wrap.add_mutually_exclusive_group()
@@ -88,7 +97,14 @@ def build_parser() -> KeystoneParser:
     discovery.add_argument("--no-discovery", action="store_true")
     wrap.add_argument("--name", default=None)
     wrap.add_argument("--namespace", default=None)
-    wrap.add_argument("--derived-image", action="store_true")
+    image_mode = wrap.add_mutually_exclusive_group()
+    image_mode.add_argument("--derived-image", action="store_true")
+    image_mode.add_argument("--stock-image", action="store_true")
+    wrap.add_argument("--publisher", default=None)
+    wrap.add_argument("--homepage", default=None)
+    wrap.add_argument("--version", dest="package_version", metavar="X.Y.Z", default=None)
+    wrap.add_argument("--read-only", metavar="NAMES", default=None)
+    wrap.add_argument("--destructive", metavar="NAMES", default=None)
     wrap.add_argument("--force", action="store_true")
 
     check = sub.add_parser("check", help="Check a deployment directory")
@@ -540,6 +556,12 @@ def _dispatch(
             derived_image=bool(args.derived_image),
             force=bool(args.force),
             runner=build_runner(),
+            stock_image=bool(args.stock_image),
+            publisher=args.publisher,
+            homepage=args.homepage,
+            version=args.package_version,
+            read_only=_names(args.read_only),
+            destructive=_names(args.destructive),
         )
     elif args.command == "check":
         assert root is not None

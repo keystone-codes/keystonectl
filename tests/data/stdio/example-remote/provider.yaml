@@ -1,0 +1,23 @@
+schema_version: 1
+name: example-remote
+title: Example remote MCP server
+server:
+  command: 'npx -y mcp-remote@0.14.3 https://mcp.example.com/mcp --header "Authorization:Bearer ${EXAMPLE_TOKEN}"'
+  bin: mcp-remote
+  lock: package-lock.json
+fields:
+  - name: EXAMPLE_TOKEN
+    type: string
+    secret: true
+    hint: "API token from the example.com account page"
+    to: env
+variants:
+  - name: token
+    fields: [EXAMPLE_TOKEN]
+    checks:
+      - tool:
+          name: whoami
+tools:
+  normalize: snake
+discovery:
+  mode: manual
