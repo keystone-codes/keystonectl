@@ -18,10 +18,13 @@ Paths below use the `docs-service` example in `docs/spec/examples/docs-service.k
 | `keystonectl/upstreams.yaml` | Upstream registry. One entry per package that has `mcp`. |
 | `keystonectl/catalog-snapshot.yaml` | Tool names keystone-mcp is allowed to publish. |
 | `.env` | `KEYSTONE_MCP_UPSTREAM_<NAMESPACE>_BEARER` and `_IDENTITY_SECRET` inside the managed block. Mode 600. |
+| `.keystonectl/package-dirs/<name>/<version>-<hash12>/` | Copy of a `package_dir` subtree, only when a container sets `package_dir`. Directories 0755, files 0644. |
 
 A secret with `generate` that every role declares goes in the shared file. The same name on several roles is one value. The bearer and the assertion secret are not in the shared file.
 
 Env files are mode 600. Compose lists them as `./…` paths, which are relative to `packages/`.
+
+A container with `package_dir` gets one more line under `volumes`: `../.keystonectl/package-dirs/<name>/<version>-<hash12>:<path>:ro`. The copy is made during `service apply`, never during `service plan`, from the pinned package version, without following links; the subtree is checked again while it is copied. `<hash12>` is the first 12 hex digits of the sha256 over every relative path and every file's bytes, in sorted order, so the same files reuse the same copy and changed files get a new one. The package cache is not mounted, because a fetch replaces it. `.keystonectl/package-dirs/` is mode 755 on purpose: the container reads the copy as its own uid. The lock records `package_dirs: {<role>: {from, path, copy}}`, and the fragment hash covers the line. `check` warns `package_dir_missing` when a copy named in the lock is missing or changed; run `service apply <name>` again. Why: [ADR 0010](adr/0010-package-files-read-only.md).
 
 ## Networks
 
@@ -53,7 +56,7 @@ A change to the keystone-mcp wiring in `docker-compose.packages.yml` recreates t
 
 ## When apply fails
 
-A first install that does not become healthy leaves only data behind. The containers of the package are stopped and removed (`docker compose rm -s -f`, while the fragment is still on disk), the fragment and the include in `docker-compose.packages.yml` are restored, and the lock has no entry for the package. The same holds when an init container fails or when a resource provider started for the package does not become healthy. The resource, its env file `packages/<name>.<kind>.env`, the consumer secret in `.keystonectl/secrets/`, and the bucket, database, and volumes stay, so the next apply uses the same credentials and does not ask about the resource again. The consumer record in `resources[]` is dropped, as `service remove` drops it, because the lock cannot name a service it does not list.
+A first install that does not become healthy leaves only data behind. The containers of the package are stopped and removed (`docker compose rm -s -f`, while the fragment is still on disk), the fragment and the include in `docker-compose.packages.yml` are restored, and the lock has no entry for the package. The same holds when an init container fails or when a resource provider started for the package does not become healthy. The resource, its env file `packages/<name>.<kind>.env`, the consumer secret in `.keystonectl/secrets/`, and the bucket, database, and volumes stay, so the next apply uses the same credentials and does not ask about the resource again. The consumer record in `resources[]` is dropped, as `service remove` drops it, because the lock cannot name a service it does not list. A `package_dir` copy that this apply created is deleted.
 
 A failed apply of an already installed service restores the files and leaves the containers as Docker left them. Its lock entry stays; use `service rollback` after a failed upgrade.
 
