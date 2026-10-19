@@ -8,7 +8,7 @@ import shlex
 import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -34,6 +34,8 @@ _DIGEST_PLACEHOLDER = "0" * 64
 _PUBLISHER = "keystone-codes"
 _PACKAGE_VERSION = "1.0.0"
 _DISCOVERY_TIMEOUT = 600
+_BOX_TOOLS_TIMEOUT = 300
+STOCK_PROVIDER_DIR = "/opt/box/provider"
 _STDERR_TAIL = 20
 
 _PACKAGE_NAME_RE = re.compile(r"^(?!.*--)[a-z][a-z0-9-]{1,38}[a-z0-9]$")
@@ -51,6 +53,13 @@ _PY_NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
 _NPM_NAME_RE = re.compile(r"^(?:@[A-Za-z0-9._-]+/[A-Za-z0-9._-]+|[A-Za-z0-9._-]+)$")
 _NPM_YES = {"-y", "--yes"}
 
+# The same patterns the manifest schema uses for these fields.
+_VERSION_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+_PUBLISHER_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+_HOMEPAGE_RE = re.compile(r"^https://\S+$")
+_BOX_TOOL_RE = re.compile(r"^creds_[a-z0-9_]{1,58}$")
+
+# Fallback when the image cannot list its own tools (stdio-box 0.1.0 has no box-tools).
 CREDS_TOOLS = (
     "creds_providers",
     "creds_profiles",
@@ -116,10 +125,25 @@ def run_wrap_stdio(
     derived_image: bool,
     force: bool,
     runner: _Runner,
+    stock_image: bool = False,
+    publisher: str | None = None,
+    homepage: str | None = None,
+    version: str | None = None,
+    read_only: Sequence[str] | None = None,
+    destructive: Sequence[str] | None = None,
 ) -> Result:
     """Validate a provider directory and write its box package files."""
     command = "package wrap-stdio"
     directory = Path(provider_dir)
+    usage = _usage_problem(
+        stock_image=stock_image,
+        derived_image=derived_image,
+        publisher=publisher,
+        homepage=homepage,
+        version=version,
+    )
+    if usage is not None:
+        return _failed(command, directory, "usage", message=usage)
     try:
         document = _load_provider(directory)
         parsed = _parse_box_command(str(document["server"]["command"]))
@@ -152,20 +176,26 @@ def run_wrap_stdio(
 
     try:
         published = [] if snapshot is None else _published_tools(snapshot, document)
+        published = _override_hints(published, read_only=read_only, destructive=destructive)
     except _Invalid as exc:
         return _failed(command, directory, "provider_invalid", problems=exc.problems)
 
-    tool_names = [item.name for item in published] + list(CREDS_TOOLS)
-    destructive = [item.name for item in published if item.destructive]
-    critical = [*destructive, *CHANGING_CREDS]
+    box_tools, box_tools_source = _box_tools(image, runner)
+    tool_names = [item.name for item in published] + box_tools
+    critical = [*(item.name for item in published if item.destructive), *CHANGING_CREDS]
     warnings = []
     if discovery == "skipped":
         spec = WARNINGS["tools_snapshot_missing"]
         warnings.append({"id": spec.id, "message": spec.title})
 
     files: list[str] = []
+    snapshot_path = directory / "tools.snapshot.json"
     if snapshot is not None:
-        _write_text(directory / "tools.snapshot.json", snapshot["text"])
+        _write_text(snapshot_path, snapshot["text"])
+        files.append("tools.snapshot.json")
+    elif not snapshot_path.exists():
+        # stdio-box does not start without a snapshot; an empty one publishes no server tools.
+        _write_text(snapshot_path, _empty_snapshot_text(document))
         files.append("tools.snapshot.json")
 
     manifest_path = directory / "keystone-service.yaml"
@@ -180,6 +210,10 @@ def run_wrap_stdio(
                 tools=tool_names,
                 critical=critical,
                 command=command_text,
+                stock_image=stock_image,
+                publisher=publisher,
+                homepage=homepage,
+                version=version,
             )
             _write_text(manifest_path, updated)
         else:
@@ -193,7 +227,11 @@ def run_wrap_stdio(
                     critical=critical,
                     image=image_ref,
                     derived_image=derived_image,
+                    stock_image=stock_image,
                     parsed=parsed,
+                    publisher=publisher,
+                    homepage=homepage,
+                    version=version,
                 ),
             )
     except _Unrecognized as exc:
@@ -251,6 +289,7 @@ def run_wrap_stdio(
                 "namespace": namespace_name,
                 "dir": str(directory),
                 "files": files,
+                "box_tools_source": box_tools_source,
             },
         )
     summary = f"Wrote package {package} ({len(tool_names)} tools)."
@@ -268,9 +307,29 @@ def run_wrap_stdio(
             "files": files,
             "tools": len(tool_names),
             "discovery": discovery,
+            "box_tools_source": box_tools_source,
             "warnings": warnings,
         },
     )
+
+
+def _usage_problem(
+    *,
+    stock_image: bool,
+    derived_image: bool,
+    publisher: str | None,
+    homepage: str | None,
+    version: str | None,
+) -> str | None:
+    if stock_image and derived_image:
+        return "--stock-image and --derived-image cannot be used together."
+    if version is not None and _VERSION_RE.fullmatch(version) is None:
+        return f"--version {version!r} is not a semantic version X.Y.Z."
+    if publisher is not None and _PUBLISHER_RE.fullmatch(publisher) is None:
+        return f"--publisher {publisher!r} is not a valid publisher name."
+    if homepage is not None and _HOMEPAGE_RE.fullmatch(homepage) is None:
+        return f"--homepage {homepage!r} is not an https:// address."
+    return None
 
 
 def _failed(
@@ -752,10 +811,10 @@ def _obtain_snapshot(
     return _parse_snapshot(stdout, document), "docker"
 
 
-def _invoke(runner: _Runner | Any, args: list[str]) -> Any:
+def _invoke(runner: _Runner | Any, args: list[str], *, timeout: float = _DISCOVERY_TIMEOUT) -> Any:
     method = getattr(runner, "run", None)
     if callable(method):
-        return method(args, timeout=_DISCOVERY_TIMEOUT)
+        return method(args, timeout=timeout)
     return runner(args)
 
 
@@ -888,6 +947,81 @@ def _publish_one(
     return name
 
 
+def _override_hints(
+    published: list[_Published],
+    *,
+    read_only: Sequence[str] | None,
+    destructive: Sequence[str] | None,
+) -> list[_Published]:
+    """``--read-only`` and ``--destructive`` replace the snapshot's hints, each as a whole set."""
+    if read_only is None and destructive is None:
+        return published
+    known = {item.name for item in published}
+    problems: list[dict[str, str]] = []
+    for flag, names in (("--read-only", read_only), ("--destructive", destructive)):
+        for item in names or ():
+            if item not in known:
+                problems.append(_problem(flag, f"'{item}' is not a published tool name"))
+    both = sorted(set(read_only or ()) & set(destructive or ()))
+    for item in both:
+        problems.append(
+            _problem("--read-only", f"'{item}' is in both --read-only and --destructive")
+        )
+    if problems:
+        raise _Invalid(problems)
+    chosen_read = None if read_only is None else set(read_only)
+    chosen_destructive = None if destructive is None else set(destructive)
+    return [
+        _Published(
+            name=item.name,
+            read_only=item.read_only if chosen_read is None else item.name in chosen_read,
+            destructive=(
+                item.destructive if chosen_destructive is None else item.name in chosen_destructive
+            ),
+        )
+        for item in published
+    ]
+
+
+def _box_tools(image: str, runner: _Runner) -> tuple[list[str], str]:
+    """The image's own ``creds_*`` tools from ``stdio-box box-tools``, else the fallback list."""
+    fallback = (list(CREDS_TOOLS), "fallback")
+    if shutil.which("docker") is None:
+        return fallback
+    args = ["docker", "run", "--rm", "--entrypoint", "stdio-box", image, "box-tools"]
+    try:
+        completed = _invoke(runner, args, timeout=_BOX_TOOLS_TIMEOUT)
+    except OSError:
+        return fallback
+    if getattr(completed, "returncode", 1) != 0:
+        return fallback
+    try:
+        loaded = json.loads(str(getattr(completed, "stdout", "") or ""))
+    except json.JSONDecodeError:
+        return fallback
+    if (
+        not isinstance(loaded, list)
+        or not loaded
+        or not all(isinstance(item, str) and _BOX_TOOL_RE.fullmatch(item) for item in loaded)
+        or len(set(loaded)) != len(loaded)
+        # mcp.critical always names these; a list without them would not lint.
+        or not set(CHANGING_CREDS) <= set(loaded)
+    ):
+        return fallback
+    return list(loaded), "image"
+
+
+def _empty_snapshot_text(document: dict[str, Any]) -> str:
+    """A snapshot with no server tools, in the exact form ``stdio-box snapshot-tools`` writes."""
+    snapshot = {
+        "schema_version": 1,
+        "server": {"command": str(document["server"]["command"])},
+        "taken_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "tools": [],
+    }
+    return json.dumps(snapshot, indent=2, sort_keys=True) + "\n"
+
+
 def _render_manifest(
     document: dict[str, Any],
     *,
@@ -897,7 +1031,11 @@ def _render_manifest(
     critical: list[str],
     image: str,
     derived_image: bool,
+    stock_image: bool,
     parsed: _BoxCommand,
+    publisher: str | None,
+    homepage: str | None,
+    version: str | None,
 ) -> str:
     title = str(document["title"])
     summary = (
@@ -910,11 +1048,13 @@ def _render_manifest(
         "schema_version: 1",
         "kind: service",
         f"name: {package}",
-        f"version: {_PACKAGE_VERSION}",
-        f"publisher: {_PUBLISHER}",
+        f"version: {version or _PACKAGE_VERSION}",
+        f"publisher: {_yaml_plain(publisher or _PUBLISHER)}",
         f"summary: {json.dumps(summary)}",
         (
-            "homepage: "
+            f"homepage: {json.dumps(homepage)}"
+            if homepage is not None
+            else "homepage: "
             f"https://github.com/keystone-codes/stdio-box/tree/{package}/v1.0.0/packages/{package}"
         ),
         "compat:",
@@ -944,6 +1084,12 @@ def _render_manifest(
         [
             f"    image: {json.dumps(image)}",
             "    port: 8081",
+        ]
+    )
+    if stock_image:
+        lines.extend(_package_dir_lines("    "))
+    lines.extend(
+        [
             "    env:",
             "      - name: BOX_PROVIDER",
             f"        default: {json.dumps(provider_name)}",
@@ -954,6 +1100,12 @@ def _render_manifest(
                 "        description: "
                 '"Server to run. The package and version must match the provider lock file."'
             ),
+        ]
+    )
+    if stock_image:
+        lines.extend(_provider_dir_env_lines("      "))
+    lines.extend(
+        [
             "    secrets:",
             "      - name: BOX_STORE_KEY",
             "        generate:",
@@ -977,6 +1129,25 @@ def _render_manifest(
         ]
     )
     return "\n".join(lines)
+
+
+def _package_dir_lines(indent: str) -> list[str]:
+    return [
+        f"{indent}package_dir:",
+        f'{indent}  from: "."',
+        f"{indent}  path: {STOCK_PROVIDER_DIR}",
+    ]
+
+
+def _provider_dir_env_lines(indent: str) -> list[str]:
+    return [
+        f"{indent}- name: BOX_PROVIDER_DIR",
+        f"{indent}  default: {json.dumps(STOCK_PROVIDER_DIR)}",
+        (
+            f"{indent}  description: "
+            '"Package files mounted read-only: provider.yaml, the lock and tools.snapshot.json."'
+        ),
+    ]
 
 
 def _yaml_plain(value: str) -> str:
@@ -1045,11 +1216,169 @@ def _policy_subject(title: str) -> str:
     return title.strip()
 
 
-def _update_manifest_text(text: str, *, tools: list[str], critical: list[str], command: str) -> str:
+def _update_manifest_text(
+    text: str,
+    *,
+    tools: list[str],
+    critical: list[str],
+    command: str,
+    stock_image: bool = False,
+    publisher: str | None = None,
+    homepage: str | None = None,
+    version: str | None = None,
+) -> str:
     lines = text.splitlines(keepends=True)
+    if stock_image:
+        lines = _ensure_stock_image(lines)
     lines = _replace_named_list(lines, "critical", critical)
     lines = _replace_named_list(lines, "tools", tools)
-    return _replace_command("".join(lines), command)
+    lines = _replace_command("".join(lines), command).splitlines(keepends=True)
+    if version is not None:
+        lines = _set_top_level(lines, "version", version)
+    if publisher is not None:
+        lines = _set_top_level(lines, "publisher", _yaml_plain(publisher))
+    if homepage is not None:
+        lines = _set_top_level(lines, "homepage", json.dumps(homepage), after="publisher")
+    return "".join(lines)
+
+
+def _indent_of(line: str) -> int:
+    raw = line.rstrip("\r\n")
+    return len(raw) - len(raw.lstrip(" "))
+
+
+def _is_content(line: str) -> bool:
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
+
+
+def _newline(lines: list[str]) -> str:
+    return "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
+
+
+def _top_level_key(lines: list[str], key: str) -> int | None:
+    for index, line in enumerate(lines):
+        if _indent_of(line) == 0 and _mapping_key(line) == key:
+            return index
+    return None
+
+
+def _child_key(lines: list[str], start: int, end: int, key: str) -> int | None:
+    """Index of ``key:`` among the direct children in ``lines[start:end]``."""
+    child_indent = None
+    for index in range(start, end):
+        if not _is_content(lines[index]):
+            continue
+        current = _indent_of(lines[index])
+        if child_indent is None:
+            child_indent = current
+        if current == child_indent and _mapping_key(lines[index]) == key:
+            return index
+    return None
+
+
+def _block_end(lines: list[str], index: int) -> int:
+    """End of the block under the key at ``index``, without trailing blank or comment lines."""
+    base = _indent_of(lines[index])
+    end = len(lines)
+    for cursor in range(index + 1, len(lines)):
+        if not _is_content(lines[cursor]):
+            continue
+        current = _indent_of(lines[cursor])
+        if current < base or (current == base and not lines[cursor].lstrip().startswith("- ")):
+            end = cursor
+            break
+    while end > index + 1 and not _is_content(lines[end - 1]):
+        end -= 1
+    return end
+
+
+def _key_has_inline_value(line: str) -> bool:
+    _key, _sep, rest = line.strip().partition(":")
+    rest = rest.strip()
+    return bool(rest) and not rest.startswith("#")
+
+
+def _insert(lines: list[str], at: int, new: list[str]) -> list[str]:
+    newline = _newline(lines)
+    head = list(lines[:at])
+    if head and not head[-1].endswith("\n"):
+        head[-1] += newline
+    return [*head, *(item + newline for item in new), *lines[at:]]
+
+
+def _ensure_stock_image(lines: list[str]) -> list[str]:
+    """Add ``package_dir`` and ``BOX_PROVIDER_DIR`` to ``containers.mcp`` when they are missing."""
+    try:
+        document = yaml.safe_load("".join(lines))
+    except yaml.YAMLError as exc:
+        raise _Unrecognized("containers.mcp") from exc
+    containers = document.get("containers") if isinstance(document, dict) else None
+    container = containers.get("mcp") if isinstance(containers, dict) else None
+    top = _top_level_key(lines, "containers")
+    if not isinstance(container, dict) or top is None:
+        raise _Unrecognized("containers.mcp")
+    role = _child_key(lines, top + 1, _block_end(lines, top), "mcp")
+    if role is None or _key_has_inline_value(lines[role]):
+        raise _Unrecognized("containers.mcp")
+    role_end = _block_end(lines, role)
+    first = next((i for i in range(role + 1, role_end) if _is_content(lines[i])), None)
+    if first is None:
+        raise _Unrecognized("containers.mcp")
+    indent = " " * _indent_of(lines[first])
+
+    if "package_dir" not in container:
+        env_key = _child_key(lines, role + 1, role_end, "env")
+        at = role_end if env_key is None else env_key
+        lines = _insert(lines, at, _package_dir_lines(indent))
+        role_end = _block_end(lines, role)
+
+    env = container.get("env")
+    names = (
+        {item.get("name") for item in env if isinstance(item, dict)}
+        if isinstance(env, list)
+        else set()
+    )
+    if "BOX_PROVIDER_DIR" in names:
+        return lines
+    env_key = _child_key(lines, role + 1, role_end, "env")
+    if env_key is None:
+        if env is not None:
+            raise _Unrecognized("containers.mcp.env")
+        return _insert(lines, role_end, [f"{indent}env:", *_provider_dir_env_lines(indent + "  ")])
+    if _key_has_inline_value(lines[env_key]):
+        raise _Unrecognized("containers.mcp.env")
+    env_end = _block_end(lines, env_key)
+    item = next(
+        (i for i in range(env_key + 1, env_end) if lines[i].lstrip().startswith("- ")),
+        None,
+    )
+    item_indent = indent + "  " if item is None else " " * _indent_of(lines[item])
+    return _insert(lines, env_end, _provider_dir_env_lines(item_indent))
+
+
+def _set_top_level(
+    lines: list[str], key: str, value: str, *, after: str | None = None
+) -> list[str]:
+    index = _top_level_key(lines, key)
+    if index is None:
+        anchor = None if after is None else _top_level_key(lines, after)
+        if anchor is None:
+            raise _Unrecognized(key)
+        return _insert(lines, anchor + 1, [f"{key}: {value}"])
+    following = next((i for i in range(index + 1, len(lines)) if _is_content(lines[i])), None)
+    if following is not None and _indent_of(lines[following]) > 0:
+        raise _Unrecognized(key)
+    line = lines[index]
+    ending = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+    _key, _sep, rest = line[: len(line) - len(ending)].partition(":")
+    rest = rest.strip()
+    if rest.startswith(("|", ">", "&", "*", "!")):
+        raise _Unrecognized(key)
+    comment = f" {rest}" if rest.startswith("#") else _trailing_comment(rest)
+    lines = list(lines)
+    lines[index] = f"{key}: {value}{comment}{ending}"
+    return lines
 
 
 def _replace_named_list(lines: list[str], key: str, items: list[str]) -> list[str]:
