@@ -14,6 +14,7 @@ from keystonectl.errors import ERRORS, WARNINGS
 from keystonectl.keystone_mcp_rules import BUILTIN_TOOL_NAMES_VERSION
 from keystonectl.manifest import ManifestError, manifest_errors
 from keystonectl.output import Result
+from keystonectl.package_dirs import declared, from_segments_problem, tree_problems
 
 _PATH_RE = re.compile(
     r"^\$?(?:[A-Za-z_][A-Za-z0-9_-]*|\[[0-9]+\])(?:\.(?:[A-Za-z_][A-Za-z0-9_-]*|\[[0-9]+\]))*$"
@@ -93,6 +94,12 @@ def _file_problems(document: dict[str, Any], directory: Path) -> list[dict[str, 
             problems.append(
                 _problem("provision.script", f"provision.script: {script} does not exist", "error")
             )
+    for role, item in declared(document).items():
+        label = f"containers.{role}.package_dir.from"
+        if from_segments_problem(item["from"]):
+            continue
+        for message in tree_problems(directory, item["from"], label=label):
+            problems.append(_problem(label, message, "error"))
     return problems
 
 

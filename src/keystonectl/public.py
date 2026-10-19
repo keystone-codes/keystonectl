@@ -903,7 +903,7 @@ def _project(ctx: Context) -> str | None:
 
 def _ensure_loopback_ready(ctx: Context, manifest: Mapping[str, Any], port: int) -> bool:
     from keystonectl.generate.compose import fragment_digest, fragment_guard, render_fragment
-    from keystonectl.generate.install import _env_values, _start, _wait
+    from keystonectl.generate.install import _start, _wait, fragment_entry
 
     name = str(manifest["name"])
     entry = _service(ctx, name)
@@ -913,7 +913,7 @@ def _ensure_loopback_ready(ctx: Context, manifest: Mapping[str, Any], port: int)
     if isinstance(entry, dict) and not fragment_guard(entry, path):
         desired = render_fragment(
             manifest,
-            {"env_values": _env_values(ctx, manifest)},
+            fragment_entry(ctx, manifest),
             host_port=port,
             extra_hosts=tuple(domains),
         )
@@ -946,7 +946,7 @@ def _ensure_loopback_ready(ctx: Context, manifest: Mapping[str, Any], port: int)
 
 def _rewrite_extra_hosts(ctx: Context, manifest: Mapping[str, Any], domain: str) -> None:
     from keystonectl.generate.compose import fragment_digest, fragment_guard, render_fragment
-    from keystonectl.generate.install import _env_values, _start
+    from keystonectl.generate.install import _start, fragment_entry
 
     domains = ready_domains(ctx, extra=domain)
     line = ", ".join(f"{item}:host-gateway" for item in domains)
@@ -992,7 +992,7 @@ def _rewrite_extra_hosts(ctx: Context, manifest: Mapping[str, Any], domain: str)
             port = int(ctx.chosen_port)
         text = render_fragment(
             document,
-            {"env_values": _env_values(ctx, document)},
+            fragment_entry(ctx, document),
             host_port=port,
             extra_hosts=domains,
         )

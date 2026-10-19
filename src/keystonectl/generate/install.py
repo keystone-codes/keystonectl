@@ -174,6 +174,78 @@ def _manifest_of(ctx: Context) -> dict[str, Any] | None:
     return None
 
 
+def package_dirs_for(ctx: Context, manifest: Mapping[str, Any]) -> dict[str, dict[str, str]]:
+    """Planned ``package_dir`` copies of the package being applied. Reads; never writes.
+
+    Raises ``PackageDirError`` when the subtree breaks a rule.
+    """
+
+    from keystonectl.package_dirs import declared, plan
+    from keystonectl.plan import package_cache_of
+
+    if ctx.package_dirs is not None:
+        return ctx.package_dirs
+    located = package_cache_of(ctx)
+    if not declared(manifest) or located is None:
+        ctx.package_dirs = {}
+    else:
+        ctx.package_dirs = plan(manifest, *located)
+    return ctx.package_dirs
+
+
+def fragment_entry(ctx: Context, manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """What ``render_fragment`` needs besides the manifest: env values and copies."""
+
+    from keystonectl.package_dirs import PackageDirError
+
+    entry: dict[str, Any] = {"env_values": _env_values(ctx, manifest)}
+    name = manifest.get("name")
+    if ctx.resolved is not None and ctx.resolved.name == name:
+        try:
+            dirs = package_dirs_for(ctx, manifest)
+        except PackageDirError:
+            dirs = {}
+    else:
+        current = _service(ctx.lock, str(name))
+        dirs = (current or {}).get("package_dirs") or {}
+    if dirs:
+        entry["package_dirs"] = dirs
+    return entry
+
+
+def _copies_missing(ctx: Context) -> bool:
+    from keystonectl.package_dirs import copy_present
+
+    return any(
+        not copy_present(ctx.root, str(item.get("copy") or ""))
+        for item in (ctx.package_dirs or {}).values()
+    )
+
+
+def _make_copies(ctx: Context, manifest: Mapping[str, Any]) -> bool:
+    """Copy each ``package_dir`` subtree out of the package cache (ADR 0010)."""
+
+    from keystonectl.package_dirs import PackageDirError, ensure_copies
+    from keystonectl.plan import package_cache_of
+
+    located = package_cache_of(ctx)
+    if not ctx.package_dirs or located is None:
+        return True
+    try:
+        ctx.package_dirs_created = ensure_copies(ctx.root, manifest, *located, ctx.package_dirs)
+    except PackageDirError as exc:
+        problems = [
+            {"path": message.split(": ", 1)[0], "message": message, "severity": "error"}
+            for message in exc.messages
+        ]
+        _fail(ctx, "manifest_invalid", exc.messages[0], result={"problems": problems})
+        return False
+    except OSError as exc:
+        _fail(ctx, "internal_error", f"Package files could not be copied: {exc}")
+        return False
+    return True
+
+
 def _lookup_text(ctx: Context, package: str, var: str) -> str | None:
     if var in ctx.sets:
         return ctx.sets[var]
@@ -1324,6 +1396,10 @@ def _save_service(
         if namespace:
             env["keystone"] = [bearer_env_name(namespace), identity_env_name(namespace)]
         env["generated"] = [item.name for item in plan.secrets if item.generate_bytes]
+    if ctx.package_dirs:
+        entry["package_dirs"] = copy.deepcopy(ctx.package_dirs)
+    else:
+        entry.pop("package_dirs", None)
     entry["registry_name"] = registry_name
     entry["namespace"] = namespace
     entry["url"] = registry_url(manifest) if namespace else None
@@ -1432,13 +1508,18 @@ def service_install_would_rerun(ctx: Context) -> bool:
         names = {str(item.get("name")) for item in entries}
         if registry_name not in names and len(entries) >= MAX_REGISTRY_ENTRIES:
             return False
-    env_values = _env_values(ctx, manifest)
+    from keystonectl.package_dirs import PackageDirError
+
+    try:
+        package_dirs_for(ctx, manifest)
+    except PackageDirError:
+        return False
     host_port, extra_hosts = fragment_ports(ctx, manifest)
     if ctx.failure is not None:
         return False
     fragment = render_fragment(
         manifest,
-        {"env_values": env_values},
+        fragment_entry(ctx, manifest),
         host_port=host_port,
         extra_hosts=extra_hosts,
     )
@@ -1494,6 +1575,11 @@ def _roll_back(ctx: Context, manifest: Mapping[str, Any], undo: _Undo) -> None:
     undo.restore()
     if first_install:
         _drop_new_entry(ctx, name)
+        if ctx.package_dirs_created:
+            from keystonectl.package_dirs import discard_copies
+
+            discard_copies(ctx.root, name, ctx.package_dirs_created)
+            ctx.package_dirs_created = []
     failure = ctx.failure
     if failure is None:
         return
@@ -1554,7 +1640,14 @@ def install_service(ctx: Context) -> None:
         if registry_name not in names and len(entries) >= MAX_REGISTRY_ENTRIES:
             _fail(ctx, "registry_full", ERRORS["registry_full"].title)
             return
-    if service_install_would_rerun(ctx):
+    from keystonectl.package_dirs import PackageDirError
+
+    try:
+        package_dirs_for(ctx, manifest)
+    except PackageDirError as exc:
+        _fail(ctx, "manifest_invalid", exc.messages[0])
+        return
+    if service_install_would_rerun(ctx) and not _copies_missing(ctx):
         ctx.rerun = True
         entry = _service(ctx.lock, name)
         if isinstance(entry, dict):
@@ -1566,7 +1659,6 @@ def install_service(ctx: Context) -> None:
             ctx, manifest, namespace=namespace, registry_name=registry_name, discovery="unknown"
         )
         return
-    env_values = _env_values(ctx, manifest)
     from keystonectl.public import fragment_ports
 
     host_port, extra_hosts = fragment_ports(ctx, manifest)
@@ -1574,7 +1666,7 @@ def install_service(ctx: Context) -> None:
         return
     fragment = render_fragment(
         manifest,
-        {"env_values": env_values},
+        fragment_entry(ctx, manifest),
         host_port=host_port,
         extra_hosts=extra_hosts,
     )
@@ -1592,6 +1684,9 @@ def install_service(ctx: Context) -> None:
         return
     undo = _Undo()
     ctx.started_project = None
+    if not _make_copies(ctx, manifest):
+        _roll_back(ctx, manifest, undo)
+        return
     try:
         _materialise(ctx, manifest, fragment, namespace, registry_name, undo)
     except (OSError, ValueError, RuntimeError) as exc:
@@ -1600,6 +1695,19 @@ def install_service(ctx: Context) -> None:
         return
     if ctx.failure is not None:
         _roll_back(ctx, manifest, undo)
+        return
+    _prune_copies(ctx, name)
+
+
+def _prune_copies(ctx: Context, name: str) -> None:
+    """Keep the copies the lock names (current and previous); delete older ones."""
+
+    from keystonectl.package_dirs import prune, referenced
+
+    entry = _service(ctx.lock, name)
+    if not isinstance(entry, dict) or entry.get("managed") != "generated":
+        return
+    prune(ctx.root, name, referenced(entry))
 
 
 def _validate_compose_only(ctx: Context) -> bool:
@@ -1685,7 +1793,12 @@ def _materialise(
             _fail(ctx, "docker_unavailable", ERRORS["docker_unavailable"].title)
             return
     env_changed = saved_env != _env_digests(ctx, manifest)
-    recreate = previous_fragment != fragment or previous_packages != packages_text or env_changed
+    recreate = (
+        previous_fragment != fragment
+        or previous_packages != packages_text
+        or env_changed
+        or bool(ctx.package_dirs_created)
+    )
     project = _start(ctx, manifest, recreate=recreate)
     if project is None or ctx.failure is not None:
         return

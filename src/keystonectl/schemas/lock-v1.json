@@ -175,6 +175,7 @@
           "type": "array",
           "items": {"type": "string"}
         },
+        "package_dirs": {"$ref": "#/$defs/package_dirs"},
         "previous": {
           "anyOf": [
             {"type": "null"},
@@ -261,6 +262,23 @@
         "last_error": {"type": ["string", "null"]}
       }
     },
+    "package_dirs": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z](?:[a-z0-9-]{0,22}[a-z0-9])?$"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "path", "copy"],
+        "properties": {
+          "from": {"type": "string", "minLength": 1, "maxLength": 128},
+          "path": {"type": "string", "pattern": "^/[^\\s:]+$"},
+          "copy": {
+            "type": "string",
+            "pattern": "^\\.keystonectl/package-dirs/[a-z][a-z0-9-]*/(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-[0-9a-f]{12}$"
+          }
+        }
+      }
+    },
     "previous": {
       "type": "object",
       "additionalProperties": false,
@@ -282,7 +300,8 @@
         "tools": {
           "type": "array",
           "items": {"type": "string"}
-        }
+        },
+        "package_dirs": {"$ref": "#/$defs/package_dirs"}
       }
     },
     "resource": {

@@ -38,6 +38,11 @@ from keystonectl.generate.registry import (
 from keystonectl.layout import drop_managed_env_keys
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.output import Result, SecretRegistry
+from keystonectl.package_dirs import copies_on_disk
+from keystonectl.package_dirs import kept_path as package_dirs_kept_path
+from keystonectl.package_dirs import prune as prune_package_dirs
+from keystonectl.package_dirs import referenced as referenced_package_dirs
+from keystonectl.package_dirs import remove_all as remove_package_dirs
 from keystonectl.resources.binding import (
     idle_catalog_providers,
     provider_data_kept_message,
@@ -618,6 +623,14 @@ def remove_service(
             path.unlink()
     if override.is_file():
         kept.append(f"packages/{name}.override.yml")
+    copies_kept = False
+    if managed == "ejected":
+        # The operator's fragment may still mount the copy; it stays with a warning.
+        copies_kept = bool(copies_on_disk(root, name))
+        if copies_kept:
+            kept.append(package_dirs_kept_path(name))
+    elif not remote:
+        remove_package_dirs(root, name)
     _rewrite_packages(root, lock, name)
     if not remote:
         run(runner, ["docker", "network", "rm", f"ks-pkg-{name}"], cwd=root)
@@ -638,6 +651,16 @@ def remove_service(
     warnings = []
     if preserved is not None:
         warnings.append(preserved[1])
+    if copies_kept:
+        warnings.append(
+            {
+                "id": "package_dir_kept",
+                "message": (
+                    f"{package_dirs_kept_path(name)} stays because the ejected "
+                    f"packages/{name}.yml may still mount it; delete it together with that file"
+                ),
+            }
+        )
     if orphaned:
         warnings.append(
             {
@@ -1037,6 +1060,9 @@ def upgrade_service(
         "fragment_sha256": entry.get("fragment_sha256"),
         "tools": list(entry.get("tools") or []),
     }
+    if isinstance(entry.get("package_dirs"), dict):
+        # The current copy becomes the previous one; apply prunes anything older.
+        entry["previous"]["package_dirs"] = entry["package_dirs"]
     retired = list(entry.get("retired_tools") or [])
     patterns = _allow_patterns(_policy_text(root, lock))
     for tool in _published(namespace or None, removed):
@@ -1300,6 +1326,10 @@ def rollback_service(
         entry["fragment_sha256"] = previous["fragment_sha256"]
     else:
         entry["fragment_sha256"] = fragment_digest(fragment.read_text(encoding="utf-8"))
+    if isinstance(previous.get("package_dirs"), dict):
+        entry["package_dirs"] = previous["package_dirs"]
+    else:
+        entry.pop("package_dirs", None)
     entry["previous"] = None
     entry["updated_at"] = utc_now(clock())
     # The .bak copies restored the fragment and env files above; there is no
@@ -1311,8 +1341,9 @@ def rollback_service(
     project = str(layout.get("project") or "")
     containers = entry.get("containers") if isinstance(entry.get("containers"), dict) else {}
     services = [str(spec.get("service")) for spec in containers.values() if isinstance(spec, dict)]
+    recreated = True
     if services:
-        run(
+        started = run(
             runner,
             [
                 *compose_prefix(root, layout, project=project or None),
@@ -1323,6 +1354,11 @@ def rollback_service(
             ],
             cwd=root,
         )
+        recreated = started.returncode == 0
+    if recreated and entry.get("managed") == "generated":
+        # The newer copy is no longer named by the lock. Delete it only once the
+        # containers that mounted it were recreated.
+        prune_package_dirs(root, name, referenced_package_dirs(entry))
     return Result(
         code=0,
         command=command,

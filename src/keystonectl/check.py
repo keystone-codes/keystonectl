@@ -337,6 +337,35 @@ def _fragment_checks(root: Path, lock: Mapping[str, Any]) -> list[dict[str, str]
     return checks
 
 
+def _package_dir_checks(root: Path, lock: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Every ``package_dir`` copy the lock names exists and still matches its hash."""
+
+    from keystonectl.package_dirs import copy_present
+
+    checks: list[dict[str, str]] = []
+    spec = WARNINGS["package_dir_missing"]
+    for service in _services(lock):
+        dirs = service.get("package_dirs")
+        if service.get("managed") == "remote" or not isinstance(dirs, dict):
+            continue
+        name = str(service.get("name"))
+        for role, item in dirs.items():
+            copy = item.get("copy") if isinstance(item, dict) else None
+            if isinstance(copy, str) and copy_present(root, copy):
+                checks.append(_item("package_dir", "ok", f"{copy} matches the lock."))
+                continue
+            checks.append(
+                _item(
+                    "package_dir_missing",
+                    "warning",
+                    f"{copy} for {name} ({role}) is missing or was changed; "
+                    f"run service apply {name} again.",
+                    spec.action.replace("<name>", name),
+                )
+            )
+    return checks
+
+
 def _env_checks(root: Path, paths: Paths, lock: Mapping[str, Any]) -> list[dict[str, str]]:
     checks: list[dict[str, str]] = []
     values = _parse_env(paths.env)
@@ -472,6 +501,7 @@ def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result
                     checks.extend(_registry_checks(paths, lock))
                     checks.extend(_snapshot_checks(paths, lock))
                     checks.extend(_fragment_checks(root, lock))
+                    checks.extend(_package_dir_checks(root, lock))
                     checks.extend(_env_checks(root, paths, lock))
                     compat, missing = _compat_checks(root, lock, env)
                     checks.extend(compat)

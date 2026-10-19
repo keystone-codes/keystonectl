@@ -44,6 +44,7 @@ LOCK_COPIED = (
     "filters",
     "env",
     "public",
+    "package_dirs",
     "previous",
     "service",
     "resource",

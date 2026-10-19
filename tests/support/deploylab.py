@@ -219,7 +219,13 @@ def prepare_root(root: Path, manifests: dict[str, str], *, resources: list | Non
     return catalog
 
 
-def runner_for(manifests: dict[str, str], box: DockerBox, catalog: str) -> FakeCommandRunner:
+def runner_for(
+    manifests: dict[str, str],
+    box: DockerBox,
+    catalog: str,
+    *,
+    package_files: dict[str, dict[str, str]] | None = None,
+) -> FakeCommandRunner:
     def ls_remote(args, **_kwargs):
         return CommandResult(tuple(args), 0, f"{SHA}\trefs/tags/v1.0.0\n", "")
 
@@ -233,6 +239,10 @@ def runner_for(manifests: dict[str, str], box: DockerBox, catalog: str) -> FakeC
             for name, text in manifests.items():
                 if name in url:
                     (dest / "keystone-service.yaml").write_text(text, encoding="utf-8")
+                    for relative, body in (package_files or {}).get(name, {}).items():
+                        target = dest / relative
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(body, encoding="utf-8")
                     break
         (dest / ".git").mkdir(exist_ok=True)
         return CommandResult(tuple(args), 0, "", "")
@@ -262,6 +272,7 @@ def apply_package(
     environ: dict[str, str] | None = None,
     bind_files: dict[str, str] | None = None,
     reset: bool = True,
+    package_files: dict[str, dict[str, str]] | None = None,
 ):
     if reset:
         catalog = prepare_root(root, manifests, resources=resources)
@@ -272,7 +283,7 @@ def apply_package(
     else:
         catalog = (root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml").read_text()
     box = box or DockerBox()
-    runner = runner_for(manifests, box, catalog)
+    runner = runner_for(manifests, box, catalog, package_files=package_files)
     result = run_service(
         root,
         "apply",

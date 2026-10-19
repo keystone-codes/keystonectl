@@ -17,6 +17,7 @@ from jsonschema import Draft202012Validator
 
 from keystonectl.catalog import keystone_mcp_range_errors
 from keystonectl.keystone_mcp_rules import reserved_namespace_errors
+from keystonectl.package_dirs import from_segments_problem
 
 SCHEMA_PATH: Path = Path(__file__).resolve().parent / "schemas" / "service-package-v1.json"
 
@@ -393,6 +394,7 @@ def _semantic_container(
             )
     _env_required_and_default(role, container.get("env"), report)
     _duplicate_volumes(role, container.get("volumes"), report)
+    _package_dir(role, container, document, report)
     _duplicate_variables(role, container, document, report)
 
 
@@ -429,6 +431,37 @@ def _duplicate_volumes(role: str, volumes: object, report: _Report) -> None:
                     f"containers.{role}.volumes: duplicate path {mount}",
                 )
             paths.add(mount)
+
+
+def _package_dir(
+    role: str,
+    container: dict[str, Any],
+    document: dict[str, Any],
+    report: _Report,
+) -> None:
+    """``package_dir`` names files inside the package, never a host path (ADR 0010)."""
+
+    item = container.get("package_dir")
+    if not isinstance(item, dict):
+        return
+    path = f"containers.{role}.package_dir"
+    if document.get("kind") == "resource":
+        report.add(path, f"{path}: is supported only for kind: service")
+    source = item.get("from")
+    if isinstance(source, str):
+        problem = from_segments_problem(source)
+        if problem:
+            report.add(f"{path}.from", f"{path}.from: {problem}")
+    target = item.get("path")
+    volumes = container.get("volumes")
+    if isinstance(target, str) and isinstance(volumes, list):
+        for volume in volumes:
+            if isinstance(volume, dict) and volume.get("path") == target:
+                report.add(
+                    f"{path}.path",
+                    f"{path}.path: {target} is also the path of a volume of this container",
+                )
+                break
 
 
 def _duplicate_variables(

@@ -1030,6 +1030,8 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | override_not_included | warning | false | Run keystonectl service apply <name> to include it. |
 | override_unchecked | warning | false | Fix the compose files and run keystonectl check again. |
 | override_widens_access | warning | false | This is the operator's choice. Review ports, privileges, and host mounts. |
+| package_dir_kept | warning | false | Delete .keystonectl/package-dirs/<name> together with the ejected fragment. |
+| package_dir_missing | warning | false | run service apply <name> again |
 | package_name_shadowed | warning | false | Install it by full name source/name. |
 | policy_already_inconsistent | warning | false | The new snapshot does not add unmatched patterns. Fix the policy when you can. |
 | policy_check_skipped | warning | false | Set KEYSTONE_MCP_RBAC_MODE to something other than off and point KEYSTONE_MCP_RBAC_POLICY_PATH at a policy file. |
