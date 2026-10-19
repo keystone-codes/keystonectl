@@ -21,7 +21,7 @@ It refuses when another installed package `requires` this one (`required_by`), a
 
 What it removes: every container of the package (`docker compose rm -s -f`, before the fragment file is deleted), the generated fragment, the package env files, the registry row, the snapshot names, the managed bearer and identity lines in `.env`, the nginx site, and the lock entry. The package network `ks-pkg-<name>` is removed when Docker allows it. That network is an ordinary bridge.
 
-What it leaves: volumes (`ks-pkg-<name>-*`), the consumer's bucket or database, the certificate, the override file, and an ejected fragment. The summary says the override is yours. Tool names that still match a policy `allow` pattern move from `active` to `reserved` (and into `.keystonectl/retired-tools.txt`) so keystone-mcp can still start. The warning `policy_rows_orphaned` lists those patterns. A later apply or remove drops a retired name once no pattern matches it.
+What it leaves: volumes (`ks-pkg-<name>-*`), the consumer's bucket or database, the certificate, the override file, and an ejected fragment. `.keystonectl/package-dirs/<name>/` (copies of `package_dir`) is deleted; when the fragment is ejected it stays, because that file may still mount it, and the warning `package_dir_kept` says so. The summary says the override is yours. Tool names that still match a policy `allow` pattern move from `active` to `reserved` (and into `.keystonectl/retired-tools.txt`) so keystone-mcp can still start. The warning `policy_rows_orphaned` lists those patterns. A later apply or remove drops a retired name once no pattern matches it.
 
 A service with named volumes also keeps the secrets keystonectl generated (`env.generated`) in `.keystonectl/secrets/<name>.generated.env` (mode 600). The warning `generated_secrets_kept` names those secrets and the volumes. Installing the service again reuses the saved values and deletes the file once the install is recorded. Delete that file only together with the volumes. If the cached manifest is missing, the secrets are kept anyway.
 
@@ -49,18 +49,18 @@ If `packages/<name>.yml` was edited by hand, upgrade stops with `fragment_modifi
 
 The preview lists tools and containers added or removed, and policy rows that stop matching (`catalog diff` before and after). New tools that no role can call are `tools_unreachable`. Confirmation is in [Confirmations](#confirmations); an older `CONFIRM_UPGRADE` value does not apply.
 
-On success, keystonectl keeps `.bak` copies (mode 600), records `previous` in the lock, and runs the normal apply. The apply step uses the installed entry's `source` (`source/name@version`) so the same package name in another catalog does not ask which package to use. `registry_name`, `namespace`, and the override stay. A failed health check tells you to run `service rollback <name>` and does not roll back by itself.
+On success, keystonectl keeps `.bak` copies (mode 600), records `previous` in the lock, and runs the normal apply. A `package_dir` gets a new copy for the new version; the current copy becomes the previous one, and older copies are deleted once the apply succeeds. After a failed upgrade the new copy stays until the next successful apply. The apply step uses the installed entry's `source` (`source/name@version`) so the same package name in another catalog does not ask which package to use. `registry_name`, `namespace`, and the override stay. A failed health check tells you to run `service rollback <name>` and does not roll back by itself.
 
 An ejected package is not rewritten. The lock, registry, and secrets move forward, and `result.manual_steps` lists the new images for the operator's file.
 
 ## rollback
 
-`service rollback <name>` restores the fragment and env files from `.bak` and the lock fields from `previous`. It recreates the containers. `previous` is cleared: one step only, and no confirmation. Without `previous` and the `.bak` file, the error is `no_previous_version`.
+`service rollback <name>` restores the fragment and env files from `.bak` and the lock fields from `previous`, including `package_dirs`, so the fragment mounts the previous copy again. It recreates the containers; when that succeeds, the newer copy is deleted. `previous` is cleared: one step only, and no confirmation. Without `previous` and the `.bak` file, the error is `no_previous_version`.
 
 ## eject and adopt
 
 A compose fragment is in one of three states:
 
 1. Leave it generated. keystonectl rewrites it on apply. Put local changes in `packages/<name>.override.yml`.
-2. `service eject <name>` marks the fragment as yours. keystonectl stops rewriting that file. Registry, secrets, the public site, and status still follow the package. Apply reports the fragment step as skipped. A remote service cannot be ejected.
+2. `service eject <name>` marks the fragment as yours. `package_dir` copies stay where they are. keystonectl stops rewriting that file. Registry, secrets, the public site, and status still follow the package. Apply reports the fragment step as skipped. A remote service cannot be ejected.
 3. `service adopt <name>` generates the fragment again from the installed version, including the current loopback port and `extra_hosts`. The previous file is saved as `packages/<name>.yml.ejected.bak` (mode 600). Confirmation is in [Confirmations](#confirmations). In `--json` the preview lists changed service keys and not the values, because the operator file may contain secrets. On a terminal the preview is a unified diff.

@@ -132,6 +132,7 @@ The role key matches `^[a-z](?:[a-z0-9-]{0,22}[a-z0-9])?$`.
 | `env` | no | up to 100 `{name, default?, required?, description?}`. `name` matches `^[A-Z][A-Z0-9_]{0,63}$` and must not start with `KEYSTONE_MCP_` or `KEYSTONE_SETUP_`. `required` and `default` together are an error | `required: false` |
 | `secrets` | no | up to 20. Either `{name, generate: {bytes}}` with `16 <= bytes <= 64`, or `{name, required: true, description?}`. The operator supplies the second form | |
 | `volumes` | no | up to 8 `{name, path}`. `name` matches `^[a-z][a-z0-9_-]{0,30}$`. `path` matches `^/[^\s:]+$`. The same `name` on two containers of one package is one volume. Names and paths are unique inside one container | |
+| `package_dir` | no | `{from, path}`, at most one per container, allowed on `init`, `kind: service` only. `from` is a directory inside the package: `.` (the package root) or `^(?!/)(?!.*\.\.)[A-Za-z0-9._/-]{1,128}$` without empty or `.` segments. `path` is the path in the container, same pattern as `volumes[].path`, and differs from the container's volume paths. The subtree holds only plain files and directories (no symbolic or hard links, devices, FIFOs, sockets), at most 900 KiB and 256 files. The installer copies it and mounts the copy read-only; see [ADR 0010](../adr/0010-package-files-read-only.md) | |
 | `healthcheck` | yes on long-running containers; forbidden on `init` | exactly one of `path` (same pattern as `mcp.path`, and the container must have `port`) or `command` (1–16 strings) | `interval` `10s`, `timeout` `5s`, `start_period` `20s`, `retries` `5` |
 
 `interval`, `timeout`, and `start_period` match `^[1-9][0-9]{0,3}s$`. `retries` is 1–20.
@@ -179,6 +180,7 @@ The manifest has nowhere to put a host-level setting. That is deliberate: the sa
 | `privileged`, `cap_add`, `devices`, `network_mode`, `pid`, `ipc`, `security_opt`, `extra_hosts`, `volumes_from`, `sysctls`, `userns_mode` | A package cannot request host access |
 | `networks`, `depends_on`, `restart`, `container_name`, `links` | The installer sets these |
 | a volume that is a string (`/srv:/data`) or an object with `host`, `source`, or `type` | Only named volumes `{name, path}`. Host paths are not allowed |
+| `package_dir.from` that is absolute, contains `..`, or reaches a link, a device, or a FIFO | `package_dir` is not a host path: `from` names files inside the package, and the installer decides where their read-only copy lives |
 | an image or `provision.image` without `@sha256:` | Images are pinned by digest |
 | tag `latest` | Use a version tag together with a digest |
 | top-level `run` | Describe containers under `containers.<role>` |
@@ -186,7 +188,7 @@ The manifest has nowhere to put a host-level setting. That is deliberate: the sa
 
 `compose.yaml` in the package repository is allowed for the author's development loop. The installer does not read it.
 
-Why: [ADR 0004](../adr/0004-compose-generated-from-manifest.md).
+Why: [ADR 0004](../adr/0004-compose-generated-from-manifest.md). `package_dir` refines it: [ADR 0010](../adr/0010-package-files-read-only.md).
 
 ## Image requirements
 

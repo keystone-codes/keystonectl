@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Optional manifest field `containers.<role>.package_dir` mounts a directory of the package into the container, read-only, from a copy keystonectl makes at apply.
+- Warning `package_dir_missing` when a copy named in the lock is missing or changed; `package_dir_kept` when removing an ejected service keeps its copies.
+- docs: ADR 0010 records package files mounted read-only; it refines ADR 0004 and ADR 0007.
 - Skill: installing a box and setting up credential profiles for people, services and roles through a one-time link.
 - e2e: Scenario 16 installs the atlassian package from a catalog subdirectory and checks profiles, role order, and a service account.
 - docs: ADR 0007 records stdio MCP servers as HTTP boxes; profiles live in the box, and containers keep the image user and default capabilities.

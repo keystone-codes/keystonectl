@@ -31,6 +31,7 @@ Paths are relative to the deployment root.
 | `sources.yaml` (mode 600) | keystonectl (`catalog add`); the operator may edit it | format is in [Catalog sources](catalog.md#sources). `init` does not create it |
 | `.keystonectl/` (mode 700) | keystonectl | catalog and package cache, `secrets/` (mode 700, including `<name>.generated.env`), and `tmp/`. Contains a `.gitignore` whose only line is `*` |
 | `.keystonectl/tmp/` (mode 700) | keystonectl | clones are built here and renamed into place on the same file system |
+| `.keystonectl/package-dirs/<name>/<version>-<hash12>/` (mode 755, files 644) | keystonectl | read-only copies of `package_dir` subtrees, mounted into containers. World-readable on purpose: containers read them as other uids. See [ADR 0010](../adr/0010-package-files-read-only.md) |
 | `.gitignore` | operator | created only when the file is absent, with the lines below |
 
 ```
@@ -338,6 +339,11 @@ and timestamps are UTC ISO 8601 with a `Z` and no fractional seconds.
 `fragment*`, requires `registry_name`, `namespace`, and `url`, and may set
 `filters` (`tool_prefix`, `include_prefixes`, `exclude_prefixes`,
 `strip_prefix`). Every other service has `filters: null`.
+
+`package_dirs.<role>`, present only when a container sets `package_dir`, is
+`{from, path, copy}`. `copy` must match
+`^\.keystonectl/package-dirs/<name>/<version>-<12 hex>$`; nothing else is ever
+mounted. `previous.package_dirs` has the same shape.
 
 `containers.<role>` is `{service, image, init}` and `service` equals
 `<package>-<role>`. `registry_name`, `namespace`, and `url` are a string or

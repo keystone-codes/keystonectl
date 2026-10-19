@@ -56,6 +56,21 @@ The JSON schema rejects `ports`, host paths, `privileged`, `network_mode: host`,
 
 Package containers share a bridge network `ks-pkg-<name>`. They reach each other by role hostname (`http://api:8000`). Only the MCP facade joins `keystone-mcp-upstreams` (see [mcp](#mcp)).
 
+### Files from the package
+
+A container can receive one directory of your package, read-only, with `package_dir`:
+
+```yaml
+containers:
+  mcp:
+    image: ghcr.io/example/my-service:1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    package_dir:
+      from: provider      # a directory next to keystone-service.yaml; "." is the package root
+      path: /srv/provider # where the container sees it
+```
+
+`keystonectl service apply` copies that directory from the pinned package version and mounts the copy read-only. It is not a host path: you cannot point it outside your package. Keep it small and plain: only files and directories, no links, devices or FIFOs, at most 900 KiB and 256 files. Files arrive with mode 0644 and directories with 0755, so an executable bit is not kept; run scripts through their interpreter. `keystonectl lint` checks all of this. Why: [ADR 0010](adr/0010-package-files-read-only.md).
+
 ### Services with several containers
 
 Use distinct roles (`api`, `migrate`, `mcp`, …). Set `init: true` on jobs that must finish before others start. Point long-lived roles at each other with internal URLs. Only roles listed under `needs[].containers` (when narrowed) receive resource env vars and join resource provider networks; default is all package containers.
@@ -295,6 +310,7 @@ Lint prints one line per problem (`<path>: <message>`), errors before warnings, 
 | Empty `mcp.tools` or names including `namespace_` | List bare tool names exactly as `list_tools` returns. |
 | `identity.signed_assertion` not `required` | Catalog services must verify assertions. |
 | `recommended_policy` file missing | Add `policy.example.yaml` next to the manifest. |
+| `package_dir.from` has a link, a FIFO, or is too large | Replace links with real files, remove special files, and stay under 900 KiB and 256 files. |
 
 Fix digest errors by copying the registry index digest (`image: …@sha256:<64 hex>`). Replace legacy top-level `run:` with `containers` plus `mcp.container`. Point `mcp.container` at a long-running role, never an `init` job. Keep `policy.example.yaml` beside the manifest when `recommended_policy` is set.
 
