@@ -370,10 +370,20 @@
       ],
       "properties": {
         "commit": {
-          "$ref": "#/$defs/commit"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "version": {
           "type": "string"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
         },
         "probes": {
           "type": "object",
@@ -1423,9 +1433,19 @@
           "type": "string"
         },
         "commit": {
-          "$ref": "#/$defs/commit"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "content_sha256": {
           "$ref": "#/$defs/sha256"
         },
         "containers": {
@@ -1498,9 +1518,19 @@
           "minLength": 1
         },
         "commit": {
-          "$ref": "#/$defs/commit"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "content_sha256": {
           "$ref": "#/$defs/sha256"
         },
         "compat_keystone_mcp": {

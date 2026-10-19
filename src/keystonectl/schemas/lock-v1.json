@@ -131,8 +131,14 @@
           "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
         },
         "ref": {"type": "string", "minLength": 1},
-        "commit": {"$ref": "#/$defs/commit"},
+        "commit": {
+          "anyOf": [
+            {"$ref": "#/$defs/commit"},
+            {"type": "null"}
+          ]
+        },
         "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
         "compat_keystone_mcp": {"type": "string", "minLength": 1, "maxLength": 100},
         "containers": {
           "type": "object",
@@ -285,8 +291,14 @@
       "properties": {
         "version": {"type": "string"},
         "ref": {"type": "string"},
-        "commit": {"$ref": "#/$defs/commit"},
+        "commit": {
+          "anyOf": [
+            {"$ref": "#/$defs/commit"},
+            {"type": "null"}
+          ]
+        },
         "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
         "containers": {
           "type": "object",
           "additionalProperties": {"$ref": "#/$defs/container"}

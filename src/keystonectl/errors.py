@@ -151,6 +151,13 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Refuse the move. Pin a commit, or upgrade on purpose with service upgrade.",
         ),
         _e(
+            "local_changed",
+            3,
+            False,
+            "A package in local/ changed, and its version did not.",
+            "raise version in keystone-service.yaml, then run service upgrade",
+        ),
+        _e(
             "manifest_invalid",
             3,
             False,
@@ -1077,6 +1084,11 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "package_dir_missing",
             "A package_dir copy named in the lock is missing or was changed.",
             "run service apply <name> again",
+        ),
+        _w(
+            "local_package_missing",
+            "An installed package's folder is gone from local/.",
+            "the folder local/<name> is gone; upgrade and reinstall need it, rollback does not",
         ),
         _w(
             "package_dir_kept",

@@ -122,11 +122,11 @@ def test_catalog_add_validates_and_writes_backup(tmp_path: Path) -> None:
         "    priority: 100\n",
         encoding="utf-8",
     )
-    result = add_source(tmp_path, URL, git_runner(), name="local", ref="v1.0.0", priority=50)
+    result = add_source(tmp_path, URL, git_runner(), name="lab", ref="v1.0.0", priority=50)
     assert result.code == 0
     assert (tmp_path / "sources.yaml.bak").is_file()
     document = load_yaml(tmp_path / "sources.yaml")
-    assert {item["name"] for item in document["sources"]} == {"kept", "local"}
+    assert {item["name"] for item in document["sources"]} == {"kept", "lab"}
 
 
 def test_catalog_add_refuses_http(tmp_path: Path) -> None:
@@ -141,7 +141,7 @@ def test_catalog_add_file_url_warns_local_source(tmp_path: Path) -> None:
         tmp_path,
         "file:///tmp/catalog",
         git_runner(),
-        name="local",
+        name="lab",
         ref="v1.0.0",
         priority=10,
     )
@@ -150,7 +150,7 @@ def test_catalog_add_file_url_warns_local_source(tmp_path: Path) -> None:
 
 
 def test_catalog_add_duplicate_refused(tmp_path: Path) -> None:
-    first = add_source(tmp_path, URL, git_runner(), name="local", ref="v1.0.0", priority=10)
+    first = add_source(tmp_path, URL, git_runner(), name="lab", ref="v1.0.0", priority=10)
     assert first.code == 0
     second = add_source(tmp_path, URL, git_runner(), name="other", ref="v1.0.0", priority=20)
     assert second.code == 3
@@ -159,7 +159,7 @@ def test_catalog_add_duplicate_refused(tmp_path: Path) -> None:
 
 
 def test_catalog_add_picks_newest_tag_when_no_ref(tmp_path: Path) -> None:
-    result = add_source(tmp_path, URL, git_runner(), name="local", priority=10)
+    result = add_source(tmp_path, URL, git_runner(), name="lab", priority=10)
     assert result.code == 0
     assert result.result["ref"] == "v1.2.0"
     assert any(item["id"] == "catalog_ref_chosen" for item in result.warnings)
@@ -175,7 +175,7 @@ def test_catalog_add_priority_default_unique(tmp_path: Path) -> None:
         "    priority: 50\n",
         encoding="utf-8",
     )
-    result = add_source(tmp_path, URL, git_runner(), name="local", ref="v1.0.0")
+    result = add_source(tmp_path, URL, git_runner(), name="lab", ref="v1.0.0")
     assert result.code == 0
     assert result.result["priority"] == 40
 
@@ -334,9 +334,9 @@ def test_fetch_tmp_dir_survives_exdev_on_rename(
 
     monkeypatch.setattr(Path, "rename", fake_rename, raising=True)
     runner = git_runner()
-    result = add_source(tmp_path, URL, runner, name="local", ref="v1.0.0")
+    result = add_source(tmp_path, URL, runner, name="lab", ref="v1.0.0")
     assert result.code == 0
-    assert (cache_root / "catalogs" / "local" / "catalog.yaml").is_file()
+    assert (cache_root / "catalogs" / "lab" / "catalog.yaml").is_file()
 
 
 def test_fetch_tree_removes_tmp_dir_on_clone_failure(tmp_path: Path) -> None:

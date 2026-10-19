@@ -367,6 +367,7 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `source_not_found` | 3 | false | No source with that name is configured. | Run keystonectl catalog list and pass a name from that list. |
 | `tag_not_found` | 3 | false | That git tag does not exist. | Check the ref in sources.yaml or catalog.yaml. For the default source, update keystonectl or add sources.yaml with a ref that exists. |
 | `tag_moved` | 3 | false | The tag now points at a different commit than the one recorded in the lock. | Refuse the move. Pin a commit, or upgrade on purpose with service upgrade. |
+| `local_changed` | 3 | false | A package in local/ changed, and its version did not. | raise version in keystone-service.yaml, then run service upgrade |
 | `manifest_invalid` | 3 | false | The package manifest is not valid. | Fix the problems listed in result.problems and run keystonectl lint. |
 | `provider_invalid` | 3 | false | The stdio provider descriptor is not valid. | Fix the problems listed in result.problems and run keystonectl package wrap-stdio again. |
 | `discovery_failed` | 3 | true | The server did not list its tools. | Read the lines in result.stderr; if the server needs a real account to start, set discovery.mode: manual and pass --tools-snapshot. |
@@ -521,6 +522,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `package_name_shadowed` | 0 | false | A package name now exists in more than one catalog. | Install it by full name source/name. |
 | `bundle_name_shadowed` | 0 | false | A bundle name now exists in more than one catalog. | Install it by full name source/name. |
 | `package_dir_missing` | 0 | false | A package_dir copy named in the lock is missing or was changed. | run service apply <name> again |
+| `local_package_missing` | 0 | false | An installed package's folder is gone from local/. | the folder local/<name> is gone; upgrade and reinstall need it, rollback does not |
 | `package_dir_kept` | 0 | false | Package file copies stay because an ejected fragment may still mount them. | Delete .keystonectl/package-dirs/<name> together with the ejected fragment. |
 | `tools_snapshot_missing` | 0 | false | The package lists only the creds_* tools. | Run wrap-stdio again without --no-discovery. |
 

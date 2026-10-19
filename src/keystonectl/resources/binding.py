@@ -32,6 +32,7 @@ from keystonectl.fetch import (
     replace_tree,
     sha256_file,
 )
+from keystonectl.local_packages import LOCAL_REF
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.output import SecretRegistry
 from keystonectl.plan import Context, StepPlan, register_step
@@ -411,6 +412,9 @@ def _providers(ctx: Context, kind: str, version: int) -> list[tuple[str, str, di
         for name, entry in packages.items():
             if not isinstance(entry, dict) or entry.get("kind") != "resource":
                 continue
+            if entry.get("problem") or not entry.get("versions"):
+                # A local/ folder whose manifest cannot be read offers nothing.
+                continue
             provides = entry.get("provides") if isinstance(entry.get("provides"), dict) else {}
             if provides.get("kind") == kind and provides.get("version") == version:
                 found.append((source.name, str(name), entry))
@@ -455,6 +459,7 @@ def _resolved_provider(
         kind="resource",
         keystone_mcp=None,
         provides=provides,
+        is_local=str(chosen["ref"]) == LOCAL_REF and not entry.get("source"),
     )
 
 
@@ -1065,6 +1070,7 @@ def _ensure_service(
             "ref": package.ref,
             "commit": package.commit,
             "manifest_sha256": package.manifest_sha256,
+            **({"content_sha256": package.content_sha256} if package.is_local else {}),
             "containers": _lock_containers(manifest),
             "fragment": f"packages/{package.name}.yml",
             "fragment_sha256": _fragment_digest(root, manifest, package.name),
@@ -1374,6 +1380,8 @@ def _admin_values(ctx: Context, manifest: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _fetch_package(ctx: Context, package: ResolvedPackage) -> dict[str, Any] | None:
+    if package.is_local:
+        return _fetch_local_package(ctx, package)
     if not package.git_url or not package.ref:
         _fail(ctx, "package_not_found", f"Package {package.name} has no source.")
         return None
@@ -1397,6 +1405,24 @@ def _fetch_package(ctx: Context, package: ResolvedPackage) -> dict[str, Any] | N
         return None
     from keystonectl.generate.install import _reject_manifest
 
+    if _reject_manifest(ctx, loaded):
+        return None
+    return loaded
+
+
+def _fetch_local_package(ctx: Context, package: ResolvedPackage) -> dict[str, Any] | None:
+    from keystonectl.generate.install import _reject_manifest
+    from keystonectl.local_packages import LocalPackageError
+    from keystonectl.sources import fetch_local_package
+
+    try:
+        loaded = fetch_local_package(ctx.root, package, ctx.lock)
+    except LocalPackageError as exc:
+        _fail(ctx, exc.error_id, exc.messages[0])
+        return None
+    except OSError as exc:
+        _fail(ctx, "internal_error", f"local/{package.name} could not be copied: {exc}")
+        return None
     if _reject_manifest(ctx, loaded):
         return None
     return loaded

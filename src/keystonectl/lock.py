@@ -41,6 +41,7 @@ SERVICE_KEYS = {
     "ref",
     "commit",
     "manifest_sha256",
+    "content_sha256",
     "compat_keystone_mcp",
     "containers",
     "fragment",

@@ -28,6 +28,7 @@ from keystonectl.fetch import (
     sha256_file,
 )
 from keystonectl.keystone_mcp_rules import BUILTIN_TOOL_NAMES_VERSION
+from keystonectl.local_packages import LocalPackageError, git_sources, with_local
 from keystonectl.lock import load_lock
 from keystonectl.manifest import manifest_errors
 from keystonectl.output import Result, SecretRegistry, missing_summary
@@ -36,6 +37,7 @@ from keystonectl.sources import (
     Resolution,
     ResolvedPackage,
     failure_result,
+    fetch_local_package,
     installed_service,
     load_cached_catalogs,
     package_cache,
@@ -115,7 +117,7 @@ def reset_steps() -> None:
 def _caches_ready(root: Path, sources: list[Any]) -> bool:
     return all(
         (root / ".keystonectl" / "catalogs" / source.name / "catalog.yaml").is_file()
-        for source in sources
+        for source in git_sources(sources)
     )
 
 
@@ -138,12 +140,31 @@ def _questions_from(resolution: Resolution | None) -> list[Question]:
 
 
 def _download_title(package: ResolvedPackage) -> str:
+    if package.is_local:
+        return f"Copy {package.name} {package.version} from local/{package.name}"
     return f"Download {package.name} {package.version} (tag {package.ref})"
+
+
+def _pin(package: ResolvedPackage) -> dict[str, Any]:
+    """``commit`` and ``version`` for the result; a local package adds ``content_sha256``."""
+
+    body: dict[str, Any] = {"commit": package.commit, "version": package.version}
+    if package.is_local:
+        body["content_sha256"] = package.content_sha256
+    return body
 
 
 def _same_install(lock: Mapping[str, Any], package: ResolvedPackage, commit: str | None) -> bool:
     installed = installed_service(lock, package.name)
-    if not installed or commit is None:
+    if not installed:
+        return False
+    if package.is_local:
+        return (
+            installed.get("version") == package.version
+            and package.content_sha256 is not None
+            and installed.get("content_sha256") == package.content_sha256
+        )
+    if commit is None:
         return False
     return installed.get("version") == package.version and installed.get("commit") == commit
 
@@ -161,7 +182,7 @@ class ResolveStep:
         ctx.keystone_version = detection.version
         questions = [detection.question] if detection.question is not None else []
         try:
-            ctx.sources = load_sources(ctx.root / "sources.yaml")
+            ctx.sources = with_local(ctx.root, load_sources(ctx.root / "sources.yaml"))
         except CatalogError as exc:
             ctx.failure = Resolution(
                 error_id="source_invalid",
@@ -455,10 +476,41 @@ def _refresh(ctx: Context) -> str | None:
     return error_id
 
 
+def _fetch_local(ctx: Context, package: ResolvedPackage) -> str | None:
+    """Copy ``local/<name>`` into the package cache; no git (ADR 0011)."""
+
+    try:
+        manifest = fetch_local_package(ctx.root, package, ctx.lock)
+    except LocalPackageError as exc:
+        problems = [
+            {"path": message.split(": ", 1)[0], "message": message, "severity": "error"}
+            for message in exc.messages
+        ]
+        ctx.failure = Resolution(
+            error_id=exc.error_id,
+            message=exc.messages[0],
+            hint=ERRORS[exc.error_id].action,
+            result={"problems": problems} if exc.error_id == "manifest_invalid" else {},
+        )
+        return exc.error_id
+    except OSError as exc:
+        ctx.failure = Resolution(
+            error_id="internal_error",
+            message=f"local/{package.name} could not be copied: {exc}",
+            hint=ERRORS["internal_error"].action,
+        )
+        return "internal_error"
+    ctx.manifest_sha256 = package.manifest_sha256
+    ctx.manifest = manifest
+    return None
+
+
 def _fetch_package(ctx: Context) -> str | None:
     package = ctx.resolved
     if package is None:
         return "package_not_found"
+    if package.is_local:
+        return _fetch_local(ctx, package)
     if not package.git_url or not package.ref:
         return "package_not_found"
     try:
@@ -807,7 +859,7 @@ def run_service(
             actions=actions,
             warnings=warnings,
             changes=0 if would_rerun else None,
-            result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
+            result=_pin(ctx.resolved),
         )
 
     if verb == "apply" and needs_deployer and ctx.deployer is None:
@@ -845,7 +897,7 @@ def run_service(
                     actions=actions,
                     warnings=warnings,
                     changes=0,
-                    result={"commit": ctx.resolved.commit, "version": ctx.resolved.version},
+                    result=_pin(ctx.resolved),
                 )
             return Result(
                 code=1,
@@ -891,7 +943,7 @@ def run_service(
                 action["status"] = "done"
     if ctx.action_log:
         actions = [*actions, *ctx.action_log]
-    result_body: dict[str, Any] = {"commit": ctx.resolved.commit, "version": ctx.resolved.version}
+    result_body: dict[str, Any] = _pin(ctx.resolved)
     if ctx.probe_reports:
         result_body["probes"] = ctx.probe_reports
     result_body.update(ctx.output_result)

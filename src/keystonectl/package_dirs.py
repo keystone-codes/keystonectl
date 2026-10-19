@@ -249,6 +249,39 @@ def subtree_digest(base: Path, relative: str, *, label: str = "package_dir") -> 
     return _digest(entries)
 
 
+@dataclass(frozen=True)
+class Tree:
+    """A subtree read once, without following links: its entries and their hash."""
+
+    entries: tuple[_Entry, ...]
+    digest: str
+
+    def file_bytes(self, relative: str) -> bytes | None:
+        for item in self.entries:
+            if not item.is_dir and item.relative == relative:
+                return item.data
+        return None
+
+
+def read_tree(base: Path, relative: str = ".", *, label: str) -> Tree:
+    """Read ``base/relative`` under the ``package_dir`` rules. Raises ``PackageDirError``.
+
+    ``base`` itself and every step to ``relative`` must be a plain directory, never a
+    link. ``Tree.digest`` equals ``subtree_digest`` of the same subtree.
+    """
+
+    entries, problems = _scan(base, relative, label)
+    if problems:
+        raise PackageDirError(problems)
+    return Tree(tuple(entries), _digest(entries))
+
+
+def write_tree(staging: Path, tree: Tree) -> None:
+    """Write ``tree`` into the empty directory ``staging`` (0755 directories, 0644 files)."""
+
+    _write_tree(staging, list(tree.entries))
+
+
 def copy_relative(name: str, version: str, digest: str) -> str:
     return f".keystonectl/{COPIES_DIR}/{name}/{version}-{digest[:12]}"
 

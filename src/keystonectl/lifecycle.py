@@ -36,6 +36,8 @@ from keystonectl.generate.registry import (
     tool_names,
 )
 from keystonectl.layout import drop_managed_env_keys
+from keystonectl.local_packages import folder_version, is_local_entry
+from keystonectl.local_packages import read_manifest as read_local_manifest
 from keystonectl.lock import save_lock, utc_now
 from keystonectl.output import Result, SecretRegistry
 from keystonectl.package_dirs import copies_on_disk
@@ -899,6 +901,27 @@ def _catalog_versions(root: Path, name: str) -> list[dict[str, Any]]:
     return found
 
 
+def _local_versions(root: Path, name: str) -> list[dict[str, Any]]:
+    """The one version ``local/<name>`` holds, shaped like catalog version rows."""
+
+    manifest, _problem = read_local_manifest(root, name)
+    version = folder_version(root, name)
+    if manifest is None or version is None:
+        return []
+    compat = manifest.get("compat") if isinstance(manifest.get("compat"), dict) else {}
+    spec = compat.get("keystone_mcp")
+    return [{"version": version, "keystone_mcp": spec if isinstance(spec, str) else None}]
+
+
+def _local_manifest(root: Path, name: str, version: str) -> dict[str, Any] | None:
+    """The manifest in ``local/<name>`` when it holds ``version``. Rollback never reads it."""
+
+    manifest, _problem = read_local_manifest(root, name)
+    if manifest is None or folder_version(root, name) != version:
+        return None
+    return manifest
+
+
 def _newer_version(
     current: str, versions: list[dict[str, Any]], keystone: str | None
 ) -> str | None:
@@ -986,7 +1009,9 @@ def upgrade_service(
     layout = _layout(lock)
     keystone = layout.get("keystone_mcp_version")
     keystone_text = str(keystone) if isinstance(keystone, str) else None
-    target = requested or _newer_version(current, _catalog_versions(root, name), keystone_text)
+    local = is_local_entry(entry)
+    versions = _local_versions(root, name) if local else _catalog_versions(root, name)
+    target = requested or _newer_version(current, versions, keystone_text)
     if target is None or target == current:
         return Result(
             code=0,
@@ -998,6 +1023,8 @@ def upgrade_service(
         )
     before = _manifest_at(root, entry, current)
     after = _manifest_at(root, entry, target)
+    if after is None and local:
+        after = _local_manifest(root, name, target)
     if after is None:
         source = entry.get("source")
         if isinstance(source, str) and source:
@@ -1056,6 +1083,11 @@ def upgrade_service(
         "ref": entry.get("ref"),
         "commit": entry.get("commit"),
         "manifest_sha256": entry.get("manifest_sha256"),
+        **(
+            {"content_sha256": entry["content_sha256"]}
+            if isinstance(entry.get("content_sha256"), str)
+            else {}
+        ),
         "containers": entry.get("containers"),
         "fragment_sha256": entry.get("fragment_sha256"),
         "tools": list(entry.get("tools") or []),
@@ -1316,6 +1348,7 @@ def rollback_service(
         "ref",
         "commit",
         "manifest_sha256",
+        "content_sha256",
         "containers",
         "fragment_sha256",
         "tools",
