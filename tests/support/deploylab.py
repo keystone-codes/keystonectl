@@ -170,8 +170,18 @@ class DockerBox:
         return ("file-mcp-", "docs-service-", "hello-worker-", "minio-", "facade-")
 
 
-def prepare_root(root: Path, manifests: dict[str, str], *, resources: list | None = None) -> str:
-    """Write a deployment and a one-package catalog. Returns the catalog text."""
+def prepare_root(
+    root: Path,
+    manifests: dict[str, str],
+    *,
+    resources: list | None = None,
+    source: str = "local",
+) -> str:
+    """Write a deployment and a one-package catalog. Returns the catalog text.
+
+    ``source`` names the git source; pass another name when the deployment also has
+    a ``local/`` folder, whose source is always called ``local``.
+    """
 
     root.mkdir(parents=True, exist_ok=True)
     write_empty_lock(root)
@@ -204,16 +214,18 @@ def prepare_root(root: Path, manifests: dict[str, str], *, resources: list | Non
             "        ref: v1.0.0\n"
             '        keystone_mcp: ">=0.5.0,<2.0"\n'
         )
-    catalog = "schema_version: 1\nname: local\ndescription: test\npackages:\n" + "".join(packages)
+    catalog = f"schema_version: 1\nname: {source}\ndescription: test\npackages:\n" + "".join(
+        packages
+    )
     (root / "sources.yaml").write_text(
         "schema_version: 1\nsources:\n"
-        "  - name: local\n"
+        f"  - name: {source}\n"
         "    url: https://example.com/catalog.git\n"
         "    ref: v1.0.0\n"
         "    priority: 100\n",
         encoding="utf-8",
     )
-    cache = root / ".keystonectl" / "catalogs" / "local"
+    cache = root / ".keystonectl" / "catalogs" / source
     cache.mkdir(parents=True)
     (cache / "catalog.yaml").write_text(catalog, encoding="utf-8")
     return catalog

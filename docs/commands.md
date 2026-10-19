@@ -940,6 +940,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | keystone_service_not_found | 3 | false | Pass --keystone-service NAME if the service was renamed. |
 | layout_invalid | 3 | false | Run keystonectl init --adopt <root> and start compose with both files: docker compose -f docker-compose.yml -f docker-compose.packages.yml. |
 | layout_unsupported | 3 | false | layout_version must be 1. |
+| local_changed | 3 | false | raise version in keystone-service.yaml, then run service upgrade |
 | lock_corrupt | 3 | false | Restore services.lock.yaml.bak or run keystonectl init again on a copy. |
 | lock_install_failed | 3 | false | Read the lines in result.stderr; fix server.command or server.bin in provider.yaml and run again with --resolve-lock. |
 | lock_resolve_failed | 3 | true | Read the lines in result.stderr; check that the version in server.command exists and that Docker can reach the registry, then run again. |
@@ -1032,6 +1033,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | keystone_compose_missing | warning | false | Put keystone-mcp's docker-compose.yml and .env here (see keystone-mcp examples/production) and run keystonectl init again. |
 | keystone_wiring_stale | warning | false | Recreate it with all compose files, for example `docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d --force-recreate --no-deps <keystone service>`. |
 | layout_changed | warning | false | Review the listed fields. The lock was updated to match the compose file. |
+| local_package_missing | warning | false | the folder local/<name> is gone; upgrade and reinstall need it, rollback does not |
 | local_source | warning | false | file:// is for tests and local development, not for a shared catalog. |
 | orphan_fragment | warning | false | Remove the file or install the package that owns it. |
 | override_not_included | warning | false | Run keystonectl service apply <name> to include it. |

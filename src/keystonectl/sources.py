@@ -30,6 +30,22 @@ from keystonectl.fetch import (
     fetch_tree,
     list_tags,
     replace_tree,
+    sha256_file,
+)
+from keystonectl.local_packages import (
+    LOCAL_REF,
+    LOCAL_SOURCE,
+    LocalPackageError,
+    changed_message,
+    fetch_local,
+    git_sources,
+    is_local_entry,
+    is_local_source,
+    local_catalog,
+    newer_message,
+    older_message,
+    other_version_message,
+    with_local,
 )
 from keystonectl.output import Result, missing_summary
 from keystonectl.runner import CommandRunner
@@ -50,6 +66,9 @@ class ResolvedPackage:
     provides: dict[str, Any] | None
     commit: str | None = None
     manifest_sha256: str | None = None
+    # A package of the deployment's local/ folder: pinned by content, not by commit.
+    is_local: bool = False
+    content_sha256: str | None = None
 
 
 @dataclass
@@ -144,6 +163,98 @@ def _incompatible(name: str, versions: list[dict[str, Any]], running: str | None
     )
 
 
+def _version_unknown() -> Resolution:
+    from keystonectl.compat import VERSION_QUESTION
+
+    return Resolution(
+        error_id="keystone_mcp_version_unknown",
+        message=ERRORS["keystone_mcp_version_unknown"].title,
+        hint=ERRORS["keystone_mcp_version_unknown"].action,
+        missing=[VERSION_QUESTION.as_missing()],
+    )
+
+
+def _resolve_local(
+    name: str,
+    wanted: str | None,
+    entry: Mapping[str, Any],
+    lock: Mapping[str, Any],
+    keystone_version: str | None,
+) -> Resolution:
+    """One version: the one in ``local/<name>/keystone-service.yaml`` (ADR 0011)."""
+
+    problem = entry.get("problem")
+    versions = _versions(entry)
+    if isinstance(problem, str) or not versions:
+        return Resolution(
+            error_id="manifest_invalid",
+            message=str(problem or f"local/{name} has no usable keystone-service.yaml"),
+            hint=ERRORS["manifest_invalid"].action,
+            result={"problems": [{"path": "local", "message": problem, "severity": "error"}]}
+            if isinstance(problem, str)
+            else {},
+        )
+    chosen = versions[0]
+    have = str(chosen["version"])
+    if wanted is not None and wanted != have:
+        return Resolution(
+            error_id="version_not_found",
+            message=other_version_message(name, have, wanted),
+            hint=ERRORS["version_not_found"].action,
+        )
+    installed = installed_service(lock, name)
+    if installed and is_local_entry(installed) and isinstance(installed.get("version"), str):
+        current = str(installed["version"])
+        if Version(have) < Version(current):
+            return Resolution(
+                error_id="version_not_found",
+                message=older_message(name, have, current),
+                hint=ERRORS["version_not_found"].action,
+            )
+        if Version(have) > Version(current) and wanted is None:
+            # Without a version, apply keeps the installed one, and local/ no longer
+            # holds it. A newer version goes through service upgrade.
+            return Resolution(
+                error_id="version_not_found",
+                message=newer_message(name, have, current),
+                hint=f"Run keystonectl service upgrade {name}.",
+            )
+    spec = chosen.get("keystone_mcp")
+    if isinstance(spec, str):
+        if not keystone_version:
+            return _version_unknown()
+        if not is_compatible(spec, keystone_version):
+            return Resolution(
+                error_id="incompatible_keystone_mcp",
+                message=(
+                    f"{name} {have} requires keystone-mcp {spec}, "
+                    f"this deployment runs {keystone_version}."
+                ),
+                hint=ERRORS["incompatible_keystone_mcp"].action,
+                result={
+                    "service": name,
+                    "version": have,
+                    "required": spec,
+                    "keystone_mcp_version": keystone_version,
+                },
+            )
+    provides = entry.get("provides") if isinstance(entry.get("provides"), dict) else None
+    return Resolution(
+        package=ResolvedPackage(
+            source_name=LOCAL_SOURCE,
+            name=name,
+            version=have,
+            ref=LOCAL_REF,
+            git_url="",
+            path=".",
+            kind=str(entry.get("kind") or "service"),
+            keystone_mcp=spec if isinstance(spec, str) else None,
+            provides=provides,
+            is_local=True,
+        )
+    )
+
+
 def resolve_package(
     text: str,
     *,
@@ -206,6 +317,8 @@ def resolve_package(
         )
 
     source, entry = found[0]
+    if is_local_source(source):
+        return _resolve_local(ref.name, ref.version, entry, lock, keystone_version)
     versions = _versions(entry)
     installed = installed_service(lock, ref.name)
     chosen: dict[str, Any] | None = None
@@ -297,6 +410,34 @@ def resolve_package(
     return Resolution(package=_resolved(source, ref.name, entry, chosen))
 
 
+def fetch_local_package(
+    root: Path, package: ResolvedPackage, lock: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Copy ``local/<name>`` into the package cache and pin it by ``content_sha256``.
+
+    Raises ``LocalPackageError``: ``manifest_invalid`` for a folder that breaks the
+    tree rules, ``local_changed`` when the installed version's content changed.
+    """
+
+    fetched = fetch_local(root, package.name)
+    installed = installed_service(lock, package.name)
+    if (
+        installed
+        and is_local_entry(installed)
+        and installed.get("version") == package.version
+        and isinstance(installed.get("content_sha256"), str)
+        and installed["content_sha256"] != fetched.content_sha256
+    ):
+        shutil_rmtree(fetched.tree)
+        raise LocalPackageError("local_changed", [changed_message(package.name, package.version)])
+    dest = package_cache(root, package.source_name, package.name, package.version)
+    replace_tree(fetched.tree, dest)
+    package.commit = None
+    package.content_sha256 = fetched.content_sha256
+    package.manifest_sha256 = sha256_file(dest / "keystone-service.yaml")
+    return fetched.manifest
+
+
 def refresh_source(
     root: Path, source: Source, runner: CommandRunner
 ) -> tuple[Path | None, dict[str, str] | None, str | None, str | None]:
@@ -332,8 +473,12 @@ def shutil_rmtree(path: Path) -> None:
 
 
 def load_cached_catalogs(root: Path, sources: list[Source]) -> dict[str, dict[str, Any]]:
+    """Cached catalogs of git sources; the ``local`` source is read from ``local/``."""
     found: dict[str, dict[str, Any]] = {}
     for source in sources:
+        if is_local_source(source):
+            found[source.name] = local_catalog(root)
+            continue
         path = catalog_cache(root, source.name) / "catalog.yaml"
         if path.is_file():
             found[source.name] = load_catalog(path)
@@ -344,7 +489,7 @@ def refresh_all(
     root: Path, sources: list[Source], runner: CommandRunner
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]], str | None, str | None]:
     warnings: list[dict[str, str]] = []
-    for source in sources:
+    for source in git_sources(sources):
         _path, noted, error_id, message = refresh_source(root, source, runner)
         if error_id:
             return {}, warnings, error_id, message
@@ -602,6 +747,26 @@ def _installed_version_warnings(
     return found
 
 
+def _local_reserved(url: str) -> Result:
+    spec = ERRORS["source_exists"]
+    hint = "use --name to pick another one"
+    return Result(
+        code=spec.code,
+        command="catalog add",
+        summary=spec.title,
+        target=url,
+        error={
+            "id": spec.id,
+            "message": (
+                f"The name {LOCAL_SOURCE} is reserved for the local/ folder of the deployment; "
+                f"{hint}."
+            ),
+            "hint": hint,
+        },
+        retryable=spec.retryable,
+    )
+
+
 def add_source(
     root: Path,
     url: str,
@@ -612,6 +777,8 @@ def add_source(
     priority: int | None = None,
 ) -> Result:
     command = "catalog add"
+    if name == LOCAL_SOURCE:
+        return _local_reserved(url)
     messages = url_errors(url)
     if messages:
         spec = ERRORS["source_invalid"]
@@ -662,6 +829,11 @@ def add_source(
         return fetched
     tree, document = fetched
     chosen_name = name or str(document.get("name"))
+    if chosen_name == LOCAL_SOURCE:
+        shutil_rmtree(tree)
+        reserved = _local_reserved(url)
+        reserved.warnings = warnings
+        return reserved
     sources_path = Path(root) / "sources.yaml"
     if sources_path.is_file():
         try:
@@ -902,7 +1074,7 @@ def list_catalogs(
 ) -> Result:
     command = "catalog list"
     try:
-        sources = load_sources(Path(root) / "sources.yaml")
+        sources = with_local(root, load_sources(Path(root) / "sources.yaml"))
     except CatalogError as exc:
         spec = ERRORS["source_invalid"]
         return Result(
@@ -912,7 +1084,7 @@ def list_catalogs(
             error={"id": spec.id, "message": "; ".join(exc.messages), "hint": spec.action},
         )
     catalogs, warnings, error_id, message = refresh_all(root, sources, runner)
-    warnings = [*default_catalog_behind_warnings(sources), *warnings]
+    warnings = [*default_catalog_behind_warnings(git_sources(sources)), *warnings]
     if error_id:
         spec = ERRORS[error_id]
         return Result(
@@ -972,6 +1144,7 @@ def list_catalogs(
         warnings=warnings,
         result={
             "keystone_mcp_version": keystone_version,
+            # The local source is not in sources.yaml; its packages say source: local.
             "sources": [
                 {
                     "name": source.name,
@@ -979,7 +1152,7 @@ def list_catalogs(
                     "ref": source.ref,
                     "priority": source.priority,
                 }
-                for source in sources
+                for source in git_sources(sources)
             ],
             "packages": packages,
             "bundles": bundles,

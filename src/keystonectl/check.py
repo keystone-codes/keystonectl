@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
+import stat
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,6 +17,7 @@ from keystonectl.catalog import CatalogError, load_sources
 from keystonectl.compat import detect_keystone_mcp_version
 from keystonectl.errors import ERRORS, WARNINGS, fragment_modified_message
 from keystonectl.keystone_mcp_rules import MAX_REGISTRY_ENTRIES, namespace_errors
+from keystonectl.local_packages import is_local_entry, local_root, missing_message
 from keystonectl.lock import LockError, load_lock, validate_lock
 from keystonectl.output import Result
 from keystonectl.sources import default_catalog_behind_warnings
@@ -366,6 +369,35 @@ def _package_dir_checks(root: Path, lock: Mapping[str, Any]) -> list[dict[str, s
     return checks
 
 
+def _local_package_checks(root: Path, lock: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Every package installed from ``local/`` still has its folder there (ADR 0011)."""
+
+    checks: list[dict[str, str]] = []
+    spec = WARNINGS["local_package_missing"]
+    for service in _services(lock):
+        if service.get("managed") == "remote":
+            continue
+        if not is_local_entry(service):
+            continue
+        name = str(service.get("package") or service.get("name"))
+        try:
+            info = os.lstat(local_root(root))
+            present = stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode)
+            if present:
+                info = os.lstat(local_root(root) / name)
+                present = stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode)
+        except OSError:
+            present = False
+        if present:
+            checks.append(_item("local_package", "ok", f"local/{name} is present."))
+            continue
+        message = missing_message(name)
+        checks.append(
+            _item("local_package_missing", "warning", message, spec.action.replace("<name>", name))
+        )
+    return checks
+
+
 def _env_checks(root: Path, paths: Paths, lock: Mapping[str, Any]) -> list[dict[str, str]]:
     checks: list[dict[str, str]] = []
     values = _parse_env(paths.env)
@@ -528,6 +560,7 @@ def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result
                     checks.extend(_snapshot_checks(paths, lock))
                     checks.extend(_fragment_checks(root, lock))
                     checks.extend(_package_dir_checks(root, lock))
+                    checks.extend(_local_package_checks(root, lock))
                     checks.extend(_env_checks(root, paths, lock))
                     checks.extend(_resource_checks(lock))
                     compat, missing = _compat_checks(root, lock, env)

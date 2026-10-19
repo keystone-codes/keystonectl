@@ -100,11 +100,13 @@ _REMOTE_FORBIDDEN = (
     "version",
     "ref",
     "commit",
+    "content_sha256",
     "containers",
     "fragment",
     "fragment_sha256",
 )
 _MODE_DIR = 0o755
+_LOCAL_DIR = "local"
 _MODE_PRIVATE_DIR = 0o700
 _MODE_FILE = 0o644
 _MODE_PRIVATE_FILE = 0o600
@@ -356,6 +358,10 @@ def apply_init(root: Path, plan: InitPlan, *, now: datetime) -> list[str]:
     written: list[str] = []
     root.mkdir(parents=True, mode=_MODE_DIR, exist_ok=True)
     for relative, mode in plan.directories:
+        if relative == _LOCAL_DIR:
+            if _create_dir_once(root / relative, mode):
+                written.append(relative)
+            continue
         if _install_dir(root / relative, mode):
             written.append(relative)
     for item in plan.writes:
@@ -835,6 +841,10 @@ def _file_plan(
         actions.append(f"write:{relative}")
 
     want_dir("packages", _MODE_DIR)
+    if not os.path.lexists(root / _LOCAL_DIR):
+        # The operator's own packages (ADR 0011). Created once; never touched after.
+        directories.append((_LOCAL_DIR, _MODE_DIR))
+        actions.append(f"create:{_LOCAL_DIR}")
     want_dir(KEYSTONECTL_DIR, _MODE_DIR)
     want_dir(".keystonectl", PRIVATE_DIR_MODE)
     want_dir(".keystonectl/secrets", PRIVATE_DIR_MODE)
@@ -993,6 +1003,17 @@ def _install_dir(path: Path, mode: int) -> bool:
         os.chmod(path, mode)
         return True
     return created
+
+
+def _create_dir_once(path: Path, mode: int) -> bool:
+    """Create ``path`` when nothing is there. An existing entry is left as it is."""
+
+    try:
+        path.mkdir(mode=mode)
+    except FileExistsError:
+        return False
+    os.chmod(path, mode)
+    return True
 
 
 def _install_file(path: Path, content: str, mode: int) -> bool:
@@ -1641,14 +1662,23 @@ def _require_generated(
     allow_null_hash: bool,
 ) -> list[str]:
     errors: list[str] = []
+    # A package of the local/ folder is pinned by content, not by commit (ADR 0011).
+    local = service.get("source") == "local" and service.get("commit", None) is None
     for field in _GENERATED_REQUIRED:
         if field not in service:
             errors.append(f"{prefix}.{field} is required when managed is {service.get('managed')}")
             continue
         if field == "fragment_sha256" and allow_null_hash and service[field] is None:
             continue
+        if field == "commit" and local:
+            continue
         if service[field] is None:
             errors.append(f"{prefix}.{field} is required when managed is {service.get('managed')}")
+    if local:
+        if not isinstance(service.get("content_sha256"), str):
+            errors.append(f"{prefix}.content_sha256 is required when source is local")
+        if service.get("ref") != "local":
+            errors.append(f"{prefix}.ref must be local when source is local")
     return errors
 
 
