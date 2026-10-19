@@ -266,8 +266,15 @@ def add_remote(
     note = _HANDOFF if auth_names else ""
     summary = (
         f"Connected {name}. Network {UPSTREAMS_NETWORK}; the url must answer from inside "
-        f"that network. The service must check the bearer and X-Keystone-Identity. aud = {name}."
+        f"that network. "
     )
+    if no_auth:
+        summary += (
+            "No bearer or identity secret was issued. Any container on the services "
+            "network can call this service as anyone."
+        )
+    else:
+        summary += f"The service must check the bearer and X-Keystone-Identity. aud = {name}."
     if note:
         summary = f"{summary} {note}"
     return Result(
