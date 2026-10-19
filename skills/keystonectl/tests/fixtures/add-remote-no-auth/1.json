@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service add-remote",
+  "target": "billing",
+  "summary": "Connected billing. Network keystone-mcp-upstreams; the url must answer from inside that network. The service must check the bearer and X-Keystone-Identity. aud = billing.",
+  "actions": [],
+  "changes": 2,
+  "missing": [],
+  "warnings": [
+    {
+      "id": "remote_without_identity",
+      "message": "This remote service has no bearer or identity secret."
+    }
+  ],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "registry_name": "billing",
+    "namespace": "billing",
+    "url": "https://billing.example.com/mcp",
+    "reachable": true
+  }
+}

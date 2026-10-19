@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service list",
+  "target": null,
+  "summary": "0 services.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "services": [],
+    "resources": [],
+    "keystone_mcp_version": "0.5.0"
+  }
+}

@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Skill: requires sign-in through the provider before the first service, and points to `keystone-gateway-bootstrap` otherwise.
+- Skill: `service add-remote` examples pass `--tools`, name the two tools warnings, and ask a yes before `--no-auth`.
 - `package wrap-stdio` pins the default `--image` to the published stdio-box 0.1.0 digest.
 - Provider contract: the secret file is the desired secret.
 - docs: Backups of catalog providers, `tools_unreachable` as the state before policy, confirmations as a contract, manual registry edits during apply.
