@@ -1,6 +1,6 @@
 ---
 name: keystonectl
-description: Install, upgrade, remove or check services behind Keystone-MCP from a service catalog (for example file-mcp with S3 or MinIO storage, or a service that needs Postgres) on the host where Keystone-MCP runs. Use when asked to add a service or a set of tools to Keystone, connect S3 or Postgres, publish a service on its own domain with a certificate, check why a service does not show up, detach a service so the operator can run it their own way, or put a third-party MCP server such as Jira, Confluence or Notion behind Keystone with per-person, per-service or per-role accounts.
+description: Install, upgrade, remove or check services behind Keystone-MCP from a service catalog (for example file-mcp with S3 or MinIO storage, or a service that needs Postgres) on the host where Keystone-MCP runs. Use when asked to add a service or a set of tools to Keystone, connect S3 or Postgres, publish a service on its own domain with a certificate, check why a service does not show up, detach a service so the operator can run it their own way, or put a third-party MCP server such as Jira, Confluence or Notion behind Keystone with per-person, per-service or per-role accounts. This skill works on a gateway that is already installed and that someone has already signed into through the sign-in provider. To install the gateway itself, use the keystone-gateway-bootstrap skill.
 ---
 
 # Install services with keystonectl
@@ -16,6 +16,16 @@ Every command is `keystonectl … --json`. When the operator gave an SSH wrapper
 Ask once for the deployment directory (the folder with keystone-mcp's `docker-compose.yml` and `.env`; after `init --adopt` it also has `keystonectl/`, `packages/`, and `services.lock.yaml`). Pass it as `--root` on every command. On keystone-deploy that directory is the `mcp` folder of the keystone-deploy checkout.
 
 ## Before you start
+
+### Gateway and sign-in first
+
+Install services only on a gateway that a person has already signed into through the sign-in provider (Google or OIDC) and on which they have seen their own tools. The skill `keystone-gateway-bootstrap`, from keystone-mcp, installs and checks that gateway; this skill does not install it.
+
+`check`, `service status`, `/healthz`, and `/readyz` do not check sign-in. They can all be green while nobody has ever signed in.
+
+On a fresh deployment — `check` says `services.lock.yaml` is missing, or `service list` returns no services — ask the operator once: has anyone signed in through the provider and seen their own tools? If the answer is no, stop. Name the skill `keystone-gateway-bootstrap` and install nothing.
+
+Skip this question only when the operator has said so directly, in this chat. Then continue, and say in the summary that the operator waived the check.
 
 Run these, then retell the result in one or two sentences:
 
@@ -89,7 +99,7 @@ While the code is 2, go back to step 3 with the new `missing` list. Running `app
 keystonectl explain dns_mismatch --json
 ```
 
-6. **Summary.** From `result`, say what was installed, the `version` and `commit`, the namespace, new tools, and `resources`: each item's `origin` is `catalog` or `external`, and `provider` is the package name or null. Say the domain and certificate from `public` (`state`, `domain`, `tls`, `last_error`; expiry is `not_after` on status), what to check, and warnings. `tools_unreachable` means nobody can call the tools until an administrator adds roles.
+6. **Summary.** From `result`, say what was installed, the `version` and `commit`, the namespace, new tools, and `resources`: each item's `origin` is `catalog` or `external`, and `provider` is the package name or null. Say the domain and certificate from `public` (`state`, `domain`, `tls`, `last_error`; expiry is `not_after` on status), what to check, and warnings. `tools_unreachable` means nobody can call the tools until an administrator adds roles. Do not call the install finished until a person who signed in through the provider has called one of the new tools. Until then, name the step that is left: roles (`tools_unreachable`), sign-in, or the call itself.
 
 7. **Policy.** Follow Policy below.
 
@@ -174,19 +184,21 @@ Retell `result.rotated` (`kind` and `provider`) and `result.restarted`.
 
 ## Connect a running service
 
-Use this only when the operator wants a service they already run, and they give the URL. Add filter flags only when they named them (`--tool-prefix`, `--include-prefixes`, `--exclude-prefixes`, `--strip-prefix`).
+Use this only when the operator wants a service they already run, and they give the URL. Add filter flags only when they named them (`--tool-prefix`, `--include-prefixes`, `--exclude-prefixes`, `--strip-prefix`). Pass `--tools a,b` whenever the tool names are known — the operator names them, or the service's own command does. Without `--tools`, `check` warns `remote_tools_unknown` (the gateway could not reach the service to list its tools) or `remote_tools_not_in_snapshot` (the live list came back, but those names are not in the catalog snapshot yet).
 
 ```
-keystonectl --root /srv/keystone service add-remote billing --url https://billing.example.com/mcp --json
+keystonectl --root /srv/keystone service add-remote billing --url https://billing.example.com/mcp --tools bill_create_invoice,bill_get_invoice --json
 ```
 
 If the registry entry already exists, ask, then pass `--adopt-existing`. Secrets are not reissued.
 
 ```
-keystonectl --root /srv/keystone service add-remote billing --url https://billing.example.com/mcp --tool-prefix bill --include-prefixes bill_ --exclude-prefixes bill_admin --strip-prefix bill_ --adopt-existing --json
+keystonectl --root /srv/keystone service add-remote billing --url https://billing.example.com/mcp --tools bill_create_invoice,bill_get_invoice --tool-prefix bill --include-prefixes bill_ --exclude-prefixes bill_admin --strip-prefix bill_ --adopt-existing --json
 ```
 
 The result includes a path to a mode 600 file for the team that runs the service. Do not read that file and do not retell its contents.
+
+`--no-auth` only fits a server that does not check the bearer token or `X-Keystone-Identity`. Before you pass it, name the cost: that server has one shared account for every caller, and any container on the services network can call it as anyone. Then wait for an explicit "yes" to this exact action, in this chat (rule 5). Pass `--no-auth`, then repeat the warning `remote_without_identity` in your summary. If the operator needs separate accounts per caller, say that such a server can be wrapped in a box instead; a later section covers that.
 
 ## Operator's own changes
 
@@ -277,7 +289,7 @@ install -m 600 /dev/null /root/keystone-secrets/pg-url && nano /root/keystone-se
 Pass the path in a `…_FILE` variable. Do not read the file and do not print it. If the operator pastes a secret anyway, do not repeat it, do not use it, and tell them to rotate that key or password.
 3. Never pass a secret as a command argument or as a variable value. Only a path, and only in a name that ends with `_FILE`.
 4. **Do not touch policy.** Do not edit the policy file and do not call `policy_*`. Hand the recommended rows to the policy skill (Policy).
-5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `rotate-secret`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `TAKEOVER=yes`, and `DNS=skip`. Set `CONFIRM_*` only after they said yes to that exact action in this chat; see [Confirmations](https://github.com/keystone-codes/keystonectl/blob/main/docs/lifecycle.md#confirmations). If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
+5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `rotate-secret`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `--no-auth`, `TAKEOVER=yes`, and `DNS=skip`. Set `CONFIRM_*` only after they said yes to that exact action in this chat; see [Confirmations](https://github.com/keystone-codes/keystonectl/blob/main/docs/lifecycle.md#confirmations). If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
@@ -687,3 +699,30 @@ Agent: Dev team identity is Team Account. Jane identity is Jane Doe. Backend ide
 ```
 
 Agent: Developers use atlassian/dev-team through role atlassian_writer (first matching role binding wins). Jane uses atlassian/jane. Backend uses atlassian/backend, Jira only.
+
+Operator: This deployment is brand new. Add the billing service.
+
+```
+<!-- scenario: gateway-prerequisite -->
+keystonectl --root /srv/keystone check --json
+keystonectl --root /srv/keystone service list --json
+# code 0, result.services is empty
+Agent: No services are installed yet, so I cannot tell whether anyone has signed in. Has a person already signed in through the sign-in provider (Google or OIDC) and seen their own tools?
+Operator: No, not yet.
+Agent: I will not install anything until that happens. Run the keystone-gateway-bootstrap skill first, then come back here.
+<!-- /scenario -->
+```
+
+Agent: Nothing was installed. The operator needs to run keystone-gateway-bootstrap and sign in through the provider before any service goes on this gateway.
+
+Operator: Connect billing, it already runs at https://billing.example.com/mcp. It does not check identity headers yet.
+
+```
+<!-- scenario: add-remote-no-auth -->
+Agent: billing does not check the bearer token or X-Keystone-Identity. Without authentication it has one shared account for every caller, and any container on the services network could call it as anyone. Do you want me to connect it without authentication anyway?
+Operator: Yes.
+keystonectl --root /srv/keystone service add-remote billing --url https://billing.example.com/mcp --no-auth --json
+<!-- /scenario -->
+```
+
+Agent: billing is connected without authentication. `remote_without_identity`: this remote service has no bearer or identity secret, so anyone on the services network can call it as anyone else. If separate accounts are needed, the service can later be wrapped in a box.

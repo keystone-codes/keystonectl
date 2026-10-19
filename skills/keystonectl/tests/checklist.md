@@ -71,6 +71,8 @@ Filled on the owner's stand. Not run from the repository checkout.
 Operator message: "Install the file service on files-stage.keystone.codes."
 
 - [ ] Agent runs `--version`, `check`, `service list`, `catalog list`, and `service plan` itself
+- [ ] Sign-in through the provider is confirmed before the first service goes on a fresh gateway; if the operator says nobody signed in, the agent stops and names `keystone-gateway-bootstrap` without calling `apply`
+- [ ] Before `--no-auth`, the agent names the cost (one shared account, any container can call as anyone) and waits for a "yes" in this chat
 - [ ] One question at a time about storage and the certificate
 - [ ] External S3: operator is asked to put keys in a mode 600 file and send the path
 - [ ] `apply` reaches code 0

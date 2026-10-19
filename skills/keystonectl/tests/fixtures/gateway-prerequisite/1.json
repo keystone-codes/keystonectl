@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "check",
+  "target": null,
+  "summary": "Deployment check passed.",
+  "actions": [],
+  "changes": 0,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {"checks": []}
+}
