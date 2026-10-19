@@ -279,7 +279,66 @@ Use a box when the server speaks only stdio. One image, [`stdio-box`](https://gi
 
 `--derived-image` writes a two-line `Dockerfile` (`FROM` the stdio-box image, `COPY` into `/opt/box/packages/<name>/`) for an author who publishes from their own repository.
 
+`--stock-image` needs no image of your own. The manifest keeps the stdio-box image from `--image` and mounts the package directory into it read-only with [`package_dir`](#files-from-the-package) (`from: "."`, `path: /opt/box/provider`); `BOX_PROVIDER_DIR` points the box there. It cannot be combined with `--derived-image`. Run on an existing manifest, it adds `package_dir` and `BOX_PROVIDER_DIR` when they are missing.
+
 The image reference written into a new manifest is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`), unless `--derived-image` selects a derived publisher image.
+
+The box's own `creds_*` tools come from the image: wrap-stdio runs `stdio-box box-tools` in it and lists what it prints. An image without that subcommand (stdio-box 0.1.0) gets the ten `creds_*` tools that release serves; `result.box_tools_source` says which (`image` or `fallback`).
+
+`--no-discovery` skips asking the server. The package then lists only the `creds_*` tools, and when the directory has no `tools.snapshot.json` the command writes an empty one (`tools: []`), because the box does not start without it.
+
+`--publisher`, `--homepage` and `--version X.Y.Z` set those manifest fields, also on an existing manifest. Without them a new manifest gets `keystone-codes` and `1.0.0`, and an existing one keeps its values.
+
+`mcp.critical` and the reader role of `policy.example.yaml` follow the server's `destructiveHint` and `readOnlyHint` annotations. When those are missing or wrong, `--read-only a,b` and `--destructive c,d` name the tools instead, by their published names (after the provider's `tools` rules). Each flag replaces the annotations as a whole; a name that is not published, or a name in both flags, is `provider_invalid`.
+
+### Wrapping a remote HTTP server
+
+An MCP server that only runs remotely over HTTP can sit in a box too: the box runs [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as the stdio server, and `mcp-remote` forwards to the remote address with the account's token. Each person, service or role still uses its own account, entered on the box's form.
+
+`provider.yaml`:
+
+```yaml
+schema_version: 1
+name: example-remote
+title: Example remote MCP server
+server:
+  command: 'npx -y mcp-remote@0.14.3 https://mcp.example.com/mcp --header "Authorization:Bearer ${EXAMPLE_TOKEN}"'
+  bin: mcp-remote
+  lock: package-lock.json
+fields:
+  - name: EXAMPLE_TOKEN
+    type: string
+    secret: true
+    hint: "API token from the example.com account page"
+    to: env
+variants:
+  - name: token
+    fields: [EXAMPLE_TOKEN]
+    checks:
+      - tool:
+          name: whoami
+tools:
+  normalize: snake
+discovery:
+  mode: manual
+```
+
+- The field has `to: env`: stdio-box puts the token into the server's environment under the field name, and `mcp-remote` itself replaces `${EXAMPLE_TOKEN}` in the header. The token is never part of the command text.
+- `tools: {normalize: snake}` turns remote names such as `get-issue` into published names such as `get_issue`.
+- `discovery: {mode: manual}`: there is no placeholder token a remote server would accept, so wrap-stdio cannot ask it for its tools.
+- The check is a `tool` check: the box calls one remote tool (here `whoami`) with the account to prove the token works.
+- Commit `package.json` and `package-lock.json` for `mcp-remote` beside `provider.yaml`.
+
+Then write the package without asking the server:
+
+    keystonectl package wrap-stdio packages/example-remote --stock-image --no-discovery --json
+
+The package lists only the `creds_*` tools until a snapshot exists. After someone has entered an account, `creds_snapshot_tools` (stdio-box 0.2.0 and later) in the running box takes the remote tool list under that account; `credsctl snapshot export <id>` prints it, and `wrap-stdio --tools-snapshot <file>` turns it into the package's tools.
+
+Limits:
+
+- A server that only accepts a sign-in in the browser (OAuth without a token you can paste) does not fit: the box has no browser.
+- The token goes only into a header. `mcp-remote` does not replace `${FIELD}` in the address, so a server that wants the token in the URL does not fit either.
 
 ## Check it locally
 

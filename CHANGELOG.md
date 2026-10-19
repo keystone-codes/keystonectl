@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `package wrap-stdio --stock-image` keeps the stdio-box image and mounts the package directory with `package_dir` and `BOX_PROVIDER_DIR`.
+- `package wrap-stdio --publisher`, `--homepage` and `--version` set those manifest fields, also when the manifest is updated in place.
+- `package wrap-stdio --read-only` and `--destructive` name read-only and destructive tools when the server's annotations are missing or wrong.
+- `package wrap-stdio` reports `result.box_tools_source`: the `creds_*` tools come from `stdio-box box-tools` or a built-in list.
+- docs: Wrapping a remote HTTP server through `mcp-remote` in a box, with its limits.
 - Optional manifest field `containers.<role>.package_dir` mounts a directory of the package into the container, read-only, from a copy keystonectl makes at apply.
 - Warning `package_dir_missing` when a copy named in the lock is missing or changed; `package_dir_kept` when removing an ejected service keeps its copies.
 - docs: ADR 0010 records package files mounted read-only; it refines ADR 0004 and ADR 0007.
@@ -31,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A recorded `sources.yaml` keeps its `keystone-codes` ref; `keystonectl catalog set-ref keystone-codes v1.2.0` moves it.
 - Skill: requires sign-in through the provider before the first service, and points to `keystone-gateway-bootstrap` otherwise.
 - Skill: `service add-remote` examples pass `--tools`, name the two tools warnings, and ask a yes before `--no-auth`.
+- `package wrap-stdio --no-discovery` writes an empty `tools.snapshot.json` when there is none, so the box starts.
+- `package wrap-stdio` lists the `creds_*` tools the image prints, including `creds_snapshot_tools`, which is not critical.
 - `package wrap-stdio` pins the default `--image` to the published stdio-box 0.1.0 digest.
 - Provider contract: the secret file is the desired secret.
 - docs: Backups of catalog providers, `tools_unreachable` as the state before policy, confirmations as a contract, manual registry edits during apply.
