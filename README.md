@@ -94,6 +94,7 @@ Lookup order: `--set`, the environment, the answer stored in the lock, then the 
 |---|---|
 | `services.lock.yaml` | What is installed. Not committed. |
 | `sources.yaml` | Catalog sources. Absent means the default keystone-codes catalog. |
+| `local/` | Your own packages without git: `local/<name>/keystone-service.yaml`, installed as `local/<name>`. |
 | `keystonectl/upstreams.yaml` | Upstream registry read by keystone-mcp. |
 | `keystonectl/catalog-snapshot.yaml` | Catalog snapshot read by keystone-mcp. |
 | `.keystonectl/` | Cache of catalogs and packages. |

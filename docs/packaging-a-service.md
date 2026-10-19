@@ -385,6 +385,16 @@ Open a PR to [keystone-catalog](https://github.com/keystone-codes/keystone-catal
 
 Host a git repository with root `catalog.yaml` per [`docs/spec/catalog.md`](spec/catalog.md). Validate with `keystonectl lint catalog.yaml`. Operators attach it via `keystonectl catalog add <url>`. The same package name in two catalogs requires `source/name` disambiguation at install time.
 
+### A package of your own, without a repository
+
+A package that only one deployment uses — a wrapper for a stdio server, a bridge to a remote server, a service whose image is already in a registry — can live in the deployment itself. Put the package folder at `<root>/local/<name>/`, with `keystone-service.yaml` at its top; the folder name is the package `name`. No git, no tag and no catalog entry: the source `local` lists it, and `keystonectl service apply local/<name>` installs it.
+
+- Check it first with `keystonectl lint local/<name>/keystone-service.yaml`.
+- The folder holds plain files and folders only: no symbolic or hard links, at most 900 KiB and 256 files, the same rules as [Files from the package](#files-from-the-package).
+- The lock pins the folder's content, not a commit. To change an installed package, raise `version` in its manifest, then run `keystonectl service upgrade <name>`. An edit under the same version is refused as `local_changed`.
+- `service rollback <name>` returns to the previous version from keystonectl's own copies, even when `local/<name>/` already holds the new one. `service remove` leaves the folder in place.
+- Back the folder up with the deployment: nothing else holds it. Why: [ADR 0011](adr/0011-local-packages-without-git.md).
+
 ## Versions and compatibility
 
 Use semantic versioning for the package `version` field and git tags `v<version>`. Tags are immutable. Declare supported gateway versions in `compat.keystone_mcp`; `keystonectl lint` and `keystonectl check` enforce the range against the deployment.

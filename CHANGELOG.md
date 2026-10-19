@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Optional manifest field `containers.<role>.package_dir` mounts a directory of the package into the container, read-only, from a copy keystonectl makes at apply.
 - Warning `package_dir_missing` when a copy named in the lock is missing or changed; `package_dir_kept` when removing an ejected service keeps its copies.
 - docs: ADR 0010 records package files mounted read-only; it refines ADR 0004 and ADR 0007.
+- Source `local`: packages in the deployment's `local/<name>/` folder install without git and are pinned by `content_sha256`.
+- Error `local_changed` when a `local/` package changed under the installed version; warning `local_package_missing` from `check`.
+- `init` creates an empty `local/` folder; `init --adopt` creates it when it is missing.
+- docs: ADR 0011 records local packages in the deployment, without git.
 - Skill: installing a box and setting up credential profiles for people, services and roles through a one-time link.
 - e2e: Scenario 16 installs the atlassian package from a catalog subdirectory and checks profiles, role order, and a service account.
 - docs: ADR 0007 records stdio MCP servers as HTTP boxes; profiles live in the box, and containers keep the image user and default capabilities.
@@ -52,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `check` reports `override_unchecked`, `compose_version_unknown` and `check_skipped_no_docker` instead of reusing check ids; every warning id is in the registry.
 - `output.schema.json` types `result` for apply, list, status, remove, bundle and catalog list; `service apply` reports `result.resources`.
 - `service remove` keeps generated secrets of a package with volumes in `.keystonectl/secrets/<name>.generated.env`; reinstalling reuses them.
+- `catalog add` refuses the name `local`, which is reserved for the `local/` folder, as `source_exists`.
+- The lock allows `commit: null` with `content_sha256` for packages from `local`; `service apply` reports `content_sha256` for them.
 - e2e: The vm profile requires `--domain` and a real `E2E_TLS_EMAIL` for certbot, and installs the keystonectl version of the checkout from PyPI.
 - e2e: Pins catalog `v1.2.0`, packages 1.0.1, and the deploy commit with the public keystonectl interface; scenario 6 upgrades file-mcp 1.0.0 to 1.0.1.
 
