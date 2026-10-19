@@ -53,3 +53,4 @@ Keep each record under roughly 80 lines. Use short sentences and present tense.
 | [0006](0006-keystonectl-is-a-separate-product.md) | keystonectl is a separate product, not part of keystone-deploy or keystone-mcp | Accepted (keystonectl 0.1, 2026-10-12) |
 | [0007](0007-stdio-servers-as-boxes.md) | Stdio-only MCP servers are packaged as boxes; credential profiles live in the box | Accepted (keystonectl 0.2, 2026-10-15) |
 | [0010](0010-package-files-read-only.md) | Package files mounted read-only | Accepted (keystonectl 0.3, 2026-10-19) |
+| [0011](0011-local-packages-without-git.md) | Local packages live in the deployment, without git | Accepted (keystonectl 0.3, 2026-10-19) |

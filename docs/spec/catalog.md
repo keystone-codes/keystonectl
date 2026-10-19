@@ -70,11 +70,35 @@ When `sources.yaml` is missing, `DEFAULT_SOURCES` applies: one source `keystone-
 
 The first `catalog add` writes that file and records the ref it resolved. Later releases of keystonectl may raise `DEFAULT_CATALOG_REF`, but they do not rewrite a pin already on disk, and reading the file never substitutes the new tag. `catalog list` and `check` warn `default_catalog_behind` when the source whose URL is the default catalog is pinned to an older `vX.Y.Z` tag than `DEFAULT_CATALOG_REF`. A commit SHA is not compared. Move the pin with `catalog set-ref <name> <ref>`: it checks the new tag or commit, rewrites only that source's `ref`, and replaces the catalog cache. Installed packages and `services.lock.yaml` stay as they are. Passing the ref the source already has changes nothing and does not contact the network.
 
+## The local source
+
+A deployment can hold its own packages in `<root>/local/`, without git. Why: [ADR 0011](../adr/0011-local-packages-without-git.md).
+
+- When `local/` is a plain directory (not a link), the source `local` is always present. It is not written in `sources.yaml`, and `catalog set-ref` does not apply to it. `init` creates the empty folder with mode 755; `init --adopt` creates it when it is missing.
+- The name `local` is reserved: `catalog add --name local`, or a catalog whose own `name` is `local`, is refused as `source_exists`. A `sources.yaml` entry named `local` next to a `local/` folder is `source_invalid`.
+- A package is a first-level folder `local/<name>/` that holds `keystone-service.yaml`. The folder name must equal the manifest `name`, otherwise `manifest_invalid`. Links are not followed: a `local/` or `local/<name>` that is a symbolic link holds no package, and a manifest that is a link is `manifest_invalid`.
+- A local package has one version, the manifest `version`. Its compatibility range is the manifest `compat.keystone_mcp`. The ref is `local`.
+- `catalog list` shows each local package with `source: local`, its version, `ref: local`, and `compatible`. The `sources` list holds only the git sources.
+- keystonectl never writes into `local/`.
+
+Fetching a local package does not use git. The folder is read once, without following links, under the [`package_dir` rules](service-package.md): plain files and folders only, no symbolic or hard links, devices, FIFOs or sockets, at most 900 KiB and 256 files. Any other entry is `manifest_invalid`. The bytes read are copied through `.keystonectl/tmp/` into the package cache `.keystonectl/packages/local/<name>/<version>/`. `content_sha256` is the hash of the folder: every relative path and every file's bytes, in sorted order (the same hash `package_dir` copies use).
+
+The lock entry of a local package has `source: local`, `ref: local`, `commit: null`, and `content_sha256`; `previous` keeps the earlier `content_sha256` after an upgrade. Entries from git sources are unchanged.
+
+| The folder holds, compared with the lock | Result |
+|---|---|
+| the installed version, the same `content_sha256` | install again; nothing changes |
+| the installed version, another `content_sha256` | `local_changed` (exit 3, not retryable): raise `version` in `keystone-service.yaml`, then run `service upgrade` |
+| a higher version | `service upgrade <name>` installs it; `service apply` without a version answers `version_not_found` and names the upgrade command |
+| a lower version | `version_not_found`: local package is older than the installed version |
+
+`service rollback` returns to the previous version from the `.bak` files, the lock's `previous`, and the `package_dir` copies; it never reads `local/`, which no longer holds the old version. `service remove` leaves `local/<name>/` in place. `check` warns `local_package_missing` when an installed local package's folder is gone: upgrade and reinstall need it, rollback does not.
+
 ## Referring to a package
 
 Syntax: `[source/]name[@X.Y.Z]`
 
-- `source` — optional; must match a configured source name.
+- `source` — optional; must match a configured source name, or `local` for the [local source](#the-local-source).
 - `name` — package name in the catalog.
 - `@X.Y.Z` — optional exact version from the catalog.
 
@@ -85,7 +109,7 @@ Invalid references raise `ValueError` with message `package reference must look 
 1. The request is `[source/]name[@version]`.
 2. Sources are ordered by `priority` (higher first). Order affects listing only, **not** selection.
 3. With a source prefix, the package is searched only in that source.
-4. Without a source, every source that lists the name is considered. None → `package_not_found`. Two or more → `package_ambiguous` with choices `source/name`, regardless of priority.
+4. Without a source, every source that lists the name is considered, the [local source](#the-local-source) included. None → `package_not_found`. Two or more → `package_ambiguous` with choices `source/name`, regardless of priority.
 5. A requested version must exist in the catalog (`version_not_found`) and be compatible with installed keystone-mcp (`incompatible_keystone_mcp`; no force flag).
 6. With no version, the highest catalog version compatible with installed keystone-mcp is chosen; if none fit → `incompatible_keystone_mcp` listing versions and ranges.
 7. If the package is already installed (present in `services.lock.yaml`), `service install` without a version keeps the installed version.
@@ -129,8 +153,9 @@ A bundle lists 1–50 unique **service** package names from the same catalog. Re
 | `requires_missing` | `requires` not satisfied | 3, not retryable |
 | `source_unreachable` | network failure fetching catalog or package | 3, retryable |
 | `catalog_invalid` | local catalog file fails validation | 3, not retryable |
+| `local_changed` | a `local/` package changed under the installed version | 3, not retryable |
 
-Warnings include `compat_mismatch`, `local_source` (`file://` URLs), and `catalog_cached`.
+Warnings include `compat_mismatch`, `local_source` (`file://` URLs), `catalog_cached`, and `local_package_missing` (from `check`).
 
 ## Not in this release
 

@@ -22,6 +22,7 @@ Paths are relative to the deployment root.
 | `packages/<name>.yml` | keystonectl when `managed` is `generated`; the operator when `ejected` | rewrites the whole file, and compares `fragment_sha256` from the lock before doing so |
 | `packages/<name>.override.yml` | operator | never writes it; the packages compose file includes it when it exists |
 | `packages/<name>.env`, `packages/<name>.mcp.env`, `packages/<name>.<kind>.env` (mode 600) | keystonectl | rewrites the whole file. The first reaches every container of the package, the second only the MCP facade, the third only the containers named for that resource |
+| `local/` (mode 755) | operator and the agent | `init` creates the empty folder once, `init --adopt` when it is missing; keystonectl never writes into it. Each `local/<name>/` with `keystone-service.yaml` is a package of the source `local`. See [Catalog sources](catalog.md#the-local-source) and [ADR 0011](../adr/0011-local-packages-without-git.md) |
 | `keystonectl/` (mode 755) | keystonectl | creates the directory and mounts it into keystone-mcp |
 | `keystonectl/upstreams.yaml` (mode 644) | shared | changes only registry entries whose `name` is in the lock, and keeps every other entry in its previous order |
 | `keystonectl/catalog-snapshot.yaml` (mode 644) | shared | changes only `<namespace>_*` names in `active` for namespaces this install owns |
