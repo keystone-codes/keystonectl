@@ -637,14 +637,14 @@ def _add_duplicate_catalog(root: Path, name: str = "e2e") -> None:
     (cache / "catalog.yaml").write_text(catalog_text(name), encoding="utf-8")
 
 
-def _prepare_upgrade(root: Path) -> None:
+def _prepare_upgrade(root: Path, *, version: str = "1.1.0", ref: str = "v1.1.0") -> None:
     catalog_path = root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
     catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     versions = catalog["packages"]["file-mcp"]["versions"]
-    versions.append({"version": "1.1.0", "ref": "v1.1.0", "keystone_mcp": ">=0.5.0,<2.0"})
+    versions.append({"version": version, "ref": ref, "keystone_mcp": ">=0.5.0,<2.0"})
     catalog_path.write_text(yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8")
     document = yaml.safe_load(_facade())
-    document["version"] = "1.1.0"
+    document["version"] = version
     document["mcp"]["tools"].append("list_files")
     document["containers"]["worker"] = {
         "image": "example:1",
@@ -653,7 +653,7 @@ def _prepare_upgrade(root: Path) -> None:
     }
     lock = load_lock(root / "services.lock.yaml")
     source = lock["services"][0]["source"]
-    cache = package_cache(root, source, "file-mcp", "1.1.0")
+    cache = package_cache(root, source, "file-mcp", version)
     cache.mkdir(parents=True)
     (cache / "keystone-service.yaml").write_text(
         yaml.safe_dump(document, sort_keys=False), encoding="utf-8"
@@ -725,6 +725,68 @@ def _apply_runner(root: Path) -> FakeCommandRunner:
             (["git", "fetch"], ok),
             (["git", "checkout"], ok),
             (["git", "rev-parse", "HEAD"], CommandResult((), 0, SHA + "\n", "")),
+            (["docker"], docker),
+        ]
+    )
+
+
+def _apply_runner_to(root: Path, *, to_version: str, commit: str) -> FakeCommandRunner:
+    """Like ``_apply_runner`` but names the target version and the fetched commit
+    explicitly, so a test can assert that the lock entry picks up the *new* commit.
+
+    ``_facade()`` always rebuilds the manifest from the on-disk fixture, whose
+    version is the package's original ``1.0.0``, so the substitution always
+    starts from that literal regardless of which upgrade step is being faked.
+    """
+    from tests.support.deploylab import DockerBox
+
+    catalog_local = (root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml").read_text()
+    current = _facade()
+    newer = (
+        current.replace("version: '1.0.0'", f"version: '{to_version}'")
+        .replace('version: "1.0.0"', f'version: "{to_version}"')
+        .replace("version: 1.0.0\n", f'version: "{to_version}"\n')
+    )
+    box = DockerBox()
+    state = {"n": 0}
+
+    def ls_remote(args, **_kwargs):
+        tag = f"v{to_version}"
+        for item in args:
+            if str(item).startswith("refs/tags/"):
+                tag = str(item).removeprefix("refs/tags/")
+        return CommandResult(tuple(args), 0, f"{commit}\trefs/tags/{tag}\n", "")
+
+    def clone(args, **_kwargs):
+        dest = Path(args[-1])
+        dest.mkdir(parents=True, exist_ok=True)
+        url = str(args[-2])
+        if "catalog" in url:
+            (dest / "catalog.yaml").write_text(catalog_local, encoding="utf-8")
+        else:
+            (dest / "keystone-service.yaml").write_text(newer, encoding="utf-8")
+        (dest / ".git").mkdir(exist_ok=True)
+        return CommandResult(tuple(args), 0, "", "")
+
+    def docker(args, **kwargs):
+        if "diff" in args:
+            state["n"] += 1
+            text = (
+                "Only in live (unreachable by any role):\n  (none)\n\n"
+                "Unmatched allow patterns:\n  (none)\n"
+            )
+            return CommandResult(tuple(args), 0, text, "")
+        return box(args, **kwargs)
+
+    ok = CommandResult((), 0, "", "")
+    return FakeCommandRunner(
+        [
+            (["git", "ls-remote"], ls_remote),
+            (["git", "clone"], clone),
+            (["git", "init"], lambda args, **_kwargs: ok),
+            (["git", "fetch"], ok),
+            (["git", "checkout"], ok),
+            (["git", "rev-parse", "HEAD"], CommandResult((), 0, commit + "\n", "")),
             (["docker"], docker),
         ]
     )
@@ -904,6 +966,52 @@ def test_rollback_without_previous_refused(tmp_path: Path) -> None:
     result = rollback_service(root, "file-mcp", runner=_ok(), clock=lambda: CLOCK)
     assert result.code == 3
     assert result.error["id"] == "no_previous_version"
+
+
+def test_upgrade_records_new_version_in_lock(tmp_path: Path) -> None:
+    """A regular (non-ejected) upgrade must stamp the *new* version, ref, commit and
+    manifest digest on the lock entry, not just move the old ones into ``previous``."""
+    root = _install(tmp_path)
+    lock_path = root / "services.lock.yaml"
+    before = load_lock(lock_path)["services"][0]
+    assert before["version"] == "1.0.0"
+    initial_manifest_sha256 = before["manifest_sha256"]
+
+    _prepare_upgrade(root, version="1.1.0", ref="v1.1.0")
+    result = _upgrade(
+        root,
+        runner=_apply_runner_to(root, to_version="1.1.0", commit="b" * 40),
+        sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_UPGRADE": "1.1.0"},
+    )
+    assert result.code == 0, result.error
+    first = load_lock(lock_path)["services"][0]
+    assert first["version"] == "1.1.0"
+    assert first["ref"] == "v1.1.0"
+    assert first["commit"] == "b" * 40
+    assert first["manifest_sha256"] != initial_manifest_sha256
+    assert first["previous"]["version"] == "1.0.0"
+    assert first["previous"]["ref"] == "v1.0.0"
+    assert first["previous"]["manifest_sha256"] == initial_manifest_sha256
+
+    _prepare_upgrade(root, version="1.2.0", ref="v1.2.0")
+    result = _upgrade(
+        root,
+        runner=_apply_runner_to(root, to_version="1.2.0", commit="c" * 40),
+        sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_UPGRADE": "1.2.0"},
+    )
+    assert result.code == 0, result.error
+    second = load_lock(lock_path)["services"][0]
+    assert second["version"] == "1.2.0"
+    assert second["ref"] == "v1.2.0"
+    assert second["commit"] == "c" * 40
+    assert second["manifest_sha256"] != first["manifest_sha256"]
+    assert second["previous"]["version"] == "1.1.0"
+
+    rolled_back = rollback_service(root, "file-mcp", runner=_ok(), clock=lambda: CLOCK)
+    assert rolled_back.code == 0, rolled_back.error
+    restored = load_lock(lock_path)["services"][0]
+    assert restored["version"] == "1.1.0"
+    assert restored["previous"] is None
 
 
 def test_eject_marks_ejected_and_apply_skips_fragment(tmp_path: Path) -> None:
