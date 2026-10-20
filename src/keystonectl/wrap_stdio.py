@@ -704,7 +704,7 @@ def _obtain_snapshot(
                 }
             ]
         )
-    args = _docker_args(directory, image)
+    args = _docker_args(directory, image, str(document["name"]))
     try:
         completed = _invoke(runner, args)
     except FileNotFoundError as exc:
@@ -759,8 +759,9 @@ def _invoke(runner: _Runner | Any, args: list[str]) -> Any:
     return runner(args)
 
 
-def _docker_args(directory: Path, image: str) -> list[str]:
+def _docker_args(directory: Path, image: str, name: str) -> list[str]:
     mounted = directory.resolve()
+    container_dir = f"/opt/box/packages/{name}"
     return [
         "docker",
         "run",
@@ -768,9 +769,9 @@ def _docker_args(directory: Path, image: str) -> list[str]:
         "--entrypoint",
         "stdio-box",
         "-v",
-        f"{mounted}:/opt/box/provider:ro",
+        f"{mounted}:{container_dir}:ro",
         "-e",
-        "BOX_PROVIDER_DIR=/opt/box/provider",
+        f"BOX_PROVIDER_DIR={container_dir}",
         image,
         "snapshot-tools",
         "--out",
