@@ -14,6 +14,7 @@ from keystonectl.answers import AnswerError, parse_sets
 from keystonectl.bundles import add_bundle_parser
 from keystonectl.check import run_check
 from keystonectl.errors import ERRORS, explain
+from keystonectl.import_snapshot import import_snapshot
 from keystonectl.lint import render_text, run_lint
 from keystonectl.lock import LockError, hold_lock, load_lock
 from keystonectl.output import Result, SecretRegistry, emit
@@ -107,6 +108,17 @@ def build_parser() -> KeystoneParser:
     wrap.add_argument("--destructive", metavar="NAMES", default=None)
     wrap.add_argument("--resolve-lock", action="store_true")
     wrap.add_argument("--force", action="store_true")
+    imported = package_sub.add_parser(
+        "import-snapshot",
+        help="Bring a tool snapshot from a running box into its local/ package",
+    )
+    _add_common(imported, version_flag=False)
+    imported.add_argument("name")
+    imported.add_argument("--id", dest="snapshot_id", metavar="N", required=True)
+    imported.add_argument("--sha256", metavar="HEX", required=True)
+    imported.add_argument("--version", dest="package_version", metavar="X.Y.Z", required=True)
+    imported.add_argument("--read-only", metavar="NAMES", default=None)
+    imported.add_argument("--destructive", metavar="NAMES", default=None)
 
     check = sub.add_parser("check", help="Check a deployment directory")
     _add_common(check)
@@ -444,6 +456,8 @@ def _command_name(args: argparse.Namespace) -> str:
 
 
 def _needs_root(args: argparse.Namespace) -> bool:
+    if args.command == "package" and args.package_command == "import-snapshot":
+        return True
     return args.command not in {None, "init", "lint", "explain", "package"}
 
 
@@ -475,6 +489,8 @@ def _lock_target(args: argparse.Namespace, root: Path | None) -> tuple[bool, Pat
     if args.command == "catalog" and args.catalog_command in {"add", "set-ref"}:
         return True, root
     if args.command == "bundle" and args.bundle_command == "install":
+        return True, root
+    if args.command == "package" and args.package_command == "import-snapshot":
         return True, root
     return False, None
 
@@ -566,6 +582,18 @@ def _dispatch(
             resolve_lock=bool(args.resolve_lock),
             work_root=root,
             environ=os.environ,
+        )
+    elif args.command == "package" and args.package_command == "import-snapshot":
+        assert root is not None
+        result = import_snapshot(
+            root,
+            args.name,
+            snapshot_id=args.snapshot_id,
+            sha256=args.sha256,
+            version=args.package_version,
+            runner=build_runner(),
+            read_only=_names(args.read_only),
+            destructive=_names(args.destructive),
         )
     elif args.command == "check":
         assert root is not None
