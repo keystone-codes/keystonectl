@@ -105,6 +105,7 @@ def build_parser() -> KeystoneParser:
     wrap.add_argument("--version", dest="package_version", metavar="X.Y.Z", default=None)
     wrap.add_argument("--read-only", metavar="NAMES", default=None)
     wrap.add_argument("--destructive", metavar="NAMES", default=None)
+    wrap.add_argument("--resolve-lock", action="store_true")
     wrap.add_argument("--force", action="store_true")
 
     check = sub.add_parser("check", help="Check a deployment directory")
@@ -562,6 +563,9 @@ def _dispatch(
             version=args.package_version,
             read_only=_names(args.read_only),
             destructive=_names(args.destructive),
+            resolve_lock=bool(args.resolve_lock),
+            work_root=root,
+            environ=os.environ,
         )
     elif args.command == "check":
         assert root is not None
