@@ -375,6 +375,9 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `lock_resolve_failed` | 3 | true | The lock file could not be built. | Read the lines in result.stderr; check that the version in server.command exists and that Docker can reach the registry, then run again. |
 | `lock_install_failed` | 3 | false | The built lock file did not install the way the box installs it. | Read the lines in result.stderr; fix server.command or server.bin in provider.yaml and run again with --resolve-lock. |
 | `manifest_unrecognized` | 3 | false | The existing manifest could not be updated in place. | Run again with --force to rewrite it. |
+| `not_local_package` | 3 | false | The package is not installed from the local/ folder. | Import a snapshot only into a package installed from local/<name>/. |
+| `snapshot_not_found` | 3 | false | The box has no stored snapshot with that id. | Ask the agent to call <ns>_creds_snapshot_tools again and pass the id it returns. |
+| `snapshot_hash_mismatch` | 3 | false | The snapshot from the box does not match its sha256. | Pass the id and sha256 from the same creds_snapshot_tools answer. Nothing was written. |
 | `catalog_invalid` | 3 | false | The catalog file is not valid. | Fix catalog.yaml and run keystonectl lint on it. |
 | `incompatible_keystone_mcp` | 3 | false | The package does not support this keystone-mcp version. | Choose a version whose range includes the running keystone-mcp, or upgrade it. |
 | `requires_missing` | 3 | false | A required package is not installed. | Install them first or use bundle install. |

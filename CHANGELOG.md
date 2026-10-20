@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `package import-snapshot` reads a box's tool snapshot with credsctl, checks its sha256, and updates the package in `local/<name>/`.
+- Errors `not_local_package`, `snapshot_not_found` and `snapshot_hash_mismatch` for `package import-snapshot`.
+- docs: Taking the tool list of a wrapped remote server under an account with `creds_snapshot_tools` and `package import-snapshot`.
 - `package wrap-stdio --stock-image` keeps the stdio-box image and mounts the package directory with `package_dir` and `BOX_PROVIDER_DIR`.
 - `package wrap-stdio --publisher`, `--homepage` and `--version` set those manifest fields, also when the manifest is updated in place.
 - `package wrap-stdio --read-only` and `--destructive` name read-only and destructive tools when the server's annotations are missing or wrong.
