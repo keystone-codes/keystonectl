@@ -119,9 +119,11 @@ Same check as `keystonectl lint`.
 
 ### keystonectl package wrap-stdio
 
-    keystonectl package wrap-stdio <provider-dir> [--image REF] [--tools-snapshot FILE | --no-discovery] [--name NAME] [--namespace NS] [--derived-image | --stock-image] [--publisher NAME] [--homepage URL] [--version X.Y.Z] [--read-only NAMES] [--destructive NAMES] [--force]
+    keystonectl package wrap-stdio <provider-dir> [--image REF] [--tools-snapshot FILE | --no-discovery] [--name NAME] [--namespace NS] [--derived-image | --stock-image] [--publisher NAME] [--homepage URL] [--version X.Y.Z] [--read-only NAMES] [--destructive NAMES] [--resolve-lock] [--force]
 
 Writes a box package into a stdio provider directory. It does not install anything and does not read credential profiles. With neither `--tools-snapshot` nor `--no-discovery`, it runs `snapshot-tools` in the stdio-box image and writes `tools.snapshot.json`. `--no-discovery` lists only the `creds_*` tools, writes an empty `tools.snapshot.json` when there is none, and warns `tools_snapshot_missing`. The `creds_*` tools come from `stdio-box box-tools` in the image, or from a built-in list when the image has no such subcommand; `result.box_tools_source` is `image` or `fallback`. An existing manifest is updated in place (`mcp.tools`, `mcp.critical`, the `BOX_COMMAND` default, and `version`, `publisher`, `homepage` when their flags are given) unless `--force` rewrites it. `--derived-image` also writes a two-line `Dockerfile`. `--stock-image` keeps the stdio-box image and mounts the package directory into it with `package_dir`; on an existing manifest it adds `package_dir` and `BOX_PROVIDER_DIR` when they are missing. `--read-only` and `--destructive` take comma-separated published tool names and replace the server's annotations for the reader role and `mcp.critical`. A bad `--version`, `--publisher` or `--homepage`, or `--stock-image` with `--derived-image`, is `usage`; an unknown tool name, or one name in both `--read-only` and `--destructive`, is `provider_invalid`.
+
+`--resolve-lock` builds the lock file again even when one exists. It copies the provider directory into `.keystonectl/tmp` of the deployment (or the system temporary directory when there is none), runs `npm install --package-lock-only --ignore-scripts --no-audit --no-fund` or `uv pip compile --universal --generate-hashes -o requirements.txt requirements.in` there with `docker run --user <your uid>:<gid> --entrypoint npm|uv <image>`, then `stdio-box install` in the same image on the same copy. Only after that install passes are `package.json` and `package-lock.json`, or `requirements.txt` and `requirements.in`, written into the provider directory with mode 0644. `provider.yaml` is checked first, then the lock is built, then the tools snapshot and the manifest are written. `BOX_NPM_REGISTRY` and `BOX_PIP_INDEX_URL` from the environment reach npm as `npm_config_registry` and uv as `UV_INDEX_URL`; a value that does not start with `https://` is `usage`. No npm or uv in the image is `lock_tool_missing`; a failed build (no such version, no network) is `lock_resolve_failed` with the last lines in `result.stderr`; a lock that does not install is `lock_install_failed`. On any of these the provider directory is unchanged. `result.lock` is `{"resolved": true|false, "file": <lock file>}`.
 
 The default `--image` is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`).
 
@@ -146,6 +148,7 @@ The default `--image` is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/key
     "tools": 13,
     "discovery": "file",
     "box_tools_source": "fallback",
+    "lock": {"resolved": false, "file": "requirements.txt"},
     "warnings": []
   }
 }
@@ -938,6 +941,9 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | layout_invalid | 3 | false | Run keystonectl init --adopt <root> and start compose with both files: docker compose -f docker-compose.yml -f docker-compose.packages.yml. |
 | layout_unsupported | 3 | false | layout_version must be 1. |
 | lock_corrupt | 3 | false | Restore services.lock.yaml.bak or run keystonectl init again on a copy. |
+| lock_install_failed | 3 | false | Read the lines in result.stderr; fix server.command or server.bin in provider.yaml and run again with --resolve-lock. |
+| lock_resolve_failed | 3 | true | Read the lines in result.stderr; check that the version in server.command exists and that Docker can reach the registry, then run again. |
+| lock_tool_missing | 3 | false | Pass --image with a stdio-box image that has npm and uv, or commit the lock file and run without --resolve-lock. |
 | manifest_invalid | 3 | false | Fix the problems listed in result.problems and run keystonectl lint. |
 | manifest_unrecognized | 3 | false | Run again with --force to rewrite it. |
 | namespace_change_unsupported | 3 | false | Run keystonectl service remove, then install the service again. |
