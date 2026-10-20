@@ -35,6 +35,8 @@ _UV_ARGS = [
     "compile",
     "--universal",
     "--generate-hashes",
+    "--python-version",
+    "3.12",
     "-o",
     "requirements.txt",
     "requirements.in",

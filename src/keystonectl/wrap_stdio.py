@@ -43,7 +43,9 @@ _WORK_DIR = "/work"
 _LOCK_ENV = ("HOME=/tmp/h", "npm_config_cache=/tmp/npm", "UV_CACHE_DIR=/tmp/uv")
 # Mirror settings of the box, and the names npm and uv read them under.
 _MIRRORS = (("BOX_NPM_REGISTRY", "npm_config_registry"), ("BOX_PIP_INDEX_URL", "UV_INDEX_URL"))
-STOCK_PROVIDER_DIR = "/opt/box/provider"
+# Where --stock-image wrote the package before 0.3.0. stdio-box needs the folder named after
+# the provider, so an update in place moves this path to ``stock_provider_dir(name)``.
+_OLD_STOCK_PROVIDER_DIR = "/opt/box/provider"
 _STDERR_TAIL = 20
 
 _PACKAGE_NAME_RE = re.compile(r"^(?!.*--)[a-z][a-z0-9-]{1,38}[a-z0-9]$")
@@ -267,6 +269,7 @@ def run_wrap_stdio(
                 critical=critical,
                 command=command_text,
                 stock_image=stock_image,
+                provider=str(document["name"]),
                 publisher=publisher,
                 homepage=homepage,
                 version=version,
@@ -969,6 +972,8 @@ def _resolve_lock(
             "compile",
             "--universal",
             "--generate-hashes",
+            "--python-version",
+            "3.12",
             "-o",
             "requirements.txt",
             "requirements.in",
@@ -1330,7 +1335,7 @@ def _render_manifest(
         ]
     )
     if stock_image:
-        lines.extend(_package_dir_lines("    "))
+        lines.extend(_package_dir_lines("    ", provider_name))
     lines.extend(
         [
             "    env:",
@@ -1346,7 +1351,7 @@ def _render_manifest(
         ]
     )
     if stock_image:
-        lines.extend(_provider_dir_env_lines("      "))
+        lines.extend(_provider_dir_env_lines("      ", provider_name))
     lines.extend(
         [
             "    secrets:",
@@ -1374,18 +1379,23 @@ def _render_manifest(
     return "\n".join(lines)
 
 
-def _package_dir_lines(indent: str) -> list[str]:
+def stock_provider_dir(provider: str) -> str:
+    """Where ``--stock-image`` mounts the package: stdio-box wants the folder named ``provider``."""
+    return f"/opt/box/packages/{provider}"
+
+
+def _package_dir_lines(indent: str, provider: str) -> list[str]:
     return [
         f"{indent}package_dir:",
         f'{indent}  from: "."',
-        f"{indent}  path: {STOCK_PROVIDER_DIR}",
+        f"{indent}  path: {stock_provider_dir(provider)}",
     ]
 
 
-def _provider_dir_env_lines(indent: str) -> list[str]:
+def _provider_dir_env_lines(indent: str, provider: str) -> list[str]:
     return [
         f"{indent}- name: BOX_PROVIDER_DIR",
-        f"{indent}  default: {json.dumps(STOCK_PROVIDER_DIR)}",
+        f"{indent}  default: {json.dumps(stock_provider_dir(provider))}",
         (
             f"{indent}  description: "
             '"Package files mounted read-only: provider.yaml, the lock and tools.snapshot.json."'
@@ -1466,13 +1476,14 @@ def _update_manifest_text(
     critical: list[str],
     command: str,
     stock_image: bool = False,
+    provider: str = "",
     publisher: str | None = None,
     homepage: str | None = None,
     version: str | None = None,
 ) -> str:
     lines = text.splitlines(keepends=True)
     if stock_image:
-        lines = _ensure_stock_image(lines)
+        lines = _ensure_stock_image(lines, provider)
     lines = _replace_named_list(lines, "critical", critical)
     lines = _replace_named_list(lines, "tools", tools)
     lines = _replace_command("".join(lines), command).splitlines(keepends=True)
@@ -1550,8 +1561,12 @@ def _insert(lines: list[str], at: int, new: list[str]) -> list[str]:
     return [*head, *(item + newline for item in new), *lines[at:]]
 
 
-def _ensure_stock_image(lines: list[str]) -> list[str]:
-    """Add ``package_dir`` and ``BOX_PROVIDER_DIR`` to ``containers.mcp`` when they are missing."""
+def _ensure_stock_image(lines: list[str], provider: str) -> list[str]:
+    """Add ``package_dir`` and ``BOX_PROVIDER_DIR`` to ``containers.mcp`` when they are missing.
+
+    Where either still names the old ``/opt/box/provider``, it is moved to the folder named
+    after the provider. Any other path is the author's and stays.
+    """
     try:
         document = yaml.safe_load("".join(lines))
     except yaml.YAMLError as exc:
@@ -1570,25 +1585,35 @@ def _ensure_stock_image(lines: list[str]) -> list[str]:
         raise _Unrecognized("containers.mcp")
     indent = " " * _indent_of(lines[first])
 
+    target = stock_provider_dir(provider)
+    package_dir = container.get("package_dir")
     if "package_dir" not in container:
         env_key = _child_key(lines, role + 1, role_end, "env")
         at = role_end if env_key is None else env_key
-        lines = _insert(lines, at, _package_dir_lines(indent))
+        lines = _insert(lines, at, _package_dir_lines(indent, provider))
         role_end = _block_end(lines, role)
+    elif isinstance(package_dir, dict) and package_dir.get("path") == _OLD_STOCK_PROVIDER_DIR:
+        lines = _move_package_dir_path(lines, role, role_end, target)
 
     env = container.get("env")
-    names = (
-        {item.get("name") for item in env if isinstance(item, dict)}
-        if isinstance(env, list)
-        else set()
-    )
+    items = [item for item in env if isinstance(item, dict)] if isinstance(env, list) else []
+    names = {item.get("name") for item in items}
     if "BOX_PROVIDER_DIR" in names:
+        if any(
+            item.get("name") == "BOX_PROVIDER_DIR"
+            and item.get("default") == _OLD_STOCK_PROVIDER_DIR
+            for item in items
+        ):
+            moved = _replace_env_default("".join(lines), "BOX_PROVIDER_DIR", json.dumps(target))
+            lines = moved.splitlines(keepends=True)
         return lines
     env_key = _child_key(lines, role + 1, role_end, "env")
     if env_key is None:
         if env is not None:
             raise _Unrecognized("containers.mcp.env")
-        return _insert(lines, role_end, [f"{indent}env:", *_provider_dir_env_lines(indent + "  ")])
+        return _insert(
+            lines, role_end, [f"{indent}env:", *_provider_dir_env_lines(indent + "  ", provider)]
+        )
     if _key_has_inline_value(lines[env_key]):
         raise _Unrecognized("containers.mcp.env")
     env_end = _block_end(lines, env_key)
@@ -1597,7 +1622,32 @@ def _ensure_stock_image(lines: list[str]) -> list[str]:
         None,
     )
     item_indent = indent + "  " if item is None else " " * _indent_of(lines[item])
-    return _insert(lines, env_end, _provider_dir_env_lines(item_indent))
+    return _insert(lines, env_end, _provider_dir_env_lines(item_indent, provider))
+
+
+def _move_package_dir_path(lines: list[str], role: int, role_end: int, target: str) -> list[str]:
+    """Point ``package_dir.path`` at ``target``, in block or flow form, keeping comments."""
+    key = _child_key(lines, role + 1, role_end, "package_dir")
+    if key is None:
+        raise _Unrecognized("containers.mcp.package_dir")
+    lines = list(lines)
+    line = lines[key]
+    if _key_has_inline_value(line):
+        old = re.escape(_OLD_STOCK_PROVIDER_DIR)
+        pattern = rf"(\bpath\s*:\s*)(\"{old}\"|'{old}'|{old})(?=\s*[,}}])"
+        moved, count = re.subn(pattern, lambda match: match.group(1) + target, line)
+        if count != 1:
+            raise _Unrecognized("containers.mcp.package_dir")
+        lines[key] = moved
+        return lines
+    path = _child_key(lines, key + 1, _block_end(lines, key), "path")
+    if path is None:
+        raise _Unrecognized("containers.mcp.package_dir.path")
+    current = lines[path]
+    ending = "\r\n" if current.endswith("\r\n") else ("\n" if current.endswith("\n") else "")
+    head, _sep, rest = current[: len(current) - len(ending)].partition(":")
+    lines[path] = f"{head}: {target}{_trailing_comment(rest.strip())}{ending}"
+    return lines
 
 
 def _set_top_level(
@@ -1700,13 +1750,17 @@ def _mapping_key(line: str) -> str | None:
 
 
 def _replace_command(text: str, command: str) -> str:
+    return _replace_env_default(text, "BOX_COMMAND", json.dumps(command))
+
+
+def _replace_env_default(text: str, name: str, quoted: str) -> str:
+    """Swap the ``default`` of the env item ``name`` for ``quoted``, keeping its comment."""
     lines = text.splitlines(keepends=True)
-    quoted = json.dumps(command)
     for index, line in enumerate(lines):
-        if "BOX_COMMAND" not in line:
+        if name not in line:
             continue
         if re.search(r"default\s*:", line):
-            lines[index] = _swap_default(line, quoted)
+            lines[index] = _swap_default(line, quoted, name)
             return "".join(lines)
         base = line.rstrip("\r\n")
         base_indent = len(base) - len(base.lstrip(" "))
@@ -1718,13 +1772,13 @@ def _replace_command(text: str, command: str) -> str:
             if indent <= base_indent:
                 break
             if re.match(r"\s*default\s*:", raw):
-                lines[cursor] = _swap_default(lines[cursor], quoted)
+                lines[cursor] = _swap_default(lines[cursor], quoted, name)
                 return "".join(lines)
-        raise _Unrecognized("BOX_COMMAND")
-    raise _Unrecognized("BOX_COMMAND")
+        raise _Unrecognized(name)
+    raise _Unrecognized(name)
 
 
-def _swap_default(line: str, quoted: str) -> str:
+def _swap_default(line: str, quoted: str, name: str = "BOX_COMMAND") -> str:
     ending = ""
     body = line
     if body.endswith("\r\n"):
@@ -1738,7 +1792,7 @@ def _swap_default(line: str, quoted: str) -> str:
         return f"{match.group(1)}{quoted}{_trailing_comment(match.group(2))}{ending}"
     flow = re.search(r"(default\s*:\s*)(\"(?:\\.|[^\"\\])*\"|'(?:[^']*)'|\S+)", body)
     if flow is None:
-        raise _Unrecognized("BOX_COMMAND")
+        raise _Unrecognized(name)
     return body[: flow.start(2)] + quoted + body[flow.end(2) :] + ending
 
 
