@@ -3,7 +3,7 @@
   "code": 0,
   "command": "service add-remote",
   "target": "billing",
-  "summary": "Connected billing. Network keystone-mcp-upstreams; the url must answer from inside that network. The service must check the bearer and X-Keystone-Identity. aud = billing.",
+  "summary": "Connected billing. Network keystone-mcp-upstreams; the url must answer from inside that network. No bearer or identity secret was issued. Any container on the services network can call this service as anyone.",
   "actions": [],
   "changes": 2,
   "missing": [],
