@@ -32,6 +32,7 @@ _SCENARIOS = {
     "atlassian-profiles",
     "gateway-prerequisite",
     "add-remote-no-auth",
+    "wrap-remote-server",
 }
 
 

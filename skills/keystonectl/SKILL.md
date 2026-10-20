@@ -1,6 +1,6 @@
 ---
 name: keystonectl
-description: Install, upgrade, remove or check services behind Keystone-MCP from a service catalog (for example file-mcp with S3 or MinIO storage, or a service that needs Postgres) on the host where Keystone-MCP runs. Use when asked to add a service or a set of tools to Keystone, connect S3 or Postgres, publish a service on its own domain with a certificate, check why a service does not show up, detach a service so the operator can run it their own way, or put a third-party MCP server such as Jira, Confluence or Notion behind Keystone with per-person, per-service or per-role accounts. This skill works on a gateway that is already installed and that someone has already signed into through the sign-in provider. To install the gateway itself, use the keystone-gateway-bootstrap skill.
+description: Install, upgrade, remove or check services behind Keystone-MCP from a service catalog (for example file-mcp with S3 or MinIO storage, or a service that needs Postgres) on the host where Keystone-MCP runs. Use when asked to add a service or a set of tools to Keystone, connect S3 or Postgres, publish a service on its own domain with a certificate, check why a service does not show up, detach a service so the operator can run it their own way, or put a third-party MCP server such as Jira, Confluence or Notion behind Keystone with per-person, per-service or per-role accounts, including a remote HTTP MCP server wrapped in a box. This skill works on a gateway that is already installed and that someone has already signed into through the sign-in provider. To install the gateway itself, use the keystone-gateway-bootstrap skill.
 ---
 
 # Install services with keystonectl
@@ -198,7 +198,7 @@ keystonectl --root /srv/keystone service add-remote billing --url https://billin
 
 The result includes a path to a mode 600 file for the team that runs the service. Do not read that file and do not retell its contents.
 
-`--no-auth` only fits a server that does not check the bearer token or `X-Keystone-Identity`. Before you pass it, name the cost: that server has one shared account for every caller, and any container on the services network can call it as anyone. Then wait for an explicit "yes" to this exact action, in this chat (rule 5). Pass `--no-auth`, then repeat the warning `remote_without_identity` in your summary. If the operator needs separate accounts per caller, say that such a server can be wrapped in a box instead; a later section covers that.
+`--no-auth` only fits a server that does not check the bearer token or `X-Keystone-Identity`. Before you pass it, name the cost: that server has one shared account for every caller, and any container on the services network can call it as anyone. Then wait for an explicit "yes" to this exact action, in this chat (rule 5). Pass `--no-auth`, then repeat the warning `remote_without_identity` in your summary. If the operator needs separate accounts per caller, say that such a server can be wrapped in a box instead; see Wrap a third-party HTTP server.
 
 ## Operator's own changes
 
@@ -278,7 +278,7 @@ Retell `problems` inside each item of `result.services`. They can include `conta
 
 ## Rules
 
-1. **Only keystonectl.** Do not run `docker`, `nginx`, `certbot`, `systemctl`, `psql`, or `mc`. Do not edit files. Do not read `.env`, `packages/*.env`, `services.lock.yaml`, or secret files. The exception is the operator's own terminal command in rule 2. They run it. You do not. An SSH wrapper the operator gave you is allowed.
+1. **Only keystonectl.** Do not run `docker`, `nginx`, `certbot`, `systemctl`, `psql`, or `mc`. Do not edit files. The one exception is `provider.yaml` in `<root>/local/<name>/` when you wrap a remote server (Wrap a third-party HTTP server). Do not read `.env`, `packages/*.env`, `services.lock.yaml`, or secret files. The exception is the operator's own terminal command in rule 2. They run it. You do not. An SSH wrapper the operator gave you is allowed.
 2. **Secrets never travel in the chat.** External S3 keys, an external Postgres password or connection string, and any `missing` item with `secret: true`: ask the operator to create a mode 600 file on the host and send only the path. Give them this command for their terminal. Do not run it.
 
 ```
@@ -289,7 +289,7 @@ install -m 600 /dev/null /root/keystone-secrets/pg-url && nano /root/keystone-se
 Pass the path in a `…_FILE` variable. Do not read the file and do not print it. If the operator pastes a secret anyway, do not repeat it, do not use it, and tell them to rotate that key or password.
 3. Never pass a secret as a command argument or as a variable value. Only a path, and only in a name that ends with `_FILE`.
 4. **Do not touch policy.** Do not edit the policy file and do not call `policy_*`. Hand the recommended rows to the policy skill (Policy).
-5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `rotate-secret`, `catalog add`, `catalog set-ref`, `init --adopt`, `--defer-public`, `--no-auth`, `TAKEOVER=yes`, and `DNS=skip`. Set `CONFIRM_*` only after they said yes to that exact action in this chat; see [Confirmations](https://github.com/keystone-codes/keystonectl/blob/main/docs/lifecycle.md#confirmations). If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
+5. **Ask the operator before** `remove`, `upgrade`, `rollback`, `eject`, `adopt`, `rotate-secret`, `catalog add`, `catalog set-ref`, `init --adopt`, `package wrap-stdio --resolve-lock`, `package import-snapshot`, `--defer-public`, `--no-auth`, `TAKEOVER=yes`, and `DNS=skip`. Set `CONFIRM_*` only after they said yes to that exact action in this chat; see [Confirmations](https://github.com/keystone-codes/keystonectl/blob/main/docs/lifecycle.md#confirmations). If apply fails after a takeover, tell the operator the site was enabled again. The names are `result.public.restored_sites`.
 6. **Override and eject only when the operator asks**, after you have explained what upgrade will do. The `fragment_modified` stop is the exception in Operator's own changes.
 7. **Do not retry blindly.** `retryable: false`: do not retry. `retryable: true`: retry only after you have explained and the operator agrees (or says the DNS record is fixed). For `busy`, wait one minute and retry once.
 8. **Do not invent answers.** If there is no `default`, ask. Do not install packages the operator did not ask for, except packages a bundle pulls in through `requires`, and a resource provider they chose with `catalog`. Say that you are installing those.
@@ -346,6 +346,79 @@ docker compose ... exec -T <service> credsctl profile import <ns>/<name> --from-
 <!-- operator-command -->
 docker compose ... exec -T <service> credsctl bind <subject> <ns>/<name> --position N
 ```
+
+## Wrap a third-party HTTP server
+
+Use this for a remote MCP server that answers over HTTP and does not check the gateway bearer or `X-Keystone-Identity`. The box runs `mcp-remote` as its stdio server and forwards each call with the caller's own token.
+
+1. **Choose.** Name both ways and their cost. The operator decides.
+   - **As is.** `service add-remote --no-auth` (Connect a running service). One account for every caller, and only the network protects it.
+   - **Wrapped in a box.** Each person, service, or role has its own account. The box needs a domain for its form, and one person enters their own token there.
+2. **Plan from the README.** Read the server's README and documentation. Write down:
+   - the MCP address;
+   - how the server knows the user;
+   - the header name and its scheme (for example `Authorization: Bearer`);
+   - where a person gets the token;
+   - the tools, and which of them only read and which are dangerous;
+   - one harmless tool that proves the account works (for example `whoami`).
+3. **Stop** when:
+   - the server accepts a sign-in only through OAuth in a browser;
+   - the token goes in the URL (`mcp-remote` puts variables only into headers);
+   - `provider.yaml` cannot express what the server needs.
+
+   Say what is missing and offer "as is". Do not work around it with a shell command or extra arguments. If the server has no harmless tool for the check, ask the operator which tool to use.
+4. **Where you write.** Only `<root>/local/<name>/provider.yaml`. The commands write the lock file, the manifest, the snapshot, and the policy example. Rule 1 still holds for everything else: no `docker`, no `.env`, no other files. Write the bridge template, with `normalize: snake`:
+
+```yaml
+schema_version: 1
+name: tracker
+title: Example Tracker
+server:
+  command: 'npx -y mcp-remote@0.14.3 https://mcp.example.com/mcp --header "Authorization:Bearer ${TRACKER_TOKEN}"'
+  bin: mcp-remote
+  lock: package-lock.json
+fields:
+  - name: TRACKER_TOKEN
+    type: string
+    secret: true
+    hint: "Personal API token from Settings, API tokens on example.com"
+    to: env
+variants:
+  - name: token
+    fields: [TRACKER_TOKEN]
+    checks:
+      - tool:
+          name: whoami
+tools:
+  normalize: snake
+discovery:
+  mode: manual
+```
+
+   Use the server's own name, address, header, field, and check tool instead of `tracker`. `${TRACKER_TOKEN}` is a reference, not a value. The token itself is entered only on the form.
+5. **Build.** Ask first (rule 5), then:
+
+```
+keystonectl --root /srv/keystone package wrap-stdio /srv/keystone/local/tracker --stock-image --resolve-lock --no-discovery --version 1.0.0 --json
+```
+
+   On `provider_invalid`, read `result.problems`, fix `provider.yaml`, and run the command again; the changed file is a new answer, not a blind retry. `lock_resolve_failed` is retryable: explain it and ask before you run it again. `tools_snapshot_missing` is expected here: the package has only the `creds_*` tools for now. If `result.box_tools_source` is `fallback`, the image has no `creds_snapshot_tools` and step 9 will not work. Tell the operator.
+6. **Install** `local/<name>` with Install flow (`service plan`, then `service apply`). If the wildcard record `*.boxes.<domain>` was created when the gateway was set up, the form domain is `<name>.boxes.<domain>`. Otherwise ask for a domain, or use `--defer-public` after the operator agrees.
+7. **Roles.** Pass the rows from `recommended_policy` as in Policy. Give `<ns>_box_admin` only to administrators. At this point the package has only `creds_*` tools.
+8. **First account: your operator's own.** Create a profile for the operator (or whoever builds the wrapper) with `<ns>_creds_profile_create` and its form, then bind it as `user:<their email>` after a yes. Other accounts follow the steps in Boxes and credential profiles.
+9. **Tool list.**
+   - Call `<ns>_creds_snapshot_tools` as the operator. It answers `id`, `sha256`, `tools`, `profile`, `variant`, and `variant_filters_tools`.
+   - If `variant_filters_tools` is `true`, say that the list was taken under a narrower account and will be that narrow for everyone.
+   - Ask first (rule 5), then import the snapshot with the next version. Pass `--read-only` and `--destructive` with what you learned from the README, as published names (after `normalize: snake`):
+
+```
+keystonectl --root /srv/keystone package import-snapshot tracker --id 1 --sha256 96d5c22ed59c2a346e70bf33096ed98c23f0a02c148c6edffa5004681534bf8b --version 1.0.1 --read-only whoami,get_issue,search_issues --destructive delete_issue --json
+```
+
+   - Retell `result.tools_added`.
+   - Run `service upgrade <name>` as in Upgrade. `CONFIRM_UPGRADE` is the new version (`1.0.1`), set only after the operator said yes.
+10. **Roles for the new tools.** Pass the new `recommended_policy` to the policy skill again.
+11. **Check.** Two different people, each with their own account, call the same tool. `<ns>_creds_whoami` shows each of them their own binding. Only then is the wrapper ready.
 
 ## Errors
 
@@ -738,3 +811,55 @@ keystonectl --root /srv/keystone service add-remote billing --url https://billin
 ```
 
 Agent: billing is connected without authentication. `remote_without_identity`: this remote service has no bearer or identity secret, so anyone on the services network can call it as anyone else. If separate accounts are needed, the service can later be wrapped in a box.
+
+Operator: Put the Example Tracker MCP server behind Keystone, https://mcp.example.com/mcp. Everyone should work under their own account.
+
+```
+<!-- scenario: wrap-remote-server -->
+Agent: The Example Tracker server does not check the gateway bearer or X-Keystone-Identity. There are two ways. As is: add-remote --no-auth, one account for every caller, and only the network protects it. Wrapped in a box: each person, service, or role has its own account; the box needs a domain for its form, and one person enters their own token there. Which way?
+Operator: Wrap it.
+Agent: From the README: the MCP address is https://mcp.example.com/mcp. The server knows the user by a personal API token in the header Authorization: Bearer. People create the token under Settings, API tokens. Tools: whoami, get-issue and search-issues only read; create-issue changes data; delete-issue is dangerous. whoami is harmless and proves the account works. Sign-in is not browser-only and the token does not go in the URL, so a box fits.
+Agent: I will write only /srv/keystone/local/tracker/provider.yaml, from the bridge template with normalize: snake. Then keystonectl builds the lock file for mcp-remote in the stdio-box image and writes the package. Build it?
+Operator: Yes.
+keystonectl --root /srv/keystone package wrap-stdio /srv/keystone/local/tracker --stock-image --resolve-lock --no-discovery --version 1.0.0 --json
+# code 0, tools_snapshot_missing, box_tools_source image
+keystonectl --root /srv/keystone service plan local/tracker --json
+# code 2, missing: KEYSTONE_SETUP_SERVICE_TRACKER_DOMAIN
+Agent: The wildcard record *.boxes.example.com was created when the gateway was set up, so the form domain is tracker.boxes.example.com.
+KEYSTONE_SETUP_SERVICE_TRACKER_DOMAIN=tracker.boxes.example.com \
+keystonectl --root /srv/keystone service apply local/tracker --json
+# code 2, missing: KEYSTONE_SETUP_SERVICE_TRACKER_TLS
+Agent: Certificate for tracker.boxes.example.com: a free Let's Encrypt certificate, your own files, or you run the proxy?
+Operator: Let's Encrypt. Reminders to ops@example.com.
+KEYSTONE_SETUP_SERVICE_TRACKER_DOMAIN=tracker.boxes.example.com \
+KEYSTONE_SETUP_SERVICE_TRACKER_TLS=certbot \
+KEYSTONE_SETUP_TLS_EMAIL=ops@example.com \
+keystonectl --root /srv/keystone service apply local/tracker --json
+# code 0
+Agent: tracker 1.0.0 is installed from local/tracker. Namespace tracker. The form is at https://tracker.boxes.example.com. The package has only tracker_creds_* tools for now. The box does not check roles. Whoever gets tracker_creds_* manages every account in this box. Recommended rows from package tracker, one file policy.example.yaml: tracker_reader, tracker_writer, tracker_box_admin. Give tracker_box_admin to administrators only. The policy skill shows the change. I do not call policy tools.
+Agent: The first account is yours. I will create profile ops, variant token. It has no fields besides the token. No token in chat.
+Operator: Yes.
+Agent: tracker_creds_profile_create {"name": "ops", "variant": "token", "fields": {}}
+Agent: Open this one-time link and enter your token. It works once and lasts 15 minutes. The link is form_url from the answer, on https://tracker.boxes.example.com.
+Agent: I will bind user:ops@example.com to tracker/ops, so your calls use your own account.
+Operator: Yes.
+Agent: tracker_creds_bind {"subject": "user:ops@example.com", "profile": "tracker/ops"}
+Operator: The form is done.
+Agent: tracker_creds_check {"profile": "tracker/ops"}
+Agent: Identity is Ops. last_check.ok is true: whoami answered with your token.
+Agent: tracker_creds_snapshot_tools
+Agent: The box took the tool list under tracker/ops, variant token: snapshot id 1, variant_filters_tools false, so the list is not narrowed. I will import it as tracker 1.0.1. Read-only: whoami, get_issue, search_issues. Destructive: delete_issue. Import it?
+Operator: Yes.
+keystonectl --root /srv/keystone package import-snapshot tracker --id 1 --sha256 96d5c22ed59c2a346e70bf33096ed98c23f0a02c148c6edffa5004681534bf8b --version 1.0.1 --read-only whoami,get_issue,search_issues --destructive delete_issue --json
+# code 0, tools_added: create_issue, delete_issue, get_issue, search_issues, whoami
+keystonectl --root /srv/keystone service upgrade tracker --json
+# code 2, missing: KEYSTONE_SETUP_SERVICE_TRACKER_CONFIRM_UPGRADE
+Agent: Upgrade tracker 1.0.0 to 1.0.1 adds whoami, get_issue, search_issues, create_issue, delete_issue. No tools are removed, and no policy rows stop matching. Upgrade?
+Operator: Yes.
+KEYSTONE_SETUP_SERVICE_TRACKER_CONFIRM_UPGRADE=1.0.1 \
+keystonectl --root /srv/keystone service upgrade tracker --json
+# code 0
+<!-- /scenario -->
+```
+
+Agent: tracker 1.0.1 is installed with the server's tools. New recommended rows from package tracker 1.0.1: [{"role": "tracker_reader", "allow": ["tracker_whoami", "tracker_get_issue", "tracker_search_issues", "tracker_creds_whoami", "tracker_creds_providers"]}, {"role": "tracker_writer", "allow": ["tracker_whoami", "tracker_get_issue", "tracker_search_issues", "tracker_create_issue", "tracker_delete_issue", "tracker_creds_whoami", "tracker_creds_providers"]}, {"role": "tracker_box_admin", "allow": ["tracker_creds_*"]}]. Critical tools: tracker_delete_issue, tracker_creds_profile_create, tracker_creds_profile_rotate, tracker_creds_profile_delete, tracker_creds_bind, tracker_creds_unbind. The wrapper is ready when two people, each with their own account, have called the same tool and tracker_creds_whoami shows each of them their own binding.

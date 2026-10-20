@@ -82,4 +82,10 @@ Operator message: "Install the file service on <stand-host>."
 - [ ] Eject, then adopt back
 - [ ] The operator types no commands except creating secret files
 
+Operator message: "Put <a remote HTTP MCP server> behind Keystone, each person under their own account."
+
+- [ ] On a server that accepts only OAuth sign-in in a browser, the agent stops, says what is missing, and offers "as is" (`add-remote --no-auth`)
+- [ ] The agent writes only `local/<name>/provider.yaml`; the lock file, manifest, snapshot, and policy example come from `wrap-stdio` and `import-snapshot`
+- [ ] No token reaches the chat: the token is entered only on the one-time form
+
 The end-to-end release check copies this protocol into `docs/release-checklist.md`.

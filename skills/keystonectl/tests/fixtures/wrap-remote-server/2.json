@@ -1,0 +1,74 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "service plan",
+  "target": "local/tracker",
+  "summary": "1 answer is missing",
+  "actions": [
+    {
+      "id": "resolve",
+      "title": "Resolve tracker 1.0.0",
+      "status": "unchanged"
+    },
+    {
+      "id": "fetch",
+      "title": "Copy tracker 1.0.0 from local/tracker",
+      "status": "planned"
+    },
+    {
+      "id": "validate",
+      "title": "Validate the package manifest",
+      "status": "planned"
+    },
+    {
+      "id": "compat",
+      "title": "Check keystone-mcp compatibility",
+      "status": "planned"
+    },
+    {
+      "id": "requires",
+      "title": "Check required packages",
+      "status": "planned"
+    },
+    {
+      "id": "deploy.fragment",
+      "title": "Write packages/tracker.yml",
+      "status": "planned"
+    },
+    {
+      "id": "deploy.up",
+      "title": "Start tracker",
+      "status": "planned"
+    },
+    {
+      "id": "deploy.registry",
+      "title": "Publish tracker in the upstream registry",
+      "status": "planned"
+    },
+    {
+      "id": "public.publish",
+      "title": "Publish tracker",
+      "status": "planned"
+    },
+    {
+      "id": "lock.commit",
+      "title": "Record the package in services.lock.yaml",
+      "status": "planned"
+    }
+  ],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_TRACKER_DOMAIN",
+      "question": "Public domain for tracker (lowercase, at least two labels).",
+      "kind": "text",
+      "choices": null,
+      "default": null,
+      "secret": false
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {}
+}
