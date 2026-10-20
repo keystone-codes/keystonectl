@@ -76,5 +76,5 @@ pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-m \"not integration\""
 markers = [
-    "integration: needs Docker",
+    "integration: needs Docker and the network; run with `uv run pytest -m integration`",
 ]
