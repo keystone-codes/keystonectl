@@ -8,6 +8,9 @@ uv run pytest -q
 uv run ruff check . && uv run ruff format --check .
 ```
 
+Tests marked `integration` need Docker and network access and are skipped by default; run them with
+`uv run pytest -m integration`.
+
 ## Changelog lines
 
 Add entries under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md). Released sections are
