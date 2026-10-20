@@ -30,6 +30,8 @@ _SCENARIOS = {
     "eject",
     "remove",
     "atlassian-profiles",
+    "gateway-prerequisite",
+    "add-remote-no-auth",
 }
 
 
