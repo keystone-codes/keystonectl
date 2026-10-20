@@ -5,8 +5,9 @@ not written in ``sources.yaml``. Each first-level folder ``local/<name>/`` that
 holds ``keystone-service.yaml`` is one package with one version: the one in its
 manifest.
 
-The folder is the operator's and the agent's. keystonectl reads it and never
-writes into it. A fetch reads the whole package folder under the ``package_dir``
+The folder is the operator's and the agent's. keystonectl reads it and does not
+write into it, except ``package import-snapshot``, which on request rewrites the
+tool snapshot, manifest and policy example of one package. A fetch reads the whole package folder under the ``package_dir``
 rules (plain files and folders only, no links, 900 KiB and 256 files at most),
 copies it into the package cache, and pins it by ``content_sha256``: the
 ``subtree_digest`` of the folder.

@@ -154,6 +154,39 @@ The default `--image` is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/key
 }
 ```
 
+### keystonectl package import-snapshot
+
+    keystonectl package import-snapshot <name> --id N --sha256 HEX --version X.Y.Z [--read-only NAMES] [--destructive NAMES] [--root DIR] [--json]
+
+Brings a tool snapshot taken by a running box into the box's package in `local/<name>/`. `<ns>_creds_snapshot_tools` returns the `id` and `sha256`; pass both. keystonectl runs `credsctl --json snapshot export <id>` in the package's MCP container with `docker compose exec -T` and the deployment's compose files, so the snapshot JSON never passes through the agent. It hashes the snapshot by the stdio-box rule (SHA-256 of the canonical JSON without `taken_at`) and writes nothing unless that hash equals both `--sha256` and the `sha256` credsctl reports. Then it writes `local/<name>/tools.snapshot.json` byte for byte and updates `keystone-service.yaml` and `policy.example.yaml` in place, as `package wrap-stdio --tools-snapshot` does: `mcp.tools`, `mcp.critical`, `version`, and the policy roles. `--read-only` and `--destructive` work as in `wrap-stdio`. If that update fails, for example because the snapshot was taken from another `server.command`, the three files are put back as they were and the `wrap-stdio` error is returned.
+
+It does not run `service upgrade`: `result.next` is the command to run once a person has confirmed it.
+
+A package that is not installed, or not installed from `local/`, is `not_local_package`. A `--version` that is not higher than the version in `local/<name>/keystone-service.yaml`, a `--sha256` that is not 64 hex characters, or an `--id` that is not a number, is `usage`. An id the box does not have is `snapshot_not_found`. Docker that is not running is `docker_unavailable`; any other credsctl failure, such as a container that is not running, is `service_unhealthy` with `result.stderr`.
+
+```json
+{
+  "ok": true,
+  "code": 0,
+  "command": "package import-snapshot",
+  "target": "example-remote",
+  "summary": "Imported snapshot 7 into local/example-remote, version 1.1.0. Run keystonectl service upgrade example-remote to install it.",
+  "actions": [],
+  "changes": 3,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "example-remote",
+    "version": "1.1.0",
+    "tools_added": ["delete_issue", "get_issue", "search_issues"],
+    "tools_removed": [],
+    "next": "keystonectl service upgrade example-remote"
+  }
+}
+```
+
 ### keystonectl check
 
     keystonectl check
@@ -955,6 +988,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | not_ejectable | 3 | false | Remote services are not generated. There is nothing to eject. |
 | not_ejected | 3 | false | service adopt only takes back a fragment that was ejected. |
 | not_implemented | 1 | false | No deploy step is configured for this change. Run service plan to preview it. |
+| not_local_package | 3 | false | Import a snapshot only into a package installed from local/<name>/. |
 | not_package | 3 | false | A remote service has no package; use add-remote to change its url. |
 | package_ambiguous | 2 | false | Pass the package as source/name, for example local/file-mcp. service upgrade reads the source from the lock. |
 | package_not_found | 3 | false | Check the name, or add the catalog with keystonectl catalog add. |
@@ -999,6 +1033,8 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | secret_file_unsafe | 3 | false | Use a regular file owned by you or root and run chmod 600. |
 | secret_in_argument | 1 | false | Secrets are accepted only as a path to a mode 600 file, via the environment. |
 | service_unhealthy | 3 | true | Read the container log and run the command again. |
+| snapshot_hash_mismatch | 3 | false | Pass the id and sha256 from the same creds_snapshot_tools answer. Nothing was written. |
+| snapshot_not_found | 3 | false | Ask the agent to call <ns>_creds_snapshot_tools again and pass the id it returns. |
 | source_exists | 3 | false | Pick another --name, or edit sources.yaml. |
 | source_invalid | 3 | false | Use an https://, ssh://, git@host:path, or file:// URL. http:// is refused. |
 | source_not_found | 3 | false | Run keystonectl catalog list and pass a name from that list. |

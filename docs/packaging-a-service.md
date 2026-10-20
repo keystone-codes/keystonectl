@@ -337,6 +337,21 @@ Then build the lock and write the package without asking the server:
 
 The package lists only the `creds_*` tools until a snapshot exists. After someone has entered an account, `creds_snapshot_tools` (stdio-box 0.2.0 and later) in the running box takes the remote tool list under that account; `credsctl snapshot export <id>` prints it, and `wrap-stdio --tools-snapshot <file>` turns it into the package's tools.
 
+#### The tool list under an account
+
+When the package lives in the deployment's `local/<name>/` folder and is installed from there, keystonectl takes the snapshot from the box itself:
+
+1. Someone enters their account on the box's form.
+2. The agent calls `<ns>_creds_snapshot_tools`. The box lists the remote tools under that account, stores the list, and answers with its `id` and `sha256`.
+3. The agent runs:
+
+       keystonectl package import-snapshot example-remote --id 7 --sha256 <sha256> --version 1.1.0 --json
+
+   keystonectl reads the snapshot from the box container with `credsctl --json snapshot export 7`, checks it against `--sha256`, writes `local/example-remote/tools.snapshot.json`, and updates the manifest's tools, `mcp.critical` and version, and the roles in `policy.example.yaml`. The snapshot JSON never passes through the agent. A hash that does not match writes nothing (`snapshot_hash_mismatch`).
+4. A person confirms the new version, and the agent runs the command in `result.next`, `keystonectl service upgrade example-remote`.
+
+`--version` must be higher than the version in `local/<name>/keystone-service.yaml`, because an installed local package is pinned by its content. When `creds_snapshot_tools` answers `variant_filters_tools: true`, that account sees a narrower set of tools, and the package publishes that narrower set to everyone.
+
 Limits:
 
 - A server that only accepts a sign-in in the browser (OAuth without a token you can paste) does not fit: the box has no browser.
