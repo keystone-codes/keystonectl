@@ -35,7 +35,10 @@ it by the hash of its content instead of a commit.
   `version_not_found`.
 - Rollback restores the previous version from keystonectl's own copies — the `.bak` files, the
   lock's `previous` and the `package_dir` copies — not from history. It never reads `local/`.
-- keystonectl never writes into `local/`. `init` creates the empty folder once; `remove` leaves
+- keystonectl writes into `local/` in one case only: `package import-snapshot` puts the tool
+  snapshot that a box took under a signed-in account into `local/<name>/` and rebuilds that
+  package's manifest and policy example, after it has checked the snapshot's hash. It never
+  installs or upgrades by itself. `init` creates the empty folder once; `remove` leaves
   `local/<name>/` in place.
 
 ## Consequences
