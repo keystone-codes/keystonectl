@@ -212,6 +212,27 @@ ERRORS: dict[str, ErrorSpec] = dict(
             "Run again with --force to rewrite it.",
         ),
         _e(
+            "not_local_package",
+            3,
+            False,
+            "The package is not installed from the local/ folder.",
+            "Import a snapshot only into a package installed from local/<name>/.",
+        ),
+        _e(
+            "snapshot_not_found",
+            3,
+            False,
+            "The box has no stored snapshot with that id.",
+            "Ask the agent to call <ns>_creds_snapshot_tools again and pass the id it returns.",
+        ),
+        _e(
+            "snapshot_hash_mismatch",
+            3,
+            False,
+            "The snapshot from the box does not match its sha256.",
+            "Pass the id and sha256 from the same creds_snapshot_tools answer. Nothing was written.",
+        ),
+        _e(
             "catalog_invalid",
             3,
             False,
