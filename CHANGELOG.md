@@ -43,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A failed apply re-enables the nginx sites it disabled in that run.
 - docs: `service list --json` returns lock entries, not names.
 - Skill fixtures match the real `result` of catalog list, status and apply.
+- `service upgrade` records the new version, ref, commit and manifest digest in services.lock.yaml.
 
 ## [0.1.1] - 2026-10-15
 
