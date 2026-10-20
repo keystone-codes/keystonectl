@@ -77,3 +77,11 @@ run_scenario() {
 @test "atlassian-profiles" {
   run_scenario atlassian-profiles
 }
+
+@test "gateway-prerequisite" {
+  run_scenario gateway-prerequisite
+}
+
+@test "add-remote-no-auth" {
+  run_scenario add-remote-no-auth
+}
