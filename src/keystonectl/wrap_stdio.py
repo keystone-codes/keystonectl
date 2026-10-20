@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import shutil
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +20,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 from packaging.version import InvalidVersion, Version
 
+from keystonectl.cachedir import private_subdir
 from keystonectl.errors import ERRORS, WARNINGS
 from keystonectl.generate.files import atomic_write
 from keystonectl.lint import lint_manifest
@@ -35,6 +38,11 @@ _PUBLISHER = "keystone-codes"
 _PACKAGE_VERSION = "1.0.0"
 _DISCOVERY_TIMEOUT = 600
 _BOX_TOOLS_TIMEOUT = 300
+_LOCK_TIMEOUT = 600
+_WORK_DIR = "/work"
+_LOCK_ENV = ("HOME=/tmp/h", "npm_config_cache=/tmp/npm", "UV_CACHE_DIR=/tmp/uv")
+# Mirror settings of the box, and the names npm and uv read them under.
+_MIRRORS = (("BOX_NPM_REGISTRY", "npm_config_registry"), ("BOX_PIP_INDEX_URL", "UV_INDEX_URL"))
 STOCK_PROVIDER_DIR = "/opt/box/provider"
 _STDERR_TAIL = 20
 
@@ -101,6 +109,14 @@ class _Invalid(Exception):
     problems: list[dict[str, str]]
 
 
+class _LockFailed(Exception):
+    def __init__(self, error_id: str, *, message: str | None = None, stderr: str | None = None):
+        self.error_id = error_id
+        self.message = message
+        self.stderr = stderr
+        super().__init__(error_id)
+
+
 class _Unrecognized(Exception):
     def __init__(self, path: str) -> None:
         self.path = path
@@ -131,10 +147,14 @@ def run_wrap_stdio(
     version: str | None = None,
     read_only: Sequence[str] | None = None,
     destructive: Sequence[str] | None = None,
+    resolve_lock: bool = False,
+    work_root: Path | None = None,
+    environ: Mapping[str, str] | None = None,
 ) -> Result:
     """Validate a provider directory and write its box package files."""
     command = "package wrap-stdio"
     directory = Path(provider_dir)
+    env = os.environ if environ is None else environ
     usage = _usage_problem(
         stock_image=stock_image,
         derived_image=derived_image,
@@ -142,14 +162,51 @@ def run_wrap_stdio(
         homepage=homepage,
         version=version,
     )
+    mirrors: dict[str, str] = {}
+    if usage is None and resolve_lock:
+        mirrors, usage = _mirror_settings(env)
     if usage is not None:
         return _failed(command, directory, "usage", message=usage)
     try:
-        document = _load_provider(directory)
+        document = _load_provider(directory, require_lock=not resolve_lock)
         parsed = _parse_box_command(str(document["server"]["command"]))
         package, namespace_name = _package_identity(document, name=name, namespace=namespace)
     except _Invalid as exc:
         return _failed(command, directory, "provider_invalid", problems=exc.problems)
+
+    files: list[str] = []
+    lock_name = str(document["server"]["lock"])
+    lock_state: dict[str, Any] = {"resolved": False, "file": lock_name}
+    if resolve_lock:
+        try:
+            files.extend(
+                _resolve_lock(
+                    directory,
+                    document,
+                    parsed,
+                    image=image,
+                    mirrors=mirrors,
+                    work_root=work_root,
+                    runner=runner,
+                )
+            )
+        except _LockFailed as exc:
+            if exc.error_id == "docker_unavailable":
+                return _failed(
+                    command,
+                    directory,
+                    "docker_unavailable",
+                    message="Docker is needed to build the lock file.",
+                    hint="Install Docker, or commit the lock file and run without --resolve-lock.",
+                )
+            return _failed(
+                command,
+                directory,
+                exc.error_id,
+                message=exc.message,
+                stderr=exc.stderr,
+            )
+        lock_state["resolved"] = True
 
     try:
         snapshot, discovery = _obtain_snapshot(
@@ -188,7 +245,6 @@ def run_wrap_stdio(
         spec = WARNINGS["tools_snapshot_missing"]
         warnings.append({"id": spec.id, "message": spec.title})
 
-    files: list[str] = []
     snapshot_path = directory / "tools.snapshot.json"
     if snapshot is not None:
         _write_text(snapshot_path, snapshot["text"])
@@ -290,6 +346,7 @@ def run_wrap_stdio(
                 "dir": str(directory),
                 "files": files,
                 "box_tools_source": box_tools_source,
+                "lock": lock_state,
             },
         )
     summary = f"Wrote package {package} ({len(tool_names)} tools)."
@@ -308,6 +365,7 @@ def run_wrap_stdio(
             "tools": len(tool_names),
             "discovery": discovery,
             "box_tools_source": box_tools_source,
+            "lock": lock_state,
             "warnings": warnings,
         },
     )
@@ -330,6 +388,19 @@ def _usage_problem(
     if homepage is not None and _HOMEPAGE_RE.fullmatch(homepage) is None:
         return f"--homepage {homepage!r} is not an https:// address."
     return None
+
+
+def _mirror_settings(environ: Mapping[str, str]) -> tuple[dict[str, str], str | None]:
+    """``BOX_NPM_REGISTRY`` and ``BOX_PIP_INDEX_URL`` from the environment; both https only."""
+    mirrors: dict[str, str] = {}
+    for box_name, _tool_name in _MIRRORS:
+        value = str(environ.get(box_name, "") or "").strip()
+        if not value:
+            continue
+        if not value.startswith("https://"):
+            return {}, f"{box_name} must start with https://."
+        mirrors[box_name] = value
+    return mirrors, None
 
 
 def _failed(
@@ -374,7 +445,7 @@ def _problem(path: str, message: str) -> dict[str, str]:
     return {"path": path, "message": message, "severity": "error"}
 
 
-def _load_provider(directory: Path) -> dict[str, Any]:
+def _load_provider(directory: Path, *, require_lock: bool = True) -> dict[str, Any]:
     if not directory.is_dir():
         raise _Invalid([_problem(str(directory), "provider directory does not exist")])
     path = directory / "provider.yaml"
@@ -388,7 +459,7 @@ def _load_provider(directory: Path) -> dict[str, Any]:
         raise _Invalid([_problem("provider.yaml", "document must be a mapping")])
     problems = [_schema_problem(item) for item in _validator().iter_errors(loaded)]
     if not problems:
-        problems.extend(_semantic_problems(directory, loaded))
+        problems.extend(_semantic_problems(directory, loaded, require_lock=require_lock))
     if problems:
         raise _Invalid(problems)
     return loaded
@@ -414,7 +485,9 @@ def _schema_problem(error: ValidationError) -> dict[str, str]:
     return _problem(path or "<root>", error.message)
 
 
-def _semantic_problems(directory: Path, document: dict[str, Any]) -> list[dict[str, str]]:
+def _semantic_problems(
+    directory: Path, document: dict[str, Any], *, require_lock: bool = True
+) -> list[dict[str, str]]:
     problems: list[dict[str, str]] = []
     name = document["name"]
     if name != directory.name:
@@ -430,9 +503,14 @@ def _semantic_problems(directory: Path, document: dict[str, Any]) -> list[dict[s
         problems.append(
             _problem("server.command", "package-lock.json requires a command starting with 'npx'")
         )
-    if not (directory / lock_name).is_file():
+    # ``--resolve-lock`` writes the lock, so it need not exist yet.
+    if require_lock and not (directory / lock_name).is_file():
         problems.append(_problem("server.lock", f"'{lock_name}' does not exist"))
-    if lock_name == "package-lock.json" and not (directory / "package.json").is_file():
+    if (
+        require_lock
+        and lock_name == "package-lock.json"
+        and not (directory / "package.json").is_file()
+    ):
         problems.append(_problem("server.lock", "package.json must exist beside package-lock.json"))
 
     fields = document["fields"]
@@ -811,9 +889,17 @@ def _obtain_snapshot(
     return _parse_snapshot(stdout, document), "docker"
 
 
-def _invoke(runner: _Runner | Any, args: list[str], *, timeout: float = _DISCOVERY_TIMEOUT) -> Any:
+def _invoke(
+    runner: _Runner | Any,
+    args: list[str],
+    *,
+    timeout: float = _DISCOVERY_TIMEOUT,
+    env: Mapping[str, str] | None = None,
+) -> Any:
     method = getattr(runner, "run", None)
     if callable(method):
+        if env:
+            return method(args, env=env, timeout=timeout)
         return method(args, timeout=timeout)
     return runner(args)
 
@@ -836,6 +922,163 @@ def _docker_args(directory: Path, image: str, name: str) -> list[str]:
         "--out",
         "-",
     ]
+
+
+def _resolve_lock(
+    directory: Path,
+    document: dict[str, Any],
+    parsed: _BoxCommand,
+    *,
+    image: str,
+    mirrors: Mapping[str, str],
+    work_root: Path | None,
+    runner: _Runner,
+) -> list[str]:
+    """Build the lock in a copy of the provider directory inside ``image``, install it there
+    the way the box does, and only then move it into the provider directory.
+
+    Returns the file names written into the provider directory.
+    """
+    if shutil.which("docker") is None:
+        raise _LockFailed("docker_unavailable")
+    name = str(document["name"])
+    node = str(document["server"]["lock"]) == "package-lock.json"
+    if node:
+        tool = "npm"
+        outputs = ("package.json", "package-lock.json")
+        tool_args = [
+            "install",
+            "--package-lock-only",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+        ]
+        input_name = "package.json"
+        input_text = (
+            json.dumps(
+                {"private": True, "dependencies": {parsed.package: parsed.version}}, indent=2
+            )
+            + "\n"
+        )
+        box_name = "BOX_NPM_REGISTRY"
+    else:
+        tool = "uv"
+        outputs = ("requirements.txt", "requirements.in")
+        tool_args = [
+            "pip",
+            "compile",
+            "--universal",
+            "--generate-hashes",
+            "-o",
+            "requirements.txt",
+            "requirements.in",
+        ]
+        input_name = "requirements.in"
+        input_text = f"{parsed.package}=={parsed.version}\n"
+        box_name = "BOX_PIP_INDEX_URL"
+
+    tool_name = dict(_MIRRORS)[box_name]
+    tool_mirrors = {tool_name: mirrors[box_name]} if box_name in mirrors else {}
+
+    scratch = Path(tempfile.mkdtemp(prefix="lock-", dir=_lock_tmp_base(work_root)))
+    try:
+        copy = scratch / name
+        shutil.copytree(
+            directory, copy, symlinks=True, ignore=shutil.ignore_patterns("node_modules")
+        )
+        os.chmod(copy, 0o700)
+        # Rebuilt from scratch: an old lock would be reused as preferences.
+        for stale in outputs:
+            (copy / stale).unlink(missing_ok=True)
+        _write_text(copy / input_name, input_text)
+        mounted = copy.resolve()
+
+        resolve_args = [
+            *_lock_run_prefix(tool_mirrors),
+            "-v",
+            f"{mounted}:{_WORK_DIR}",
+            "-w",
+            _WORK_DIR,
+            "--entrypoint",
+            tool,
+            image,
+            *tool_args,
+        ]
+        completed = _run_lock_step(runner, resolve_args, tool_mirrors)
+        stderr = str(getattr(completed, "stderr", "") or "")
+        returncode = getattr(completed, "returncode", 1)
+        if returncode != 0:
+            if returncode == 127 or "executable file not found" in stderr:
+                raise _LockFailed(
+                    "lock_tool_missing",
+                    message=f"The image has no {tool} to build the lock file.",
+                )
+            raise _LockFailed("lock_resolve_failed", stderr=_stderr_tail(stderr))
+        missing = [item for item in outputs if not (copy / item).is_file()]
+        if missing:
+            raise _LockFailed(
+                "lock_resolve_failed",
+                message=f"{tool} did not write {missing[0]}.",
+                stderr=_stderr_tail(stderr),
+            )
+
+        # stdio-box wants the directory name to equal the provider name.
+        provider_dir = f"{_WORK_DIR}/{name}"
+        box_mirrors = dict(mirrors)
+        install_args = [
+            *_lock_run_prefix(box_mirrors),
+            "-v",
+            f"{mounted}:{provider_dir}",
+            "-w",
+            provider_dir,
+            "--entrypoint",
+            "stdio-box",
+            image,
+            "install",
+            "--provider-dir",
+            provider_dir,
+            "--cache",
+            "/tmp/cache",
+        ]
+        installed = _run_lock_step(runner, install_args, box_mirrors)
+        if getattr(installed, "returncode", 1) != 0:
+            raise _LockFailed(
+                "lock_install_failed",
+                stderr=_stderr_tail(str(getattr(installed, "stderr", "") or "")),
+            )
+
+        for item in outputs:
+            atomic_write(directory / item, (copy / item).read_bytes(), mode=0o644)
+        return list(outputs)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _lock_tmp_base(work_root: Path | None) -> Path:
+    """``.keystonectl/tmp`` of the deployment, or the system temporary directory without one."""
+    if work_root is not None and Path(work_root).is_dir():
+        return private_subdir(Path(work_root), "tmp")
+    return Path(tempfile.gettempdir())
+
+
+def _lock_run_prefix(passed: Mapping[str, str]) -> list[str]:
+    """``docker run`` as the current user, with caches in ``/tmp``.
+
+    Mirror values travel in the environment of ``docker`` itself (``-e NAME``), not in argv.
+    """
+    args = ["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
+    for item in _LOCK_ENV:
+        args.extend(["-e", item])
+    for key in sorted(passed):
+        args.extend(["-e", key])
+    return args
+
+
+def _run_lock_step(runner: _Runner, args: list[str], env: Mapping[str, str]) -> Any:
+    try:
+        return _invoke(runner, args, timeout=_LOCK_TIMEOUT, env=env)
+    except FileNotFoundError as exc:
+        raise _LockFailed("docker_unavailable") from exc
 
 
 def _stderr_tail(text: str) -> str:

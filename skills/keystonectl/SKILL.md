@@ -370,6 +370,9 @@ Match `error.id`. Code and `retryable` are the registry values. Say the sentence
 | `manifest_invalid` | 3 | false | The package manifest is not valid. | Fix the problems listed in result.problems and run keystonectl lint. |
 | `provider_invalid` | 3 | false | The stdio provider descriptor is not valid. | Fix the problems listed in result.problems and run keystonectl package wrap-stdio again. |
 | `discovery_failed` | 3 | true | The server did not list its tools. | Read the lines in result.stderr; if the server needs a real account to start, set discovery.mode: manual and pass --tools-snapshot. |
+| `lock_tool_missing` | 3 | false | The image has no npm or uv to build the lock file. | Pass --image with a stdio-box image that has npm and uv, or commit the lock file and run without --resolve-lock. |
+| `lock_resolve_failed` | 3 | true | The lock file could not be built. | Read the lines in result.stderr; check that the version in server.command exists and that Docker can reach the registry, then run again. |
+| `lock_install_failed` | 3 | false | The built lock file did not install the way the box installs it. | Read the lines in result.stderr; fix server.command or server.bin in provider.yaml and run again with --resolve-lock. |
 | `manifest_unrecognized` | 3 | false | The existing manifest could not be updated in place. | Run again with --force to rewrite it. |
 | `catalog_invalid` | 3 | false | The catalog file is not valid. | Fix catalog.yaml and run keystonectl lint on it. |
 | `incompatible_keystone_mcp` | 3 | false | The package does not support this keystone-mcp version. | Choose a version whose range includes the running keystone-mcp, or upgrade it. |
