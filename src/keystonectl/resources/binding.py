@@ -1031,6 +1031,15 @@ def _ensure_service(
             entry["compat_keystone_mcp"] = compat["keystone_mcp"]
         lock.setdefault("services", []).append(entry)
         return entry
+    compat = manifest.get("compat") if isinstance(manifest.get("compat"), dict) else {}
+    current["source"] = package.source_name
+    current["version"] = package.version
+    current["ref"] = package.ref
+    current["commit"] = package.commit
+    current["manifest_sha256"] = package.manifest_sha256
+    current["containers"] = _lock_containers(manifest)
+    if role == "service" and isinstance(compat.get("keystone_mcp"), str):
+        current["compat_keystone_mcp"] = compat["keystone_mcp"]
     env = current.setdefault("env", {"keystone": [], "files": [], "generated": []})
     if isinstance(env, dict):
         files = env.setdefault("files", [])
