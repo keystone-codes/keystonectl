@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "package import-snapshot",
+  "target": "tracker",
+  "summary": "Imported snapshot 1 into local/tracker, version 1.0.1. Run keystonectl service upgrade tracker to install it.",
+  "actions": [],
+  "changes": 3,
+  "missing": [],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "tracker",
+    "version": "1.0.1",
+    "tools_added": [
+      "create_issue",
+      "delete_issue",
+      "get_issue",
+      "search_issues",
+      "whoami"
+    ],
+    "tools_removed": [],
+    "next": "keystonectl service upgrade tracker"
+  }
+}

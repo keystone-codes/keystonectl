@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Skill: wrapping a remote HTTP MCP server in a box, from the operator's choice and a plan from its README to `package import-snapshot` and `service upgrade`.
+- Skill: asks before `package wrap-stdio --resolve-lock` and `package import-snapshot`, and writes only `provider.yaml` in `local/<name>/`.
 - `package import-snapshot` reads a box's tool snapshot with credsctl, checks its sha256, and updates the package in `local/<name>/`.
 - Errors `not_local_package`, `snapshot_not_found` and `snapshot_hash_mismatch` for `package import-snapshot`.
 - docs: Taking the tool list of a wrapped remote server under an account with `creds_snapshot_tools` and `package import-snapshot`.

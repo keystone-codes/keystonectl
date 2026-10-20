@@ -1,0 +1,40 @@
+{
+  "ok": false,
+  "code": 2,
+  "command": "service upgrade",
+  "target": "tracker@1.0.1",
+  "summary": "1 answer is missing",
+  "actions": [],
+  "changes": 0,
+  "missing": [
+    {
+      "var": "KEYSTONE_SETUP_SERVICE_TRACKER_CONFIRM_UPGRADE",
+      "question": "Upgrade tracker 1.0.0 -> 1.0.1? Removed tools: none. Added: whoami, get_issue, search_issues, create_issue, delete_issue. Policy rows that stop matching: none.",
+      "kind": "confirm",
+      "choices": null,
+      "default": null,
+      "secret": false
+    }
+  ],
+  "warnings": [],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "diff": {
+      "from": "1.0.0",
+      "to": "1.0.1",
+      "tools_removed": [],
+      "tools_added": [
+        "whoami",
+        "get_issue",
+        "search_issues",
+        "create_issue",
+        "delete_issue"
+      ],
+      "containers_added": [],
+      "containers_removed": [],
+      "policy_rows_stop_matching": [],
+      "tools_unreachable": []
+    }
+  }
+}

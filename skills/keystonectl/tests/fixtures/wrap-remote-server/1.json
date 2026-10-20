@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "package wrap-stdio",
+  "target": "/srv/keystone/local/tracker",
+  "summary": "Wrote package tracker (11 tools).",
+  "actions": [],
+  "changes": 5,
+  "missing": [],
+  "warnings": [
+    {
+      "id": "tools_snapshot_missing",
+      "message": "The package lists only the creds_* tools."
+    }
+  ],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "package": "tracker",
+    "namespace": "tracker",
+    "dir": "/srv/keystone/local/tracker",
+    "files": [
+      "package.json",
+      "package-lock.json",
+      "tools.snapshot.json",
+      "keystone-service.yaml",
+      "policy.example.yaml"
+    ],
+    "tools": 11,
+    "discovery": "skipped",
+    "box_tools_source": "image",
+    "lock": {
+      "resolved": true,
+      "file": "package-lock.json"
+    },
+    "warnings": [
+      {
+        "id": "tools_snapshot_missing",
+        "message": "The package lists only the creds_* tools."
+      }
+    ]
+  }
+}

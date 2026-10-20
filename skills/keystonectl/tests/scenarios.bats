@@ -85,3 +85,7 @@ run_scenario() {
 @test "add-remote-no-auth" {
   run_scenario add-remote-no-auth
 }
+
+@test "wrap-remote-server" {
+  run_scenario wrap-remote-server
+}

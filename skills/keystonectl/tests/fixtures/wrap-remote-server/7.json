@@ -1,0 +1,140 @@
+{
+  "ok": true,
+  "code": 0,
+  "command": "service upgrade",
+  "target": "tracker@1.0.1",
+  "summary": "Applied tracker 1.0.1.",
+  "actions": [
+    {
+      "id": "resolve",
+      "title": "Resolve tracker 1.0.1",
+      "status": "unchanged"
+    },
+    {
+      "id": "fetch",
+      "title": "Copy tracker 1.0.1 from local/tracker",
+      "status": "done"
+    },
+    {
+      "id": "validate",
+      "title": "Validate the package manifest",
+      "status": "done"
+    },
+    {
+      "id": "compat",
+      "title": "Check keystone-mcp compatibility",
+      "status": "done"
+    },
+    {
+      "id": "requires",
+      "title": "Check required packages",
+      "status": "done"
+    },
+    {
+      "id": "deploy.fragment",
+      "title": "Write packages/tracker.yml",
+      "status": "done"
+    },
+    {
+      "id": "deploy.up",
+      "title": "Start tracker",
+      "status": "done"
+    },
+    {
+      "id": "deploy.registry",
+      "title": "Publish tracker in the upstream registry",
+      "status": "done"
+    },
+    {
+      "id": "public.defer",
+      "title": "Leave the public address of tracker pending",
+      "status": "done"
+    },
+    {
+      "id": "lock.commit",
+      "title": "Record the package in services.lock.yaml",
+      "status": "done"
+    },
+    {
+      "id": "public.defer",
+      "title": "Leave the public address of tracker pending",
+      "status": "done"
+    }
+  ],
+  "changes": 10,
+  "missing": [],
+  "warnings": [
+    {
+      "id": "policy_check_skipped",
+      "message": "The policy check was skipped."
+    }
+  ],
+  "error": null,
+  "retryable": false,
+  "result": {
+    "commit": null,
+    "version": "1.0.1",
+    "content_sha256": "492d1fcba1870de1d6c6b588fdc04fad838f53339cf1121d30bb8d77643fb62b",
+    "info": "keystone-mcp is not running; it will read the new registry when you start it",
+    "containers": [
+      {
+        "role": "mcp",
+        "service": "tracker-mcp",
+        "image": "ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519",
+        "init": false
+      }
+    ],
+    "check": "keystonectl service status tracker",
+    "namespace": "tracker",
+    "registry_name": "tracker",
+    "tools": [
+      "whoami",
+      "get_issue",
+      "search_issues",
+      "create_issue",
+      "delete_issue",
+      "creds_providers",
+      "creds_profiles",
+      "creds_bindings",
+      "creds_profile_create",
+      "creds_profile_rotate",
+      "creds_profile_delete",
+      "creds_bind",
+      "creds_unbind",
+      "creds_whoami",
+      "creds_snapshot_tools",
+      "creds_check"
+    ],
+    "discovery": "unknown",
+    "critical_tools": [
+      "tracker_delete_issue",
+      "tracker_creds_profile_create",
+      "tracker_creds_profile_rotate",
+      "tracker_creds_profile_delete",
+      "tracker_creds_bind",
+      "tracker_creds_unbind"
+    ],
+    "critical_tools_hint": "add these to critical_tools in the policy file",
+    "recommended_policy": {
+      "path": "policy.example.yaml",
+      "content": "# Example only. keystonectl prints this file and never merges it into your policy.\n# The box does not check roles: whoever the policy lets call tracker_creds_* manages\n# everyone's accounts in this box. Do not give a non-administrator role tracker_* :\n# it also matches tracker_creds_*.\nversion: \"2.0.0\"\ndefault_deny: true\nroles:\n  tracker_reader:\n    description: \"Read Example Tracker through the tracker box.\"\n    allow:\n      - tracker_whoami\n      - tracker_get_issue\n      - tracker_search_issues\n      - tracker_creds_whoami\n      - tracker_creds_providers\n  tracker_writer:\n    description: \"Read and change Example Tracker through the tracker box.\"\n    allow:\n      - tracker_whoami\n      - tracker_get_issue\n      - tracker_search_issues\n      - tracker_create_issue\n      - tracker_delete_issue\n      - tracker_creds_whoami\n      - tracker_creds_providers\n  tracker_box_admin:\n    description: \"Manage accounts and bindings in the tracker box.\"\n    allow:\n      - \"tracker_creds_*\"\ncritical_tools:\n  - tracker_delete_issue\n  - tracker_creds_profile_create\n  - tracker_creds_profile_rotate\n  - tracker_creds_profile_delete\n  - tracker_creds_bind\n  - tracker_creds_unbind\n# Only a signed-in person may change accounts; API keys and service accounts may not.\nrequires_human_identity:\n  - tracker_creds_profile_create\n  - tracker_creds_profile_rotate\n  - tracker_creds_profile_delete\n  - tracker_creds_bind\n  - tracker_creds_unbind\n"
+    },
+    "resources": [],
+    "diff": {
+      "from": "1.0.0",
+      "to": "1.0.1",
+      "tools_removed": [],
+      "tools_added": [
+        "whoami",
+        "get_issue",
+        "search_issues",
+        "create_issue",
+        "delete_issue"
+      ],
+      "containers_added": [],
+      "containers_removed": [],
+      "policy_rows_stop_matching": [],
+      "tools_unreachable": []
+    }
+  }
+}
