@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A failed apply re-enables the nginx sites it disabled in that run.
 - docs: `service list --json` returns lock entries, not names.
 - Skill fixtures match the real `result` of catalog list, status and apply.
+- `package wrap-stdio` mounts the provider directory under its own `name` for discovery, so stdio-box accepts any provider name, not just `provider`.
 
 ## [0.1.1] - 2026-10-15
 
