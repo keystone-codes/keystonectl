@@ -44,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - docs: `service list --json` returns lock entries, not names.
 - Skill fixtures match the real `result` of catalog list, status and apply.
 - `service upgrade` records the new version, ref, commit and manifest digest in services.lock.yaml.
+- `service add-remote --no-auth` summary no longer asks to check a bearer that was never issued.
 
 ## [0.1.1] - 2026-10-15
 

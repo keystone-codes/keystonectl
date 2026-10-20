@@ -127,6 +127,26 @@ def test_add_remote_no_auth_warns_and_has_no_auth_block(tmp_path: Path) -> None:
     assert not (root / "packages" / "analytics-mcp.env").exists()
 
 
+def test_add_remote_no_auth_summary_does_not_ask_to_check_bearer(tmp_path: Path) -> None:
+    root, _box, runner = _root(tmp_path)
+    result = _add(root, runner, no_auth=True)
+    assert result.code == 0, result.error
+    assert "must check" not in result.summary
+    assert (
+        "No bearer or identity secret was issued. Any container on the services "
+        "network can call this service as anyone."
+    ) in result.summary
+
+
+def test_add_remote_with_auth_summary_still_asks_to_check_bearer(tmp_path: Path) -> None:
+    root, _box, runner = _root(tmp_path)
+    result = _add(root, runner)
+    assert result.code == 0, result.error
+    assert "The service must check the bearer and X-Keystone-Identity. aud = analytics-mcp." in (
+        result.summary
+    )
+
+
 def test_add_remote_namespace_default_strips_mcp(tmp_path: Path) -> None:
     root, _box, runner = _root(tmp_path)
     result = _add(root, runner)
