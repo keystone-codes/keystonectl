@@ -418,9 +418,10 @@ def test_stock_image_mounts_package_dir(tmp_path: Path) -> None:
     document = _manifest(directory)
     container = document["containers"]["mcp"]
     assert container["image"] == STDIO_BOX_IMAGE
-    assert container["package_dir"] == {"from": ".", "path": "/opt/box/provider"}
+    # stdio-box checks that provider.yaml's name equals the name of its folder.
+    assert container["package_dir"] == {"from": ".", "path": "/opt/box/packages/atlassian"}
     env = _env(document)
-    assert env["BOX_PROVIDER_DIR"]["default"] == "/opt/box/provider"
+    assert env["BOX_PROVIDER_DIR"]["default"] == "/opt/box/packages/atlassian"
     assert env["BOX_PROVIDER"]["default"] == "atlassian"
     assert not (directory / "Dockerfile").exists()
     assert _lint_errors(directory) == []
@@ -455,9 +456,9 @@ def test_stock_image_update_adds_missing_keys(tmp_path: Path) -> None:
     document = yaml.safe_load(after)
     assert document["containers"]["mcp"]["package_dir"] == {
         "from": ".",
-        "path": "/opt/box/provider",
+        "path": "/opt/box/packages/atlassian",
     }
-    assert _env(document)["BOX_PROVIDER_DIR"]["default"] == "/opt/box/provider"
+    assert _env(document)["BOX_PROVIDER_DIR"]["default"] == "/opt/box/packages/atlassian"
     assert [item["name"] for item in document["containers"]["mcp"]["env"]] == [
         "BOX_PROVIDER",
         "BOX_COMMAND",
@@ -470,6 +471,79 @@ def test_stock_image_update_adds_missing_keys(tmp_path: Path) -> None:
     again = _wrap(directory, stock_image=True)
     assert again.code == 0, again.result
     assert manifest.read_text(encoding="utf-8") == after
+
+
+def _old_stock_manifest(directory: Path, *, flow: bool = False) -> str:
+    """A manifest as --stock-image wrote it before the path was named after the provider."""
+    manifest = directory / "keystone-service.yaml"
+    text = manifest.read_text(encoding="utf-8")
+    new_dir = '"/opt/box/packages/atlassian"'
+    old = text.replace("path: /opt/box/packages/atlassian\n", "path: /opt/box/provider  # mount\n")
+    old = old.replace(f"default: {new_dir}\n", 'default: "/opt/box/provider"  # box\n')
+    if flow:
+        old = old.replace(
+            '    package_dir:\n      from: "."\n      path: /opt/box/provider  # mount\n',
+            '    package_dir: {from: ".", path: /opt/box/provider}  # mount\n',
+        )
+    assert old != text
+    manifest.write_text(old, encoding="utf-8")
+    return old
+
+
+@pytest.mark.parametrize("flow", [False, True])
+def test_stock_image_update_moves_old_path(tmp_path: Path, flow: bool) -> None:
+    directory = _copy(_ATLASSIAN, tmp_path)
+    assert _wrap(directory, stock_image=True).code == 0
+    old = _old_stock_manifest(directory, flow=flow)
+    assert yaml.safe_load(old)["containers"]["mcp"]["package_dir"]["path"] == "/opt/box/provider"
+
+    result = _wrap(directory, stock_image=True)
+    assert result.code == 0, result.result
+    after = (directory / "keystone-service.yaml").read_text(encoding="utf-8")
+    document = yaml.safe_load(after)
+    assert document["containers"]["mcp"]["package_dir"] == {
+        "from": ".",
+        "path": "/opt/box/packages/atlassian",
+    }
+    assert _env(document)["BOX_PROVIDER_DIR"]["default"] == "/opt/box/packages/atlassian"
+    assert "/opt/box/provider" not in after
+    # Only the two paths change; comments and every other line stay.
+    changed = [
+        (before, now)
+        for before, now in zip(old.splitlines(), after.splitlines(), strict=True)
+        if before != now
+    ]
+    assert len(changed) == 2
+    assert all("# mount" in now or "# box" in now for _before, now in changed)
+    assert _lint_errors(directory) == []
+
+    again = _wrap(directory, stock_image=True)
+    assert again.code == 0, again.result
+    assert (directory / "keystone-service.yaml").read_text(encoding="utf-8") == after
+
+
+def test_stock_image_update_keeps_author_path(tmp_path: Path) -> None:
+    directory = _copy(_ATLASSIAN, tmp_path)
+    assert _wrap(directory, stock_image=True).code == 0
+    manifest = directory / "keystone-service.yaml"
+    custom = manifest.read_text(encoding="utf-8").replace(
+        "/opt/box/packages/atlassian", "/opt/box/packages/atlassian-custom"
+    )
+    manifest.write_text(custom, encoding="utf-8")
+
+    result = _wrap(directory, stock_image=True)
+    assert result.code == 0, result.result
+    assert manifest.read_text(encoding="utf-8") == custom
+
+
+def test_without_stock_image_old_path_stays(tmp_path: Path) -> None:
+    directory = _copy(_ATLASSIAN, tmp_path)
+    assert _wrap(directory, stock_image=True).code == 0
+    old = _old_stock_manifest(directory)
+
+    result = _wrap(directory)
+    assert result.code == 0, result.result
+    assert (directory / "keystone-service.yaml").read_text(encoding="utf-8") == old
 
 
 def test_no_discovery_writes_empty_snapshot(tmp_path: Path) -> None:
