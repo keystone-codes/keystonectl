@@ -285,6 +285,8 @@ The image reference written into a new manifest is the digest-pinned stdio-box 0
 
 The box's own `creds_*` tools come from the image: wrap-stdio runs `stdio-box box-tools` in it and lists what it prints. An image without that subcommand (stdio-box 0.1.0) gets the ten `creds_*` tools that release serves; `result.box_tools_source` says which (`image` or `fallback`).
 
+`--resolve-lock` builds the lock file instead of you: in a temporary copy of the provider directory it runs `npm install --package-lock-only` (for `npx`) or `uv pip compile --universal --generate-hashes` (for `uvx`) inside the stdio-box image, then installs the result there with `stdio-box install`, the same install the box does on start. Only when that install passes does it write `package.json` and `package-lock.json`, or `requirements.txt` and `requirements.in`, into the provider directory; other files stay as they are. Nothing runs npm or uv on your machine. `BOX_NPM_REGISTRY` and `BOX_PIP_INDEX_URL` in the environment are passed on as mirrors and must start with `https://`. Without the flag the lock file must already be there.
+
 `--no-discovery` skips asking the server. The package then lists only the `creds_*` tools, and when the directory has no `tools.snapshot.json` the command writes an empty one (`tools: []`), because the box does not start without it.
 
 `--publisher`, `--homepage` and `--version X.Y.Z` set those manifest fields, also on an existing manifest. Without them a new manifest gets `keystone-codes` and `1.0.0`, and an existing one keeps its values.
@@ -327,11 +329,11 @@ discovery:
 - `tools: {normalize: snake}` turns remote names such as `get-issue` into published names such as `get_issue`.
 - `discovery: {mode: manual}`: there is no placeholder token a remote server would accept, so wrap-stdio cannot ask it for its tools.
 - The check is a `tool` check: the box calls one remote tool (here `whoami`) with the account to prove the token works.
-- Commit `package.json` and `package-lock.json` for `mcp-remote` beside `provider.yaml`.
+- Do not write `package.json` and `package-lock.json` by hand: `--resolve-lock` builds them for `mcp-remote` in the image and checks that they install. Commit them with `provider.yaml`.
 
-Then write the package without asking the server:
+Then build the lock and write the package without asking the server:
 
-    keystonectl package wrap-stdio packages/example-remote --stock-image --no-discovery --json
+    keystonectl package wrap-stdio packages/example-remote --stock-image --no-discovery --resolve-lock --json
 
 The package lists only the `creds_*` tools until a snapshot exists. After someone has entered an account, `creds_snapshot_tools` (stdio-box 0.2.0 and later) in the running box takes the remote tool list under that account; `credsctl snapshot export <id>` prints it, and `wrap-stdio --tools-snapshot <file>` turns it into the package's tools.
 

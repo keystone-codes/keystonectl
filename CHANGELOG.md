@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `package wrap-stdio --publisher`, `--homepage` and `--version` set those manifest fields, also when the manifest is updated in place.
 - `package wrap-stdio --read-only` and `--destructive` name read-only and destructive tools when the server's annotations are missing or wrong.
 - `package wrap-stdio` reports `result.box_tools_source`: the `creds_*` tools come from `stdio-box box-tools` or a built-in list.
+- `package wrap-stdio --resolve-lock` builds the lock file with npm or uv in the stdio-box image and checks it with `stdio-box install` before writing it.
+- `package wrap-stdio` reports `result.lock`: whether the lock file was rebuilt, and its name.
+- Errors `lock_tool_missing`, `lock_resolve_failed` and `lock_install_failed` for `--resolve-lock`.
 - docs: Wrapping a remote HTTP server through `mcp-remote` in a box, with its limits.
 - Optional manifest field `containers.<role>.package_dir` mounts a directory of the package into the container, read-only, from a copy keystonectl makes at apply.
 - Warning `package_dir_missing` when a copy named in the lock is missing or changed; `package_dir_kept` when removing an ejected service keeps its copies.
