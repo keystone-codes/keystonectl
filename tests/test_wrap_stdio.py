@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 from keystonectl.lint import lint_manifest
-from keystonectl.runner import CommandResult, FakeCommandRunner
+from keystonectl.runner import CommandResult, FakeCommandRunner, RealCommandRunner
 from keystonectl.wrap_stdio import (
     CREDS_TOOLS,
     PROVIDER_SCHEMA_SHA256,
@@ -24,6 +24,7 @@ from keystonectl.wrap_stdio import (
 _DATA = Path(__file__).parent / "data" / "stdio"
 _ATLASSIAN = _DATA / "atlassian"
 _NOTION = _DATA / "notion"
+_TAVILY = _DATA / "tavily"
 _POLICY = _DATA / "policy.example.atlassian.yaml"
 
 
@@ -105,9 +106,9 @@ def test_discovery_runs_image(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "--entrypoint",
         "stdio-box",
         "-v",
-        f"{mounted}:/opt/box/provider:ro",
+        f"{mounted}:/opt/box/packages/atlassian:ro",
         "-e",
-        "BOX_PROVIDER_DIR=/opt/box/provider",
+        "BOX_PROVIDER_DIR=/opt/box/packages/atlassian",
         STDIO_BOX_IMAGE,
         "snapshot-tools",
         "--out",
@@ -135,6 +136,38 @@ def test_discovery_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert failed.error["id"] == "discovery_failed"
     assert failed.retryable is True
     assert "install failed" in failed.result["stderr"]
+
+
+@pytest.mark.integration
+def test_discovery_mounts_provider_named_directory(tmp_path: Path) -> None:
+    """``wrap-stdio`` discovery must work for a provider not named ``provider``.
+
+    Regression test for G12: stdio-box requires the mounted directory's name to
+    equal ``name`` in ``provider.yaml``. The fixture uses tavily with its
+    ``discovery: placeholder`` key, since ``tools/list`` does not need a real one.
+    """
+    if shutil.which("docker") is None:
+        pytest.skip("Docker is not installed")
+    directory = _copy(_TAVILY, tmp_path)
+    result = run_wrap_stdio(
+        directory,
+        image=STDIO_BOX_IMAGE,
+        tools_snapshot=None,
+        no_discovery=False,
+        name=None,
+        namespace=None,
+        derived_image=False,
+        force=False,
+        runner=RealCommandRunner(),
+    )
+    if result.code != 0:
+        error_id = (result.error or {}).get("id")
+        if error_id in {"docker_unavailable", "discovery_failed"}:
+            pytest.skip(f"Docker or network is unavailable for live discovery: {result.result}")
+        pytest.fail(f"wrap-stdio failed: {result.result}")
+    assert result.result["discovery"] == "docker"
+    snapshot = json.loads((directory / "tools.snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["tools"]
 
 
 def test_update_keeps_author_fields(tmp_path: Path) -> None:
