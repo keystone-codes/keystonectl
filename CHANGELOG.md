@@ -57,6 +57,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `package wrap-stdio --stock-image` mounts the package at `/opt/box/packages/<provider>`, so the box starts; updates move the old `/opt/box/provider`.
+- `package wrap-stdio --resolve-lock` runs `uv pip compile` with `--python-version 3.12`, the Python of the stdio-box image.
+- Tests marked `integration` (Docker and network) no longer run by default; run them with `uv run pytest -m integration`.
 - docs: Upgrade confirmation is the target version, not `y`.
 - Bundle results read the policy of the installed package version; cached versions are compared as versions.
 - ``.keystonectl/`` gets its ``.gitignore`` whichever command creates it first.
