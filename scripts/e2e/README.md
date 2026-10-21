@@ -35,9 +35,9 @@ scripts/e2e.sh --layout production-example --profile ci --storage both --postgre
 ## Layouts
 
 - **production-example** copies `examples/production` from keystone-mcp `6b04a198101dac22815b17d5bcf55b0e1c6463d8` and adopts it. The one-time patch is `scripts/e2e/fixtures/production-example.patch`. That file has no diff. An empty diff means the open example needs no one-time edit: `init --adopt` already adds the second compose file and the upstream network.
-- **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `ffd719701f3bb0eb53bdd212447bcd43bbd07c43`. CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend. That profile skips `agent_path_missing` because setup already installed the minimal bundle.
+- **keystone-deploy** checks out `https://github.com/keystone-codes/deploy.git` at `bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3` (branch `release/catalog`, after D01 and D02). CI starts only the `keystone-mcp` profile plus a Redis container named `ks-cat-e2e-redis`. The VM profile calls `./setup.sh --non-interactive` and still does not start the product backend. That profile skips `agent_path_missing` because setup already installed the minimal bundle.
 
-Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upstream are GHCR digests. MinIO, mc, Postgres, and Redis are the foreign digests from the package manifests (Redis from `docker buildx imagetools inspect`). stdio-box is `ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519` from commit `1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f` (tag `atlassian/v1.0.0`, read from `IMAGE` on 2026-10-15).
+Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upstream are the GHCR digests for their published 1.0.1 (`FILE_MCP_IMAGE`, `HELLO_IMAGE`). MinIO, mc, Postgres, and Redis are the foreign digests from the package manifests (Redis from `docker buildx imagetools inspect`; MinIO and mc are from minio-resource 1.0.1). stdio-box is `ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519` from commit `1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f` (tag `atlassian/v1.0.0`, read from `IMAGE` on 2026-10-15; the same commit and digest the catalog's `atlassian` and `notion` packages use at `v1.2.0`). The catalog itself is pinned at `CATALOG_REF`, the commit of tag `v1.2.0`.
 
 ## Scenarios
 
@@ -46,7 +46,7 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 3. The policy file hash is unchanged; recommended roles are in the install JSON.
 4. A second plan asks nothing and changes nothing.
 5. Install docs-service on the catalog Postgres.
-6. `packages/file-mcp.override.yml` is kept across upgrade.
+6. `packages/file-mcp.override.yml` is kept across an upgrade from 1.0.0 to 1.0.1 (the local catalog `e2e` vendors both published manifests so the test controls both versions).
 7. A direct edit is refused until eject; eject leaves the marker.
 8. Adopt regenerates the fragment.
 9. Remove keeps the bucket and the override; install again works. file-mcp declares no volumes, so the kept list has no volume name.
@@ -86,7 +86,7 @@ The table lists each numbered scenario plus the certbot step. Cells assume defau
 
 ## Report
 
-Each line is `{"scenario","status","code","message"}`. `status` is `pass`, `fail`, `skip`, or `deviation`. `deviation` is a note, not a failure: the empty layout patch, the catalog SHA instead of a missing `v1.0.0` tag, the local stand-in for file-mcp 0.9.0, and a non-default publish port.
+Each line is `{"scenario","status","code","message"}`. `status` is `pass`, `fail`, `skip`, or `deviation`. `deviation` is a note, not a failure: the empty layout patch, the catalog commit pinned in `sources.yaml`, the local vendor of the published file-mcp 1.0.0/1.0.1 manifests, and a non-default publish port.
 
 In CI (`.github/workflows/e2e.yml`), the report and `e2e-diagnostics/` are uploaded as a build artifact on every run, not only on failure.
 
