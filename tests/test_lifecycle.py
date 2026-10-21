@@ -229,6 +229,40 @@ def test_remove_result_lists_kept(tmp_path: Path) -> None:
     assert "packages/file-mcp.override.yml" in kept
 
 
+def test_remove_cleans_up_a_bak_from_an_unrolled_upgrade(tmp_path: Path) -> None:
+    """A .bak left by an upgrade that was never rolled back must not outlive remove.
+
+    Once the service is gone there is nothing left to roll back to, so
+    packages/<name>.yml.bak and packages/<name>.env.bak (if any) would
+    otherwise sit in packages/ unexplained forever.
+    """
+    root = _install(tmp_path)
+    fragment_bak = root / "packages" / "file-mcp.yml.bak"
+    fragment_bak.write_bytes((root / "packages" / "file-mcp.yml").read_bytes())
+    os.chmod(fragment_bak, 0o600)
+    env_path = root / "packages" / "file-mcp.env"
+    env_bak = root / "packages" / "file-mcp.env.bak"
+    if env_path.is_file():
+        env_bak.write_bytes(env_path.read_bytes())
+        os.chmod(env_bak, 0o600)
+    lock = load_lock(root / "services.lock.yaml")
+    entry = lock["services"][0]
+    entry["previous"] = {
+        "version": "0.9.0",
+        "ref": "v0.9.0",
+        "commit": entry["commit"],
+        "manifest_sha256": entry["manifest_sha256"],
+        "containers": entry["containers"],
+        "fragment_sha256": entry["fragment_sha256"],
+        "tools": list(entry["tools"]),
+    }
+    save_lock(root / "services.lock.yaml", lock, now=CLOCK)
+    result = _remove(root, sets={"KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE": "yes"})
+    assert result.code == 0, result.error
+    assert not fragment_bak.exists()
+    assert not env_bak.exists()
+
+
 def test_remove_required_by_refused(tmp_path: Path) -> None:
     root = _install(tmp_path)
     lock = load_lock(root / "services.lock.yaml")
@@ -1030,6 +1064,9 @@ def test_rollback_restores_previous_and_hash(tmp_path: Path) -> None:
     assert restored["version"] == "0.9.0"
     assert restored["previous"] is None
     assert restored["fragment_sha256"] == entry["fragment_sha256"]
+    # There is no longer a "previous" to roll back to, so the .bak copy that
+    # rollback just consumed should not sit in packages/ unexplained.
+    assert not backup.exists()
 
 
 def test_rollback_without_previous_refused(tmp_path: Path) -> None:

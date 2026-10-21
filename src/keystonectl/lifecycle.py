@@ -594,6 +594,11 @@ def remove_service(
     managed = entry.get("managed")
     if managed == "generated" and fragment.is_file():
         fragment.unlink()
+    # A prior upgrade that was never rolled back left packages/<name>.yml.bak
+    # and packages/<name>.env.bak around; the service they would roll back to
+    # no longer exists once it is removed. packages/<name>.yml.ejected.bak is
+    # a different, documented artifact and is left alone.
+    _remove_baks(root, entry)
     kept: list[str] = []
     if managed == "ejected" and fragment.is_file():
         kept.append(f"packages/{name}.yml")
@@ -1186,6 +1191,29 @@ def _write_baks(root: Path, entry: Mapping[str, Any]) -> None:
         os.chmod(destination, 0o600)
 
 
+def _remove_baks(root: Path, entry: Mapping[str, Any]) -> None:
+    """Delete the plain upgrade/rollback ``.bak`` copies ``_write_baks`` made.
+
+    Called once they stop being useful: after a successful rollback (there is
+    no longer a ``previous`` to roll back to) and when the service itself is
+    removed. ``packages/<name>.yml.ejected.bak`` is a different, documented
+    artifact (the operator's hand-edited fragment, kept for them to read) and
+    is never touched here.
+    """
+    name = str(entry.get("name"))
+    fragment_bak = root / "packages" / f"{name}.yml.bak"
+    if fragment_bak.is_file():
+        fragment_bak.unlink()
+    env = entry.get("env") if isinstance(entry.get("env"), dict) else {}
+    for relative in env.get("files") or []:
+        if not isinstance(relative, str):
+            continue
+        path = root / relative
+        backup = path.with_name(path.name + ".bak")
+        if backup.is_file():
+            backup.unlink()
+
+
 def _upgrade_ejected(
     root: Path,
     lock: dict[str, Any],
@@ -1274,6 +1302,10 @@ def rollback_service(
         entry["fragment_sha256"] = fragment_digest(fragment.read_text(encoding="utf-8"))
     entry["previous"] = None
     entry["updated_at"] = utc_now(clock())
+    # The .bak copies restored the fragment and env files above; there is no
+    # longer a "previous" to roll back to, so they would otherwise sit in
+    # packages/ unexplained until the next upgrade overwrites them.
+    _remove_baks(root, entry)
     save_lock(root / "services.lock.yaml", lock, now=clock())
     layout = _layout(lock)
     project = str(layout.get("project") or "")
