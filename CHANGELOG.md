@@ -56,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `service upgrade` fetches a catalog version it has not cached yet, the same way `service plan <name>@<version>` already does.
 - e2e: An unnumbered scenario upgrades the catalog `minio` provider from 1.0.0 to 1.0.1 and checks the image, the lock, and the bucket data.
 - Binding a second service to an already-installed catalog provider no longer records the catalog's newest version in the lock without redeploying it.
+- `service rollback`/`service remove` delete the `.bak` copies an upgrade left once nothing can roll back to them anymore.
 
 ## [0.1.1] - 2026-10-15
 
