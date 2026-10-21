@@ -8,7 +8,7 @@ Global flags apply to every command. `init` and `lint` do not search for a deplo
 | `--json` | One JSON document on stdout. Implies `--non-interactive`. |
 | `--non-interactive` | Do not prompt. A missing answer exits 2. |
 | `--set KEY=VALUE` | Answer a question. Refused when `KEY` is a secret (`*_FILE`). |
-| `--version` | Print `keystonectl 0.1.1`. |
+| `--version` | Print `keystonectl 0.2.0`. |
 
 | Command | Purpose |
 |---|---|
