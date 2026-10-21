@@ -17,14 +17,16 @@ def test_layout_a_patch_has_no_diff() -> None:
 def test_script_pins_published_refs() -> None:
     pins = [
         "6b04a198101dac22815b17d5bcf55b0e1c6463d8",
-        "ffd719701f3bb0eb53bdd212447bcd43bbd07c43",
-        "1bc59512acccbd30cfbd958f78b713b21a7276a2",
-        "sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0",
-        "sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337",
-        "sha256:af8333b0a5e9209abbb677c546b595dec87b45a227f33a2757b60e7d0ec5717f",
-        "sha256:63ba7ba9b7ba59af56cb52d9052eb385cce4e8531b40d6b43639c9e7e514c97f",
+        "bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3",
+        "3673c30cc96861fb92682140522407dac97544fb",
+        "1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f",
+        "sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323",
+        "sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798",
+        "sha256:a9dca07071a50045809704bb10681922448c9d7680d36afdbc2f7f759caaea6e",
+        "sha256:468a6df578c096e46a8dbff6e133ae5b480cf9fa802fde150a2430b10f63be92",
         "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
         "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519",
     ]
     for pin in pins:
         assert pin in SCRIPT
