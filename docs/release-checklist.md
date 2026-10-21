@@ -1,37 +1,40 @@
 # Release checklist
 
-Fill this in when a person runs the manual checks. The result column stays empty until that run. A CI report is not a substitute for sections A–H.
+Fill this in when a person runs the manual checks. The result column stays empty until that run. A CI report is not a substitute for sections A–I.
 
 The CI profile does not run keystone-deploy `setup.sh`; the partner path is proven only by section B.
 
+The 0.1.0 run is archived at [`docs/releases/0.1.0-checklist.md`](releases/0.1.0-checklist.md).
+
 | Field | Value |
 |---|---|
-| keystonectl (PyPI) | `0.1.0` — wheel sha256 `ceb302ae396a65a4852ba61f3daf7a092e6ec8dc692b593bba58b17773d02bd4`, sdist sha256 `d5c42bb17d9b52f42e9399c4b5e7d7c136046a5da0bae1c00b6d8f8ae5b54975` |
-| keystonectl commit | `79d16b7` |
-| Release run (publish, pypi-verify, github-release) | <https://github.com/keystone-codes/keystonectl/actions/runs/38542146269> |
+| keystonectl (PyPI) | `0.2.0` — wheel sha256 (filled by R07), sdist sha256 (filled by R07) |
+| keystonectl commit | |
+| Release run (publish, pypi-verify, github-release) | |
 | Date | |
 | Checked by | |
 | keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.5.0` |
 | keystone-mcp commit | `6b04a198101dac22815b17d5bcf55b0e1c6463d8` (`release/0.5.0`) |
-| keystone-deploy commit | `ffd719701f3bb0eb53bdd212447bcd43bbd07c43` (`release/catalog`) |
-| keystone-catalog commit | `1bc59512acccbd30cfbd958f78b713b21a7276a2` (tag `v1.0.0` = `1bc5951`) |
-| file-mcp | `1.0.0` — `ghcr.io/keystone-codes/file-mcp@sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0` |
-| hello-upstream | `1.0.0` — `ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337` |
-| minio-resource / postgres-resource | git tag `v1.0.0`; images are the foreign digests in those manifests |
+| keystone-deploy commit | `bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3` (`release/catalog`, after D01 and D02) |
+| keystone-catalog commit | `3673c30cc96861fb92682140522407dac97544fb` (tag `v1.2.0` = `3673c30`) |
+| file-mcp | `1.0.1` — `ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323` |
+| hello-upstream | `1.0.1` — `ghcr.io/keystone-codes/hello-upstream@sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798` |
+| minio-resource / postgres-resource | minio `1.0.1` — `ghcr.io/keystone-codes/minio-server@sha256:a9dca07071a50045809704bb10681922448c9d7680d36afdbc2f7f759caaea6e`, mc `ghcr.io/keystone-codes/minio-client@sha256:468a6df578c096e46a8dbff6e133ae5b480cf9fa802fde150a2430b10f63be92`; postgres-resource git tag `v1.0.0` (unchanged), images are the foreign digests in that manifest |
+| stdio-box | `0.1.0` — `ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`, commit `1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f` (tag `atlassian/v1.0.0`) |
+| Catalog boxes | `atlassian` `1.0.0`, `notion` `1.0.0` |
 | Package versions from the lock | |
 
 `scripts/e2e.sh --profile vm` is the command for sections A and B. It has not been run for this document. Do not mark a row from a CI log. The command checks PyPI for the requested keystonectl version; pass `--keystonectl <wheel or checkout>` for an unpublished candidate, otherwise it installs from PyPI.
 
 ## 0. Candidate commit
 
-Commit K is the candidate under test for every row below, including A–H. Fill in the link once each run exists; leave rows empty until then.
+Commit K is the candidate under test for every row below, including A–I. Fill in the link once each run exists; leave rows empty until then.
 
 | Check | Expected | Link |
 |---|---|---|
-| `ci` on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539656674> |
-| Manual `e2e` workflow_dispatch on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539668689> (both layouts, success) |
-| e2e atlassian_profiles pass (ci) | scenario `atlassian_profiles` is pass on `--profile ci` | |
-| Trial `Release` run with `dry_run` on commit K | green | <https://github.com/keystone-codes/keystonectl/actions/runs/38539675781> |
+| `ci` on commit K | green | |
+| Manual `e2e` workflow_dispatch on commit K | green (both layouts, success) | |
+| Trial `Release` run with `dry_run` on commit K | green | |
 
 ## A. Clean VM, open example
 
@@ -58,7 +61,7 @@ Same script, layout `keystone-deploy`, profile `vm`, `--tls certbot`, on Ubuntu 
 |---|---|---|---|
 | Ubuntu 22.04 | `E2E_TLS_EMAIL=<address> scripts/e2e.sh --layout keystone-deploy --profile vm --tls certbot --domain <vm-domain>` (or add `--keystonectl <wheel>` for an unpublished candidate) | Exit 0; every scenario marked `runs` for this layout and profile in `scripts/e2e/README.md` passes | |
 | Debian 12 | same command | Exit 0; every scenario marked `runs` for this layout and profile in `scripts/e2e/README.md` passes | |
-| bats | Run `tests/bash/run.sh` in keystone-deploy on the commit under test | all bats files pass | |
+| bats (CI) | link to the green `bats` GitHub Actions run in keystone-deploy for the commit under test | all bats files pass | |
 
 ## C. Owner stand, through chat
 
@@ -88,7 +91,7 @@ Success: the operator typed no commands except creating secret files; the agent 
 | External S3 | operator endpoint, bucket, and key files | upload and download through the agent succeed | |
 | External Postgres | operator host and password file | docs-service is healthy | |
 
-## F. Repeat, override, eject, adopt, remove
+## F. Repeat, override, eject, adopt, remove, upgrade
 
 Same checks as script scenarios 4 and 6–9, on the stand.
 
@@ -98,6 +101,7 @@ Same checks as script scenarios 4 and 6–9, on the stand.
 | Override | `packages/<name>.override.yml` | survives upgrade | |
 | Eject and adopt | eject, edit, adopt | adopt regenerates; the operator edit is gone | |
 | Remove and install again | remove, then install | kept resources stay; a fresh install works | |
+| `service upgrade minio` | `service upgrade minio` 1.0.0 → 1.0.1 on the stand | buckets and data are in place | |
 
 ## G. Partner catalog
 
@@ -126,5 +130,17 @@ One row per item. Point at the step above that shows it. Leave the result empty 
 | Override, eject, adopt | section F | override survives upgrade; adopt regenerates | |
 | Partner catalog | section G | package installs the same way | |
 | Repeat, remove, reinstall | section F | no questions on the second plan; reinstall works | |
+| Boxes with per-person credentials | section I | installs through a one-time link; a reinstall keeps the profiles | |
 | Final check | `keystonectl check` | clean, apart from warnings the release note allows | |
 | Forbidden leftovers | search the deployment | no `EXTERNAL_APIS`, `docker-compose.external.yml`, a "managed" flag, `FILE_API_URL`, or a keystone-mcp image built from git; on the open example: operator files unchanged, no temporary files, nothing unexplained in `packages/` | |
+
+## I. Boxes
+
+Credential boxes (`atlassian`, `notion`) from stdio-box, installed through the catalog path `packages/<box>`.
+
+| Step | Command or action | Expected | Result |
+|---|---|---|---|
+| atlassian-profiles on the stand | chat, skill installs `atlassian` and sets up per-person, service, and role credential profiles (S13) | install through the one-time link; `creds_whoami` answers correctly per profile; a reinstall keeps the profiles | |
+| e2e atlassian_profiles pass (ci) | scenario `atlassian_profiles` is pass on `--profile ci` | | |
+| e2e atlassian_profiles pass (vm) | scenario `atlassian_profiles` is pass on `--profile vm` | | |
+| Credential form in two browsers | open the `/creds/` link in Chrome and in Firefox | form submits in both | |

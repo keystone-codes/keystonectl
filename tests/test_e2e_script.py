@@ -69,6 +69,12 @@ def test_deploy_vm_skips_agent_path_missing_without_a_pass() -> None:
     assert body.index("return 0") < body.index("pass agent_path_missing")
 
 
+def test_override_scenario_upgrades_real_file_mcp() -> None:
+    body = _function_body("scenario_override_survives_upgrade")
+    assert "0.9.0" not in body
+    assert "service upgrade file-mcp" in body
+
+
 def test_vm_manual_tls_uses_the_nginx_vhost_not_caddy() -> None:
     assert "start_manual_caddy" not in SCRIPT
     assert "caddy run" not in SCRIPT

@@ -6,19 +6,21 @@ set -euo pipefail
 # release/0.5.0 of keystone-mcp. examples/production is copied from this commit.
 KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-6b04a198101dac22815b17d5bcf55b0e1c6463d8}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
-# keystone-codes/deploy, branch release/catalog.
-KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-ffd719701f3bb0eb53bdd212447bcd43bbd07c43}"
+# keystone-codes/deploy, branch release/catalog. Commit after D01 (CI bats) and
+# D02 (public keystonectl interface instead of parsing its files).
+KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3}"
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
-CATALOG_REF="${E2E_CATALOG_REF:-1bc59512acccbd30cfbd958f78b713b21a7276a2}"
+# tag v1.2.0 = 3673c30, 2026-10-21.
+CATALOG_REF="${E2E_CATALOG_REF:-3673c30cc96861fb92682140522407dac97544fb}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
-# file-mcp 1.0.0, git f2928bf. hello-upstream 1.0.0, git c9dd693.
-FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0"
-HELLO_IMAGE="ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337"
-# minio-resource: official RELEASE.2025-09-07 and mc RELEASE.2025-08-13, packaged for GHCR.
-MINIO_IMAGE="ghcr.io/keystone-codes/minio-server@sha256:af8333b0a5e9209abbb677c546b595dec87b45a227f33a2757b60e7d0ec5717f"
-MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:63ba7ba9b7ba59af56cb52d9052eb385cce4e8531b40d6b43639c9e7e514c97f"
+# file-mcp 1.0.1, git 81f8e9d. hello-upstream 1.0.1, git b0a2086.
+FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323"
+HELLO_IMAGE="ghcr.io/keystone-codes/hello-upstream@sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798"
+# minio-resource 1.0.1, git f7da576: official RELEASE.2025-09-07 and mc RELEASE.2025-08-13, packaged for GHCR.
+MINIO_IMAGE="ghcr.io/keystone-codes/minio-server@sha256:a9dca07071a50045809704bb10681922448c9d7680d36afdbc2f7f759caaea6e"
+MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:468a6df578c096e46a8dbff6e133ae5b480cf9fa802fde150a2430b10f63be92"
 # postgres-resource 7953f7a: postgres:16-alpine 16.15-alpine3.24.
 PG_IMAGE="postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 # redis:7-alpine index, docker buildx imagetools inspect on 2026-10-13.
@@ -1002,20 +1004,23 @@ build_local_catalogs() {
   python3 -c '
 import pathlib, sys
 path = pathlib.Path(sys.argv[1])
-path.write_text(path.read_text().replace("version: \"1.0.0\"", "version: \"0.9.0\"", 1))
+text = path.read_text()
+text = text.replace("version: \"1.0.1\"", "version: \"1.0.0\"", 1)
+text = text.replace(
+    "sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323",
+    "sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0",
+    1,
+)
+path.write_text(text)
 ' "$files/keystone-service.yaml"
   git init -q "$files"
   git -C "$files" add .
-  git_identity -C "$files" commit -q -m "file-mcp 0.9.0 vendored from the 1.0.0 tree"
-  git -C "$files" tag v0.9.0
-  python3 -c '
-import pathlib, sys
-path = pathlib.Path(sys.argv[1])
-path.write_text(path.read_text().replace("version: \"0.9.0\"", "version: \"1.0.0\"", 1))
-' "$files/keystone-service.yaml"
-  git -C "$files" add keystone-service.yaml
   git_identity -C "$files" commit -q -m "file-mcp 1.0.0"
   git -C "$files" tag v1.0.0
+  cp "$HERE/e2e/fixtures/file-mcp/keystone-service.yaml" "$files/keystone-service.yaml"
+  git -C "$files" add keystone-service.yaml
+  git_identity -C "$files" commit -q -m "file-mcp 1.0.1"
+  git -C "$files" tag v1.0.1
   mkdir -p "$catalog"
   cat >"$catalog/catalog.yaml" <<EOF
 schema_version: 1
@@ -1030,11 +1035,11 @@ packages:
       - {version: 1.0.0, ref: v1.0.0, keystone_mcp: ">=0.5.0,<2.0"}
   file-mcp:
     kind: service
-    summary: file-mcp versions used to exercise upgrade.
+    summary: file-mcp versions used to exercise upgrade, vendored from the published manifests.
     source: file://${files}
     versions:
-      - {version: 0.9.0, ref: v0.9.0, keystone_mcp: ">=0.5.0,<2.0"}
       - {version: 1.0.0, ref: v1.0.0, keystone_mcp: ">=0.5.0,<2.0"}
+      - {version: 1.0.1, ref: v1.0.1, keystone_mcp: ">=0.5.0,<2.0"}
   atlassian:
     kind: service
     summary: Jira and Confluence behind Keystone with per-person accounts.
@@ -1157,11 +1162,11 @@ scenario_override_survives_upgrade() {
   unset KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE
   export_file_public
   export KEYSTONE_SETUP_RESOURCE_S3=catalog
-  run_answered service apply e2e/file-mcp@0.9.0 \
-    || fail override_survives_upgrade "apply 0.9.0 exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp@1.0.0 \
+    || fail override_survives_upgrade "apply 1.0.0 exited ${KC_RC}"
   write_override
-  run_answered service apply e2e/file-mcp@0.9.0 \
-    || fail override_survives_upgrade "re-apply 0.9.0 after override exited ${KC_RC}"
+  run_answered service apply e2e/file-mcp@1.0.0 \
+    || fail override_survives_upgrade "re-apply 1.0.0 after override exited ${KC_RC}"
   kc check
   [[ "$KC_RC" -eq 0 ]] || fail override_survives_upgrade "check exited ${KC_RC}"
   local id
@@ -1169,14 +1174,14 @@ scenario_override_survives_upgrade() {
   limit="$(docker inspect --format '{{.HostConfig.Memory}}' "$id")"
   [[ "$limit" == "268435456" ]] || fail override_survives_upgrade "memory limit is not 256m"
   env_names "$id" | has_line FILE_MCP_LOG_LEVEL || fail override_survives_upgrade "log level missing"
-  kc service plan e2e/file-mcp@1.0.0 || true
-  [[ -f "$ROOT/.keystonectl/packages/e2e/file-mcp/1.0.0/keystone-service.yaml" ]] \
-    || fail override_survives_upgrade "1.0.0 is not in the cache"
+  kc service plan e2e/file-mcp@1.0.1 || true
+  [[ -f "$ROOT/.keystonectl/packages/e2e/file-mcp/1.0.1/keystone-service.yaml" ]] \
+    || fail override_survives_upgrade "1.0.1 is not in the cache"
   before="$(sha_file "$ROOT/packages/file-mcp.override.yml")"
   local old_fragment
   old_fragment="$(lockq service file-mcp fragment_sha256)"
-  UPGRADE_ACCEPT="1.0.0"
-  run_answered service upgrade file-mcp@1.0.0 \
+  UPGRADE_ACCEPT="1.0.1"
+  run_answered service upgrade file-mcp \
     || fail override_survives_upgrade "upgrade exited ${KC_RC}"
   after="$(sha_file "$ROOT/packages/file-mcp.override.yml")"
   [[ "$before" == "$after" ]] || fail override_survives_upgrade "override file changed"
@@ -2377,7 +2382,7 @@ main() {
     note "publish port is ${PUBLISH_PORT} because 8080 is not used on this machine"
   fi
   note "production-example.patch has no diff; layout A is not edited"
-  note "file-mcp has no published 0.9.0 tag; the local catalog vendors 0.9.0 from the 1.0.0 tree and the same image digest"
+  note "e2e/file-mcp locally vendors the published 1.0.0 and 1.0.1 manifests so override_survives_upgrade controls both versions deterministically"
   note "sources.yaml pins catalog ${CATALOG_REF}"
   note "containers created by this script are named ks-cat-e2e-*; network aliases stay redis, e2e-external-s3, e2e-external-pg, and atlassian-mock"
   WORK="$(mktemp -d /tmp/ks-cat-e2e.XXXXXX)"

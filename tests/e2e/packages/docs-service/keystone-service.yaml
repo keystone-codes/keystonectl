@@ -77,8 +77,8 @@ containers:
       interval: 10s
       start_period: 20s
   mcp:
-    # ghcr.io/keystone-codes/hello-upstream:1.0.0 index, git c9dd693
-    image: ghcr.io/keystone-codes/hello-upstream@sha256:f73a378bd40c3a176df5c7cf560464827d2a9b2c38238da6674342a73bff5337
+    # ghcr.io/keystone-codes/hello-upstream:1.0.1 index, git b0a2086
+    image: ghcr.io/keystone-codes/hello-upstream@sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798
     port: 8081
     healthcheck:
       path: /healthz
