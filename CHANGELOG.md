@@ -51,6 +51,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `service upgrade` records the new version, ref, commit and manifest digest in services.lock.yaml.
 - `service add-remote --no-auth` summary no longer asks to check a bearer that was never issued.
 - `package wrap-stdio` mounts the provider directory under its own `name` for discovery, so stdio-box accepts any provider name, not just `provider`.
+- An image tag that is not a PEP 440 version (for example a build id suffix) is treated as unknown, not as that literal version string.
+- `service upgrade`/`service apply` on a resource provider redeploy and update the lock when the version or an added override actually changed.
+- `service upgrade` fetches a catalog version it has not cached yet, the same way `service plan <name>@<version>` already does.
+- e2e: An unnumbered scenario upgrades the catalog `minio` provider from 1.0.0 to 1.0.1 and checks the image, the lock, and the bucket data.
 
 ## [0.1.1] - 2026-10-15
 
