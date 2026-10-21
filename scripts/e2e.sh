@@ -2257,9 +2257,10 @@ scenario_atlassian_profiles() {
     || atlassian_fail accounts "nobody key"
   issue_api_key_for e2e-atl-backend atlassian_nobody E2E_ATL_BACKEND_KEY "$WORK/secrets/atlassian.env" \
     || atlassian_fail accounts "backend key"
-  export E2E_ATL_DEV_TOKEN="$(rand_hex 16)"
-  export E2E_ATL_DESIGN_TOKEN="$(rand_hex 16)"
-  export E2E_ATL_BACKEND_TOKEN="$(rand_hex 16)"
+  E2E_ATL_DEV_TOKEN="$(rand_hex 16)"
+  E2E_ATL_DESIGN_TOKEN="$(rand_hex 16)"
+  E2E_ATL_BACKEND_TOKEN="$(rand_hex 16)"
+  export E2E_ATL_DEV_TOKEN E2E_ATL_DESIGN_TOKEN E2E_ATL_BACKEND_TOKEN
   append_atlassian_tokens || atlassian_fail accounts "token file"
   atlassian_check setup || atlassian_fail setup "${ATL_CHECK_REASON:-atlassian check failed}"
   ATL_INSTALLED_KEY="$(read_installed_key)" || atlassian_fail setup "installed_key missing"
