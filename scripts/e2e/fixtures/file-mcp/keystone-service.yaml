@@ -1,7 +1,7 @@
 schema_version: 1
 kind: service
 name: file-mcp
-version: "1.0.0"
+version: "1.0.1"
 publisher: keystone-codes
 summary: Upload and download links for large files on S3-compatible storage.
 homepage: https://github.com/keystone-codes/file-mcp
@@ -32,8 +32,8 @@ identity:
 
 containers:
   mcp:
-    # ghcr.io/keystone-codes/file-mcp:1.0.0 index, git f2928bf
-    image: ghcr.io/keystone-codes/file-mcp@sha256:5976b83fe6b256d66246044c99fb769fff53981104bb1a769e8799bb37fef4c0
+    # ghcr.io/keystone-codes/file-mcp:1.0.1 index, git 81f8e9d
+    image: ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323
     port: 8081
     env:
       - name: FILE_MCP_MAX_BYTES
