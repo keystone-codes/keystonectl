@@ -14,6 +14,7 @@ import yaml
 
 from keystonectl.answers import pkg_var
 from keystonectl.envfiles import read_env
+from keystonectl.generate.compose import fragment_digest
 from keystonectl.lifecycle import (
     adopt_service,
     eject_service,
@@ -561,11 +562,21 @@ def test_upgrade_provider_with_consumers_keeps_bindings(
     document = yaml.safe_load(lab.texts["minio"])
     document["version"] = "1.0.1"
     document["summary"] = "minio 1.0.1"
+    new_image = (
+        "minio/minio@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    )
+    document["containers"]["server"]["image"] = new_image
     minio_text = yaml.safe_dump(document, sort_keys=False)
     lab.by_url["https://example.com/minio.git"] = minio_text
     cache = package_cache(lab.root, source, "minio", "1.0.1")
     cache.mkdir(parents=True, exist_ok=True)
     (cache / "keystone-service.yaml").write_text(minio_text, encoding="utf-8")
+    # Lab's own FakeDeployer (used for the two installs above) never wrote a
+    # real fragment file; only `upgrade_service`'s hard-coded ComposeDeployer
+    # (exercised below) does, so there is nothing to diff against yet.
+    assert not (lab.root / "packages" / "minio.yml").exists()
+    fragment_sha_before = minio["fragment_sha256"]
+    deploy_events_before = len(lab.deployer.events)
     upgraded = upgrade_service(
         lab.root,
         "minio",
@@ -584,6 +595,66 @@ def test_upgrade_provider_with_consumers_keeps_bindings(
     assert resource["provider"] == "minio"
     minio = next(item for item in lock["services"] if item["name"] == "minio")
     assert minio["previous"]["version"] == "1.0.0"
+    # The defect: upgrade reported success ("Applied minio 1.0.1") but left the
+    # image, the fragment, and the lock's version at 1.0.0. Lab's deployer events
+    # list is untouched because `upgrade_service` always hard-codes a real
+    # `ComposeDeployer`, so the container really would have been recreated.
+    assert minio["version"] == "1.0.1"
+    fragment_after = (lab.root / "packages" / "minio.yml").read_text(encoding="utf-8")
+    assert new_image in fragment_after
+    assert minio["fragment_sha256"] != fragment_sha_before
+    assert minio["fragment_sha256"] == fragment_digest(fragment_after)
+    # Lab's deployer is unused by upgrade_service (it always builds its own
+    # ComposeDeployer); the data volume is addressed by name (ks-pkg-minio-data)
+    # and is not touched by --force-recreate, so it survives the upgrade.
+    assert len(lab.deployer.events) == deploy_events_before
+
+
+def test_upgrade_fetches_a_version_not_yet_in_the_cache(tmp_path: Path) -> None:
+    """`service upgrade` pulls the target version from the source itself.
+
+    Before this, upgrade only ever looked in the local cache, so a version
+    that `catalog list`/`catalog diff` already shows (the catalog itself is
+    refreshed) but that was never individually fetched failed with
+    `version_not_found: "1.0.1 is not in the cache."`. Working around it
+    required running `service plan minio@1.0.1` first, purely to warm the
+    cache; `service plan` does fetch on demand.
+    """
+    lab = Lab(tmp_path, [s3_provider()])
+    assert lab.apply("minio").code == 0
+    lock = load_lock(lab.root / "services.lock.yaml")
+    minio = next(item for item in lock["services"] if item["name"] == "minio")
+    source = str(minio["source"])
+    catalog_path = lab.root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
+    catalog_doc = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    catalog_doc["packages"]["minio"]["versions"].append({"version": "1.0.1", "ref": "v1.0.1"})
+    catalog_text = yaml.safe_dump(catalog_doc, sort_keys=False)
+    catalog_path.write_text(catalog_text, encoding="utf-8")
+    lab.by_url["https://example.com/catalog.git"] = catalog_text
+    document = yaml.safe_load(lab.texts["minio"])
+    document["version"] = "1.0.1"
+    document["summary"] = "minio 1.0.1"
+    lab.by_url["https://example.com/minio.git"] = yaml.safe_dump(document, sort_keys=False)
+    # No cache pre-seed for 1.0.1 here: that is the point of this test.
+    assert not (
+        package_cache(lab.root, source, "minio", "1.0.1") / "keystone-service.yaml"
+    ).exists()
+    upgraded = upgrade_service(
+        lab.root,
+        "minio",
+        runner=lab.runner,
+        secrets=SecretRegistry(),
+        sets={pkg_var("minio", "CONFIRM_UPGRADE"): "1.0.1"},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=False,
+        clock=lambda: CLOCK,
+    )
+    assert upgraded.code == 0, upgraded.error
+    cached = package_cache(lab.root, source, "minio", "1.0.1") / "keystone-service.yaml"
+    assert cached.is_file()
+    lock = load_lock(lab.root / "services.lock.yaml")
+    minio = next(item for item in lock["services"] if item["name"] == "minio")
+    assert minio["version"] == "1.0.1"
 
 
 def _upgrade(root: Path, ref: str = "file-mcp", *, sets: dict | None = None, runner=None):

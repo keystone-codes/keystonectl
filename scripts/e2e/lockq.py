@@ -55,6 +55,18 @@ def query_lines(document: Mapping[str, Any], query: str, args: list[str]) -> lis
             return ["missing"]
         value = service.get(args[1])
         return [] if value is None else [str(value)]
+    if query == "service-image":
+        if len(args) != 2:
+            raise ValueError("service-image needs NAME and ROLE")
+        service = _service(document, args[0])
+        if service is None:
+            return []
+        containers = service.get("containers") if isinstance(service, Mapping) else None
+        role = containers.get(args[1]) if isinstance(containers, Mapping) else None
+        if not isinstance(role, Mapping):
+            return []
+        value = role.get("image")
+        return [] if value is None else [str(value)]
     if query == "env-files":
         if len(args) != 1:
             raise ValueError("env-files needs a package name")
@@ -74,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) < 2:
         print(
             "usage: lockq.py LOCK QUERY [ARG ...]\n"
-            "queries: layout-flavor layout-keystone-service layout-version resource service env-files",
+            "queries: layout-flavor layout-keystone-service layout-version resource service "
+            "service-image env-files",
             file=sys.stderr,
         )
         return 2

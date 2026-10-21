@@ -883,6 +883,37 @@ def _decide_need(ctx: Context, manifest: Mapping[str, Any], need: Mapping[str, A
     return work
 
 
+def _provider_needs_deploy(
+    ctx: Context, manifest: Mapping[str, Any], name: str, installed: Mapping[str, Any] | None
+) -> bool:
+    """True when ``provider.deploy``/``_apply_direct`` has to actually run.
+
+    A provider is unchanged only when it is installed, bound, at the manifest's
+    version, *and* the files apply would write (the fragment and
+    docker-compose.packages.yml, which carries the override-include flag) are
+    already on disk as apply would render them. Comparing only "installed and
+    bound" let ``service upgrade``/``apply`` report success for a version bump
+    or a newly added ``packages/<name>.override.yml`` without redeploying,
+    regenerating the fragment, or including the override.
+    """
+    if installed is None:
+        return True
+    version = str(manifest.get("version") or "")
+    if installed.get("version") != version:
+        return True
+    from keystonectl.generate.compose import render_fragment
+    from keystonectl.generate.install import packages_file_text
+
+    path = ctx.root / "packages" / f"{name}.yml"
+    fragment = render_fragment(manifest, {})
+    if not path.is_file() or path.read_text(encoding="utf-8") != fragment:
+        return True
+    packages_path = ctx.root / "docker-compose.packages.yml"
+    if not packages_path.is_file():
+        return True
+    return packages_path.read_text(encoding="utf-8") != packages_file_text(ctx, name)
+
+
 def _decide_provider(ctx: Context, manifest: Mapping[str, Any]) -> _Work:
     work = _Work()
     name = str(manifest.get("name") or "")
@@ -904,9 +935,13 @@ def _decide_provider(ctx: Context, manifest: Mapping[str, Any]) -> _Work:
         )
         return work
     installed = _service(ctx.lock, name)
-    status = "unchanged" if installed and bound is not None else "planned"
     source = ctx.resolved.source_name if ctx.resolved is not None else ""
     version = str(manifest.get("version") or "")
+    status = (
+        "planned"
+        if bound is None or _provider_needs_deploy(ctx, manifest, name, installed)
+        else "unchanged"
+    )
     work.actions.append(
         {
             "id": "provider.deploy",
@@ -1649,7 +1684,7 @@ def _apply_direct(ctx: Context, manifest: Mapping[str, Any]) -> None:
     name = str(manifest["name"])
     bound = _resource(ctx.lock, str(manifest["provides"]["kind"]))
     installed = _service(ctx.lock, name)
-    if installed is None or bound is None:
+    if bound is None or _provider_needs_deploy(ctx, manifest, name, installed):
         ctx.deployer.deploy(ctx, ctx.resolved, role="resource")
         if ctx.failure is not None:
             return
@@ -1668,7 +1703,7 @@ def _apply_direct(ctx: Context, manifest: Mapping[str, Any]) -> None:
         params = {"host": host, "port": port, "sslmode": "disable"}
     now = _stamp(ctx)
     _admin_values(ctx, manifest)
-    _ensure_service(
+    entry = _ensure_service(
         ctx.lock,
         package=ctx.resolved,
         manifest=manifest,
@@ -1679,6 +1714,14 @@ def _apply_direct(ctx: Context, manifest: Mapping[str, Any]) -> None:
         generated=_generated_names(manifest),
         root=ctx.root,
     )
+    # `_ensure_service` only sets `fragment_sha256` on a first install (the
+    # regular-service path patches it again afterwards in `_save_service`); a
+    # provider upgrade never did, so a redeployed provider kept its old
+    # version's hash and the next `service upgrade`/`service plan` would see
+    # a false hand-edit (`fragment_modified`) against the file deploy() just
+    # wrote.
+    entry["fragment_sha256"] = _fragment_digest(ctx.root, manifest, name)
+    entry["fragment"] = f"packages/{name}.yml"
     _upsert_resource(
         ctx.lock,
         kind=kind,
