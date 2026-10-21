@@ -2058,10 +2058,10 @@ ensure_atlassian_catalog() {
 
 apply_atlassian() {
   if [[ "$PROFILE" == "ci" ]]; then
-    run_answered service apply atlassian || return $?
+    run_answered service apply e2e/atlassian || return $?
     return 0
   fi
-  kc service apply atlassian --defer-public
+  kc service apply e2e/atlassian --defer-public
   return "$KC_RC"
 }
 

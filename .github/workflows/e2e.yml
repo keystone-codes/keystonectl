@@ -17,7 +17,7 @@ on:
       keystone_deploy_ref:
         description: keystone-deploy commit (release/catalog)
         required: false
-        default: ffd719701f3bb0eb53bdd212447bcd43bbd07c43
+        default: bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3
       keystone_mcp_ref:
         description: keystone-mcp commit (release/0.5.0)
         required: false
