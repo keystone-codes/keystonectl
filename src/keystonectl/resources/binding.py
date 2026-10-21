@@ -422,8 +422,28 @@ def _choose_version(entry: Mapping[str, Any]) -> dict[str, Any]:
     return max(versions, key=lambda item: Version(str(item["version"])))
 
 
-def _resolved_provider(source: str, name: str, entry: Mapping[str, Any]) -> ResolvedPackage:
-    chosen = _choose_version(entry)
+def _entry_version(entry: Mapping[str, Any], version: str) -> dict[str, Any] | None:
+    for item in entry.get("versions") or []:
+        if isinstance(item, dict) and item.get("version") == version:
+            return item
+    return None
+
+
+def _resolved_provider(
+    source: str, name: str, entry: Mapping[str, Any], *, pinned_version: str | None = None
+) -> ResolvedPackage:
+    """Build the provider's ResolvedPackage: the pinned (already installed) version when
+    there is one, the newest compatible catalog version otherwise (a first install).
+
+    Binding a second (or later) consumer to a provider that is already installed must
+    reuse exactly what is running, not silently record the catalog's newest version in
+    the lock while the container itself is never redeployed.
+    """
+    chosen = None
+    if pinned_version is not None:
+        chosen = _entry_version(entry, pinned_version)
+    if chosen is None:
+        chosen = _choose_version(entry)
     provides = entry.get("provides") if isinstance(entry.get("provides"), dict) else None
     return ResolvedPackage(
         source_name=source,
@@ -1539,8 +1559,13 @@ def _apply_catalog(
             return
         selected = selected_maybe
     source, name, entry = selected
-    provider_package = _resolved_provider(source, name, entry)
     installed = _service(ctx.lock, name)
+    pinned_version = (
+        str(installed["version"])
+        if installed is not None and isinstance(installed.get("version"), str)
+        else None
+    )
+    provider_package = _resolved_provider(source, name, entry, pinned_version=pinned_version)
     if installed is None:
         if ctx.deployer is None:
             _fail(
