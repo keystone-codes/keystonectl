@@ -1098,6 +1098,10 @@ def _ensure_service(
     current["ref"] = package.ref
     current["commit"] = package.commit
     current["manifest_sha256"] = package.manifest_sha256
+    if package.is_local:
+        current["content_sha256"] = package.content_sha256
+    else:
+        current.pop("content_sha256", None)
     current["containers"] = _lock_containers(manifest)
     if role == "service" and isinstance(compat.get("keystone_mcp"), str):
         current["compat_keystone_mcp"] = compat["keystone_mcp"]
