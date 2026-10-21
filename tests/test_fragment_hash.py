@@ -255,6 +255,63 @@ def test_provider_deploy_is_not_called_again_over_a_hand_edit(tmp_path: Path) ->
     assert lab.deployer.events == before
 
 
+def test_provider_apply_includes_an_added_override(tmp_path: Path) -> None:
+    """``packages/minio.override.yml`` is picked up by a plain re-apply.
+
+    A consumer package's own ``service apply`` always includes an override
+    (e2e scenario 6). A resource provider's own ``service apply`` did not:
+    ``_decide_provider`` called it "unchanged" whenever the provider was
+    already installed and bound, without checking whether
+    ``docker-compose.packages.yml`` on disk still matched what apply would
+    write (which carries the override-include flag). So the override file
+    was accepted and left untouched, but `docker-compose.packages.yml` was
+    never rewritten to include it, and `check` kept reporting
+    `override_not_included` no matter how often `apply` ran.
+    """
+    from keystonectl.generate.install import ComposeDeployer
+    from keystonectl.plan import run_service
+
+    lab = Lab(tmp_path, [s3_provider()])
+    first = run_service(
+        lab.root,
+        "apply",
+        "minio",
+        runner=lab.runner,
+        secrets=SecretRegistry(),
+        sets={},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=False,
+        deployer=ComposeDeployer(),
+        clock=lambda: datetime(2026, 10, 13, 12, 0, tzinfo=UTC),
+    )
+    assert first.code == 0, first.error
+    packages_before = (lab.root / "docker-compose.packages.yml").read_text(encoding="utf-8")
+    assert "minio.override.yml" not in packages_before
+
+    override = lab.root / "packages" / "minio.override.yml"
+    override.write_text("services: {}\n", encoding="utf-8")
+
+    second = run_service(
+        lab.root,
+        "apply",
+        "minio",
+        runner=lab.runner,
+        secrets=SecretRegistry(),
+        sets={},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=False,
+        deployer=ComposeDeployer(),
+        clock=lambda: datetime(2026, 10, 13, 12, 5, tzinfo=UTC),
+    )
+    assert second.code == 0, second.error
+    packages_after = (lab.root / "docker-compose.packages.yml").read_text(encoding="utf-8")
+    assert "packages/minio.override.yml" in packages_after
+    assert override.read_text(encoding="utf-8") == "services: {}\n"
+
+    result = run_check(lab.root)
+    assert not any(item["id"] == "override_not_included" for item in result.warnings)
+
+
 def _provider_package(root: Path, text: str) -> ResolvedPackage:
     dest = root / ".keystonectl" / "packages" / "local" / "minio" / "1.0.0"
     dest.mkdir(parents=True, exist_ok=True)
