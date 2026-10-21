@@ -543,10 +543,6 @@ def test_lock_still_requires_commit_for_git_sources(tmp_path: Path) -> None:
     assert validate_lock(lock) == []
 
 
-@pytest.mark.xfail(
-    reason="G10: _ensure_service does not record the new version and pins after upgrade",
-    strict=False,
-)
 def test_upgrade_records_the_new_version_and_content(tmp_path: Path) -> None:
     root = _installed(tmp_path)
     old = _entry(root)["content_sha256"]

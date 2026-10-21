@@ -6,8 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-21
-
 ### Added
 
 - Skill: wrapping a remote HTTP MCP server in a box, from the operator's choice and a plan from its README to `package import-snapshot` and `service upgrade`.
@@ -30,6 +28,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Error `local_changed` when a `local/` package changed under the installed version; warning `local_package_missing` from `check`.
 - `init` creates an empty `local/` folder; `init --adopt` creates it when it is missing.
 - docs: ADR 0011 records local packages in the deployment, without git.
+
+### Changed
+
+- `package wrap-stdio --no-discovery` writes an empty `tools.snapshot.json` when there is none, so the box starts.
+- `package wrap-stdio` lists the `creds_*` tools the image prints, including `creds_snapshot_tools`, which is not critical.
+- `catalog add` refuses the name `local`, which is reserved for the `local/` folder, as `source_exists`.
+- The lock allows `commit: null` with `content_sha256` for packages from `local`; `service apply` reports `content_sha256` for them.
+
+### Fixed
+
+- `package wrap-stdio --stock-image` mounts the package at `/opt/box/packages/<provider>`, so the box starts; updates move the old `/opt/box/provider`.
+- `package wrap-stdio --resolve-lock` runs `uv pip compile` with `--python-version 3.12`, the Python of the stdio-box image.
+- Tests marked `integration` (Docker and network) no longer run by default; run them with `uv run pytest -m integration`.
+- `service upgrade` of a package from `local/` also records the new `content_sha256`; it drops the field when the package is no longer from `local`.
+
+## [0.2.0] - 2026-10-21
+
+### Added
+
 - Skill: installing a box and setting up credential profiles for people, services and roles through a one-time link.
 - e2e: Scenario 16 installs the atlassian package from a catalog subdirectory and checks profiles, role order, and a service account.
 - docs: ADR 0007 records stdio MCP servers as HTTP boxes; profiles live in the box, and containers keep the image user and default capabilities.
@@ -49,8 +66,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A recorded `sources.yaml` keeps its `keystone-codes` ref; `keystonectl catalog set-ref keystone-codes v1.2.0` moves it.
 - Skill: requires sign-in through the provider before the first service, and points to `keystone-gateway-bootstrap` otherwise.
 - Skill: `service add-remote` examples pass `--tools`, name the two tools warnings, and ask a yes before `--no-auth`.
-- `package wrap-stdio --no-discovery` writes an empty `tools.snapshot.json` when there is none, so the box starts.
-- `package wrap-stdio` lists the `creds_*` tools the image prints, including `creds_snapshot_tools`, which is not critical.
 - `package wrap-stdio` pins the default `--image` to the published stdio-box 0.1.0 digest.
 - Provider contract: the secret file is the desired secret.
 - docs: Backups of catalog providers, `tools_unreachable` as the state before policy, confirmations as a contract, manual registry edits during apply.
@@ -61,16 +76,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `check` reports `override_unchecked`, `compose_version_unknown` and `check_skipped_no_docker` instead of reusing check ids; every warning id is in the registry.
 - `output.schema.json` types `result` for apply, list, status, remove, bundle and catalog list; `service apply` reports `result.resources`.
 - `service remove` keeps generated secrets of a package with volumes in `.keystonectl/secrets/<name>.generated.env`; reinstalling reuses them.
-- `catalog add` refuses the name `local`, which is reserved for the `local/` folder, as `source_exists`.
-- The lock allows `commit: null` with `content_sha256` for packages from `local`; `service apply` reports `content_sha256` for them.
 - e2e: The vm profile requires `--domain` and a real `E2E_TLS_EMAIL` for certbot, and installs the keystonectl version of the checkout from PyPI.
 - e2e: Pins catalog `v1.2.0`, packages 1.0.1, and the deploy commit with the public keystonectl interface; scenario 6 upgrades file-mcp 1.0.0 to 1.0.1.
 
 ### Fixed
 
-- `package wrap-stdio --stock-image` mounts the package at `/opt/box/packages/<provider>`, so the box starts; updates move the old `/opt/box/provider`.
-- `package wrap-stdio --resolve-lock` runs `uv pip compile` with `--python-version 3.12`, the Python of the stdio-box image.
-- Tests marked `integration` (Docker and network) no longer run by default; run them with `uv run pytest -m integration`.
 - docs: Upgrade confirmation is the target version, not `y`.
 - Bundle results read the policy of the installed package version; cached versions are compared as versions.
 - ``.keystonectl/`` gets its ``.gitignore`` whichever command creates it first.
