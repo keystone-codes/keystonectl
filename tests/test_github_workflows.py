@@ -192,3 +192,13 @@ def test_e2e_workflow_defaults_match_script_pins() -> None:
         default = re.search(rf"{var}: .*\|\| '([0-9a-f]{{40}})'", workflow)
         assert pinned is not None and default is not None, var
         assert default.group(1) == pinned.group(1), var
+    inputs = _workflow_on(_load("e2e.yml"))["workflow_dispatch"]["inputs"]
+    for name, script_name in (
+        ("keystone_deploy_ref", "KEYSTONE_DEPLOY_REF"),
+        ("keystone_mcp_ref", "KEYSTONE_MCP_REF"),
+    ):
+        pinned = re.search(
+            rf'^{script_name}="\$\{{E2E_[A-Z_]+:-([0-9a-f]{{40}})\}}"', script, re.MULTILINE
+        )
+        assert pinned is not None, name
+        assert inputs[name]["default"] == pinned.group(1), name
