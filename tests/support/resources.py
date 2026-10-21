@@ -21,6 +21,7 @@ from keystonectl.resources.s3_probe import ProbeError as S3Error
 from keystonectl.resources.s3_probe import ProbeReport as S3Report
 from keystonectl.runner import CommandResult, FakeCommandRunner
 from tests.support import EXAMPLES, SHA, private_file, write_empty_lock
+from tests.support.deploylab import DockerBox
 
 ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE01"
 SECRET_KEY = "wJalrXUtnFEMI7SECRETKEY32charsxx"
@@ -139,6 +140,7 @@ class Lab:
         self.containers: dict[str, dict[str, Any]] = {}
         self.by_url: dict[str, str] = {}
         self.texts: dict[str, str] = {}
+        self.docker_box = DockerBox()
         write_empty_lock(root)
         groups = [("local", manifests, "https://example.com/catalog.git", 100)]
         if extra:
@@ -222,7 +224,11 @@ class Lab:
                 if lab.provision_code != 0:
                     return CommandResult(tuple(args), lab.provision_code, "", lab.provision_stderr)
                 return CommandResult(tuple(args), 0, _provision_json(list(args)) + "\n", "")
-            raise AssertionError(list(args))
+            # Everything else (compose up/config/version, image inspect, container
+            # health) goes through the same fake Docker the plain-service deploy
+            # tests use, so a real `ComposeDeployer.deploy()` (for example from
+            # `service upgrade` on a resource provider) works here too.
+            return lab.docker_box(args, **_kwargs)
 
         ok = CommandResult((), 0, "", "")
         return FakeCommandRunner(

@@ -883,6 +883,12 @@ scenario_install_file_mcp_minio() {
   fi
   export KEYSTONE_SETUP_RESOURCE_S3=catalog
   export_file_public
+  # Pin the provider at 1.0.0 before the bundle: an unpinned `bundle install`
+  # resolves the newest compatible version (1.0.1 as of this catalog), which
+  # would leave scenario_minio_provider_upgrade with nothing to upgrade from.
+  # Once minio is installed and bound, bundle install reuses it as-is.
+  kc service apply minio@1.0.0
+  [[ "$KC_RC" -eq 0 ]] || fail install_file_mcp_minio "minio@1.0.0 apply exited ${KC_RC}"
   run_answered bundle install minimal || fail install_file_mcp_minio "bundle install exited ${KC_RC}"
   cp "$WORK/log/kc.out" "$WORK/log/install.json"
   curl_public || fail install_file_mcp_minio "public HTTP check failed"
@@ -896,6 +902,8 @@ scenario_install_file_mcp_minio() {
   fi
   lockq resource s3 origin | has_line catalog || fail install_file_mcp_minio "s3 origin is not catalog"
   lockq service minio role | has_line resource || fail install_file_mcp_minio "minio is not a resource"
+  lockq service minio version | has_line 1.0.0 \
+    || fail install_file_mcp_minio "bundle install did not reuse the pinned minio 1.0.0"
   if [[ "$LAYOUT" == "production-example" ]]; then
     # .env does not set this ahead of time on this layout; keystonectl must add
     # it to the managed block itself once an upstream needs plain HTTP.
@@ -909,6 +917,52 @@ raise SystemExit(0 if "KEYSTONE_MCP_UPSTREAM_ALLOW_INSECURE_HTTP" in block else 
 ' "$ROOT/.env" || fail install_file_mcp_minio "keystonectl did not set ALLOW_INSECURE_HTTP in the managed block"
   fi
   pass install_file_mcp_minio "$started"
+}
+
+minio_bucket_object_count() {
+  local bucket="$1"
+  MC_E2E_BUCKET="$bucket" docker run --rm --network keystone-resources \
+    --env-file "$ROOT/packages/minio.env" -e "MC_E2E_BUCKET=${bucket}" \
+    --entrypoint sh "$MC_IMAGE" -c '
+      mc alias set local http://minio-server:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
+      mc ls --recursive "local/$MC_E2E_BUCKET" 2>/dev/null | wc -l
+    ' | tr -d '[:space:]'
+}
+
+scenario_minio_provider_upgrade() {
+  local started before_started after_started objects_before objects_after
+  started="$(date +%s)"
+  if ! want_storage minio; then
+    skip minio_provider_upgrade "storage is ${STORAGE}"
+    return 0
+  fi
+  if lockq service minio managed | has_line missing; then
+    skip minio_provider_upgrade "minio is not installed"
+    return 0
+  fi
+  lockq service minio version | has_line 1.0.0 \
+    || fail minio_provider_upgrade "minio is not at 1.0.0 before the upgrade"
+  before_started="$(container_started minio-server)"
+  objects_before="$(minio_bucket_object_count file-mcp)"
+  [[ "$objects_before" -ge 1 ]] \
+    || fail minio_provider_upgrade "no objects in the file-mcp bucket before the upgrade"
+  UPGRADE_ACCEPT="1.0.1"
+  run_answered service upgrade minio || fail minio_provider_upgrade "upgrade exited ${KC_RC}"
+  lockq service minio version | has_line 1.0.1 \
+    || fail minio_provider_upgrade "lock version did not move to 1.0.1"
+  lockq service-image minio server | has_line "$MINIO_IMAGE" \
+    || fail minio_provider_upgrade "lock image did not move to the 1.0.1 pin"
+  grep -F -q "$MINIO_IMAGE" "$ROOT/packages/minio.yml" \
+    || fail minio_provider_upgrade "fragment does not reference the 1.0.1 image"
+  after_started="$(container_started minio-server)"
+  [[ "$before_started" != "$after_started" ]] \
+    || fail minio_provider_upgrade "minio-server was not recreated"
+  objects_after="$(minio_bucket_object_count file-mcp)"
+  [[ "$objects_after" == "$objects_before" ]] \
+    || fail minio_provider_upgrade "bucket object count changed: ${objects_before} -> ${objects_after}"
+  mcp_check files \
+    || fail minio_provider_upgrade "files client failed after minio upgrade (${MCP_CHECK_FAIL_REASON:-unknown})"
+  pass minio_provider_upgrade "$started"
 }
 
 scenario_policy_untouched() {
@@ -2406,6 +2460,7 @@ main() {
   fi
   scenario_agent_path_missing
   scenario_install_file_mcp_minio
+  scenario_minio_provider_upgrade
   scenario_policy_untouched
   scenario_rerun_no_questions
   scenario_docs_service_postgres_provider
