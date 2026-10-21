@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 from packaging.specifiers import SpecifierSet
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 from keystonectl.answers import Question
 from keystonectl.catalog import is_compatible
@@ -98,10 +98,22 @@ def _compose_keystone_image(root: Path) -> str | None:
 
 
 def image_version(image: str) -> str | None:
+    """Return the PEP 440 version from an image tag, when the tag parses as one.
+
+    A tag that matches the loose ``_IMAGE_RE`` shape but is not a valid PEP 440
+    version (for example ``0.5.0-g01``, a build id suffix) is treated as unknown
+    rather than returned, so callers fall through to the next detection step
+    instead of comparing an unparsable string.
+    """
     match = _IMAGE_RE.search(image.strip())
     if not match:
         return None
-    return match.group("v")
+    candidate = match.group("v")
+    try:
+        Version(candidate)
+    except InvalidVersion:
+        return None
+    return candidate
 
 
 def detect_keystone_mcp_version(

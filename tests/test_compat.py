@@ -137,6 +137,37 @@ def test_latest_tag_asks_version(tmp_path: Path) -> None:
     assert code == 2
 
 
+def test_build_id_tag_without_answer_asks_version(tmp_path: Path) -> None:
+    """A tag like 0.5.0-g01 is not a PEP 440 version; fall through to the question."""
+    found = detect_keystone_mcp_version(tmp_path, lock=_lock("keystone-mcp:0.5.0-g01"))
+    assert found.version is None
+    assert found.question is not None
+    assert found.question.var == "KEYSTONE_SETUP_KEYSTONE_MCP_VERSION"
+
+
+def test_build_id_tag_with_answer_is_compatible(tmp_path: Path) -> None:
+    """The same unparsable tag, with an operator answer, resolves and is compatible."""
+    found = detect_keystone_mcp_version(
+        tmp_path,
+        lock=_lock("keystone-mcp:0.5.0-g01"),
+        answers={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+    )
+    assert found.version == "0.5.0"
+    assert found.via == "answer"
+    assert is_compatible(">=0.5.0,<2.0", found.version)
+
+
+def test_valid_tag_wins_over_answer(tmp_path: Path) -> None:
+    """A tag that does parse as PEP 440 is used even when an answer is also given."""
+    found = detect_keystone_mcp_version(
+        tmp_path,
+        lock=_lock(IMAGE),
+        answers={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "9.9.9"},
+    )
+    assert found.version == "0.5.0"
+    assert found.via == "image"
+
+
 def test_answered_version_reused_until_image_changes(tmp_path: Path) -> None:
     lock = _lock("keystone-mcp:latest", version="0.5.0")
     found = detect_keystone_mcp_version(tmp_path, lock=lock)
