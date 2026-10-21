@@ -858,6 +858,13 @@ def _note_unreachable(ctx: Context, text: str) -> None:
         )
 
 
+def packages_file_text(ctx: Context, name: str) -> str:
+    """Public wrapper so other modules (the resource provider path) can compare
+    the current ``docker-compose.packages.yml`` against what apply would write,
+    for example to notice an override file added after install."""
+    return _packages_text(ctx, name)
+
+
 def _packages_text(ctx: Context, name: str) -> str:
     layout = _layout(ctx)
     names: dict[str, bool] = {}

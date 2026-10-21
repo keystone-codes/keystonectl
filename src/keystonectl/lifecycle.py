@@ -23,6 +23,7 @@ from keystonectl.answers import Question, pkg_var
 from keystonectl.cachedir import private_subdir
 from keystonectl.envfiles import read_env, upsert_env
 from keystonectl.errors import ERRORS
+from keystonectl.fetch import FetchError, describe_fetch_error, fetch_tree, replace_tree
 from keystonectl.generate.compose import fragment_digest, render_fragment
 from keystonectl.generate.docker import compose_prefix, run
 from keystonectl.generate.files import atomic_write, write_backup
@@ -153,6 +154,68 @@ def _manifest_at(
         return None
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     return loaded if isinstance(loaded, dict) else None
+
+
+def _package_catalog_entry(root: Path, name: str) -> dict[str, Any] | None:
+    catalogs = root / ".keystonectl" / "catalogs"
+    if not catalogs.is_dir():
+        return None
+    for path in catalogs.glob("*/catalog.yaml"):
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        packages = document.get("packages") if isinstance(document, dict) else None
+        if isinstance(packages, dict) and isinstance(packages.get(name), dict):
+            return packages[name]
+    return None
+
+
+def _fetch_version_into_cache(
+    root: Path,
+    runner: CommandRunner,
+    *,
+    command: str,
+    source: str,
+    name: str,
+    version: str,
+) -> Result | None:
+    """Download a catalog version keystonectl has not fetched yet.
+
+    ``catalog list``/``catalog diff`` can show a version before its tree has
+    ever been cloned (the catalog itself is already refreshed; only the
+    package tree is missing). Without this, ``service upgrade`` demanded a
+    prior ``service plan <name>@<version>`` just to warm the cache, even
+    though ``service plan`` fetches the same way.
+    """
+    catalog_entry = _package_catalog_entry(root, name)
+    if not isinstance(catalog_entry, dict):
+        return None
+    git_url = catalog_entry.get("source")
+    ref: str | None = None
+    for item in catalog_entry.get("versions") or []:
+        if isinstance(item, dict) and item.get("version") == version:
+            value = item.get("ref")
+            ref = value if isinstance(value, str) else None
+            break
+    if not isinstance(git_url, str) or not git_url or not ref:
+        return None
+    try:
+        tree, _commit = fetch_tree(runner, git_url, ref, root)
+    except FetchError as exc:
+        spec = ERRORS[exc.error_id]
+        return Result(
+            code=spec.code,
+            command=command,
+            summary=spec.title,
+            target=f"{name}@{version}",
+            error={
+                "id": exc.error_id,
+                "message": describe_fetch_error(f"Package {name}", exc),
+                "hint": spec.action,
+            },
+            retryable=spec.retryable,
+        )
+    dest = package_cache(root, source, name, version)
+    replace_tree(tree, dest)
+    return None
 
 
 def _requires_names(document: Mapping[str, Any]) -> list[str]:
@@ -907,6 +970,15 @@ def upgrade_service(
         )
     before = _manifest_at(root, entry, current)
     after = _manifest_at(root, entry, target)
+    if after is None:
+        source = entry.get("source")
+        if isinstance(source, str) and source:
+            fetch_failed = _fetch_version_into_cache(
+                root, runner, command=command, source=source, name=name, version=target
+            )
+            if fetch_failed is not None:
+                return fetch_failed
+            after = _manifest_at(root, entry, target)
     if after is None:
         return _error(
             command, f"{name}@{target}", "version_not_found", f"{target} is not in the cache."
