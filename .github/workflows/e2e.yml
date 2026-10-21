@@ -39,7 +39,7 @@ jobs:
       matrix:
         layout: [production-example, keystone-deploy]
     env:
-      E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || 'ffd719701f3bb0eb53bdd212447bcd43bbd07c43' }}
+      E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || 'bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3' }}
       E2E_KEYSTONE_MCP_REF: ${{ inputs.keystone_mcp_ref || '6b04a198101dac22815b17d5bcf55b0e1c6463d8' }}
       E2E_PARTNER_CATALOG_URL: ${{ inputs.partner_catalog_url }}
       KEYSTONE_DEPLOY_TOKEN: ${{ secrets.KEYSTONE_DEPLOY_TOKEN }}

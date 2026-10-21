@@ -177,3 +177,18 @@ def test_e2e_dispatch_accepts_partner_catalog_url() -> None:
     runs = [step.get("run") or "" for step in doc["jobs"]["e2e"]["steps"]]
     assert any("--profile ci" in run for run in runs)
     assert not any("--profile vm" in run for run in runs)
+
+
+def test_e2e_workflow_defaults_match_script_pins() -> None:
+    script = (WORKFLOWS_DIR.parent.parent / "scripts" / "e2e.sh").read_text(encoding="utf-8")
+    workflow = (WORKFLOWS_DIR / "e2e.yml").read_text(encoding="utf-8")
+    for var, script_name in (
+        ("E2E_KEYSTONE_DEPLOY_REF", "KEYSTONE_DEPLOY_REF"),
+        ("E2E_KEYSTONE_MCP_REF", "KEYSTONE_MCP_REF"),
+    ):
+        pinned = re.search(
+            rf'^{script_name}="\$\{{{var}:-([0-9a-f]{{40}})\}}"', script, re.MULTILINE
+        )
+        default = re.search(rf"{var}: .*\|\| '([0-9a-f]{{40}})'", workflow)
+        assert pinned is not None and default is not None, var
+        assert default.group(1) == pinned.group(1), var
