@@ -433,6 +433,28 @@ def test_atlassian_check_hides_secrets_and_creds_tokens() -> None:
     )
 
 
+def test_minio_provider_upgrade_is_wired_into_main() -> None:
+    body = _function_body("main")
+    assert body.index("scenario_install_file_mcp_minio") < body.index(
+        "scenario_minio_provider_upgrade"
+    )
+    assert body.index("scenario_minio_provider_upgrade") < body.index("scenario_policy_untouched")
+    install_body = _function_body("scenario_install_file_mcp_minio")
+    assert "service apply minio@1.0.0" in install_body
+    upgrade_body = _function_body("scenario_minio_provider_upgrade")
+    assert 'UPGRADE_ACCEPT="1.0.1"' in upgrade_body
+    assert "run_answered service upgrade minio" in upgrade_body
+    # The defects this guards: upgrade left the lock version, the image, and
+    # the fragment at 1.0.0 (no real redeploy) while reporting success, and
+    # the bucket data has to survive the real container recreation.
+    assert "lockq service minio version | has_line 1.0.1" in upgrade_body
+    assert 'lockq service-image minio server | has_line "$MINIO_IMAGE"' in upgrade_body
+    assert "minio-server was not recreated" in upgrade_body
+    assert "bucket object count changed" in upgrade_body
+    assert "unnumbered `minio_provider_upgrade`" in README
+    assert "| unnumbered `minio_provider_upgrade` | runs | runs | runs | runs |" in README
+
+
 def test_ci_profile_keeps_local_partner_catalog() -> None:
     vm_url = SCRIPT.index(
         'E2E_PARTNER_CATALOG_URL="https://github.com/keystone-codes/e2e-partner-catalog.git"'

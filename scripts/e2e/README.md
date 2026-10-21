@@ -42,7 +42,7 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 ## Scenarios
 
 1. `bundle install` with no answers exits 2 and changes nothing. The keystone-deploy VM profile skips this scenario because `setup.sh` already installed the minimal bundle.
-2. Install file-mcp and MinIO, upload and download 1 MiB.
+2. Install file-mcp and MinIO, upload and download 1 MiB. MinIO is pinned at `1.0.0` (the default catalog's next version, `1.0.1`, is used by the unnumbered `minio_provider_upgrade` step right after this one) so `bundle install` reuses the already-bound provider instead of picking the newest version.
 3. The policy file hash is unchanged; recommended roles are in the install JSON.
 4. A second plan asks nothing and changes nothing.
 5. Install docs-service on the catalog Postgres.
@@ -58,6 +58,8 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 15. Forbidden leftovers on both layouts. Shared checks: no `.*.tmp` files outside `.keystonectl/`, an empty `.keystonectl/tmp/`, no unexplained files under `packages/` (lock names, operator `*.override.yml`, and paths kept by `service remove` are allowed), and mode `600` on `services.lock.yaml` and `packages/*.env`. On **keystone-deploy**, the script also scans `setup.sh`, `start.sh`, docs, and `mcp/**` for legacy external-API strings, refuses a `build:` on `keystone-mcp`, and on the vm profile checks `layout_version`. On **production-example**, it compares operator-file digests to a snapshot taken at the end of prepare (compose, optional `upstreams.yaml`, policy, and `.env` outside the managed block), refuses a `build:` on the layout keystone service, and checks `layout.flavor` and `layout_version`. The report notes which branch ran.
 16. `atlassian_profiles`: install the `atlassian` package from the local catalog subdirectory `packages/atlassian`, then check per-person profiles, role order, a service-account profile, and a reinstall that keeps those profiles. The ci profile submits the credential form through nginx. The vm profile imports the same secrets with `credsctl`. Number 17 is reserved for `second_instance` in 0.3.
 
+Right after scenario 2, an unnumbered scenario (`minio_provider_upgrade`) runs `service upgrade minio` from `1.0.0` to `1.0.1` (the default catalog lists both). It checks that the lock version and the pinned `MINIO_IMAGE` move to `1.0.1`, that `minio-server` is actually recreated (`StartedAt` changes), and that the objects already in the `file-mcp` bucket are still there afterward.
+
 On the VM profile with `--tls certbot`, an unnumbered scenario runs between 12 and 13: the certificate for `--domain` was issued by Let's Encrypt, and re-applying does not change its serial number (certbot did not re-issue).
 
 ### Scenario matrix
@@ -68,6 +70,7 @@ The table lists each numbered scenario plus the certbot step. Cells assume defau
 |---|---|---|---|---|
 | 1 `agent_path_missing` | runs | runs | runs | skipped (setup.sh already installed bundle minimal) |
 | 2 `install_file_mcp_minio` | runs | runs | runs | runs |
+| unnumbered `minio_provider_upgrade` | runs | runs | runs | runs |
 | 3 `policy_untouched` | runs | runs | runs | runs |
 | 4 `rerun_no_questions` | runs | runs | runs | runs |
 | 5 `docs_service_postgres_provider` | runs | runs | runs | runs |
