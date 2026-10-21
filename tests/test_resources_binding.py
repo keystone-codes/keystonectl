@@ -232,6 +232,48 @@ def test_direct_provider_install_binds_without_consumers(tmp_path: Path, kind: s
     assert service["role"] == "resource"
 
 
+def test_second_consumer_reuses_installed_provider_version(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Binding a consumer to an already-installed catalog provider must reuse exactly
+    what is installed, not silently record the catalog's newest version in the lock.
+
+    _apply_catalog resolved the provider via _choose_version(), which always picks the
+    newest catalog version, even when a provider was already installed at an older one.
+    _commit_consumer then wrote that newest version and its manifest (containers, image)
+    into the provider's lock entry -- without ever calling deploy() to actually
+    redeploy it -- so the lock claimed a version the running container was not
+    actually running.
+    """
+    calls = install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    provider = provider_name(kind)
+    assert lab.apply(provider).code == 0, "provider install failed"
+    catalog_path = lab.root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
+    catalog_doc = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    catalog_doc["packages"][provider]["versions"].append({"version": "9.9.9", "ref": "v9.9.9"})
+    catalog_text = yaml.safe_dump(catalog_doc, sort_keys=False)
+    catalog_path.write_text(catalog_text, encoding="utf-8")
+    lab.by_url["https://example.com/catalog.git"] = catalog_text
+    document = yaml.safe_load(lab.texts[provider])
+    document["version"] = "9.9.9"
+    lab.by_url[f"https://example.com/{provider}.git"] = yaml.safe_dump(document, sort_keys=False)
+    lock_before = yaml.safe_load((lab.root / "services.lock.yaml").read_text(encoding="utf-8"))
+    before = next(item for item in lock_before["services"] if item["name"] == provider)
+    deploys_before = [event for event in lab.deployer.events if event[0] == "deploy"]
+    answers = lab.s3_answers() if kind == "s3" else lab.pg_answers()
+    result = lab.apply(consumer_name(kind), environ=answers)
+    assert result.code == 0, result.error
+    probes = len(calls)
+    assert probes >= 1
+    lock_after = yaml.safe_load((lab.root / "services.lock.yaml").read_text(encoding="utf-8"))
+    after = next(item for item in lock_after["services"] if item["name"] == provider)
+    assert after["version"] == before["version"] == "1.0.0"
+    assert after["containers"] == before["containers"]
+    deploys_after = [event for event in lab.deployer.events if event[0] == "deploy"]
+    assert deploys_after == deploys_before
+
+
 def test_rerun_is_unchanged(tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch) -> None:
     calls = install_ok_probes(monkeypatch)
     lab = Lab(tmp_path, standard_manifests())
