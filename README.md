@@ -37,7 +37,7 @@ keystonectl --root <deployment-dir> bundle install minimal
 keystonectl --root <deployment-dir> service status
 ```
 
-Without `sources.yaml` the default catalog `keystone-codes` is used at tag `v1.0.0`.
+Without `sources.yaml` the default catalog `keystone-codes` is used at tag `v1.2.0`.
 
 Every command, its questions, and its error ids are in [docs/commands.md](https://github.com/keystone-codes/keystonectl/blob/main/docs/commands.md).
 

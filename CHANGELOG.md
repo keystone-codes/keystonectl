@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The default catalog `keystone-codes` is pinned at tag `v1.2.0`: the credential boxes and 1.0.1 of `minio`, `hello-upstream`, `file-mcp`.
+- A recorded `sources.yaml` keeps its `keystone-codes` ref; `keystonectl catalog set-ref keystone-codes v1.2.0` moves it.
 - Skill: requires sign-in through the provider before the first service, and points to `keystone-gateway-bootstrap` otherwise.
 - Skill: `service add-remote` examples pass `--tools`, name the two tools warnings, and ask a yes before `--no-auth`.
 - `package wrap-stdio` pins the default `--image` to the published stdio-box 0.1.0 digest.
