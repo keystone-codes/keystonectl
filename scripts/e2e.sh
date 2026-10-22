@@ -1444,6 +1444,29 @@ scenario_external_s3() {
   if lockq resource s3 provider | has_prefix ""; then
     fail external_s3 "external s3 still names a provider"
   fi
+  # Removing the last (only) consumer of an external resource must drop the
+  # binding itself: there is no provider package to remove it with, and
+  # without this a later catalog consumer answered resource_already_bound
+  # ("remove it first") with nothing to remove.
+  run_answered service remove file-mcp \
+    || fail external_s3 "remove file-mcp (the last external s3 consumer) exited ${KC_RC}"
+  [[ -z "$(lockq resource s3 origin)" ]] \
+    || fail external_s3 "external s3 binding was not dropped once its last consumer was removed"
+  unset KEYSTONE_SETUP_RESOURCE_S3 KEYSTONE_SETUP_S3_ENDPOINT KEYSTONE_SETUP_S3_BUCKET \
+    KEYSTONE_SETUP_S3_REGION KEYSTONE_SETUP_S3_PATH_STYLE KEYSTONE_SETUP_S3_ACCESS_KEY_FILE \
+    KEYSTONE_SETUP_S3_SECRET_KEY_FILE
+  kc service apply minio
+  [[ "$KC_RC" -eq 0 ]] || fail external_s3 "apply minio (back to the catalog provider) exited ${KC_RC}"
+  export KEYSTONE_SETUP_RESOURCE_S3=catalog
+  export_file_public
+  run_answered service apply e2e/file-mcp \
+    || fail external_s3 "file-mcp back on the catalog provider exited ${KC_RC}"
+  lockq resource s3 origin | has_line catalog \
+    || fail external_s3 "s3 origin is not catalog after returning from external"
+  lockq resource s3 provider | has_line minio \
+    || fail external_s3 "s3 provider is not minio after returning from external"
+  mcp_check files \
+    || fail external_s3 "files client failed after returning to the catalog provider (${MCP_CHECK_FAIL_REASON:-unknown})"
   pass external_s3 "$started"
 }
 

@@ -50,7 +50,7 @@ Image digests are pinned at the top of `scripts/e2e.sh`. file-mcp and hello-upst
 7. A direct edit is refused until eject; eject leaves the marker.
 8. Adopt regenerates the fragment.
 9. Remove keeps the bucket and the override; install again works. file-mcp declares no volumes, so the kept list has no volume name.
-10. Point file-mcp at an external S3 (`ks-cat-e2e-external-s3`, alias `e2e-external-s3`).
+10. Point file-mcp at an external S3 (`ks-cat-e2e-external-s3`, alias `e2e-external-s3`). Then remove file-mcp (the external binding's only consumer, so it is dropped) and go back to the catalog provider: `service apply minio`, then file-mcp on it again.
 11. Point docs-service at an external Postgres (`ks-cat-e2e-external-pg`).
 12. A second catalog source; an ambiguous name asks for a choice. When `E2E_PARTNER_CATALOG_URL` is set, the script adds that repository at `E2E_PARTNER_CATALOG_REF` and expects neither `local_source` nor `catalog_ref_chosen`. When the URL is empty, it builds the local `file://` catalog. The report notes which path ran: the URL and ref, or `file://`.
 13. On the open example, manual TLS: the first apply is retryable `public_unreachable`. Both profiles then install the sample nginx vhost with a self-signed certificate; apply reaches ready. On the VM profile this runs after the certbot scenario, so a certbot-issued certificate cannot be mistaken for the manual one.

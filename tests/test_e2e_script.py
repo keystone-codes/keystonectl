@@ -46,6 +46,23 @@ def test_external_s3_requires_the_installer_http_warning() -> None:
     assert "insecure_endpoint" not in body
 
 
+def test_external_s3_returns_to_the_catalog_provider_after_the_last_consumer() -> None:
+    """Defect 10: removing the only consumer of an external resource must drop
+    the binding itself; this is the end-to-end check that going back to a
+    catalog provider (minio) actually works afterward, not just that the lock
+    entry is gone."""
+    body = _function_body("scenario_external_s3")
+    remove_index = body.index("run_answered service remove file-mcp \\\n    || fail external_s3")
+    dropped_index = body.index('[[ -z "$(lockq resource s3 origin)"')
+    apply_minio_index = body.index("kc service apply minio")
+    catalog_index = body.index("lockq resource s3 origin | has_line catalog")
+    assert remove_index < dropped_index < apply_minio_index < catalog_index
+    assert "lockq resource s3 provider | has_line minio" in body
+    assert (
+        'mcp_check files \\\n    || fail external_s3 "files client failed after returning' in body
+    )
+
+
 def test_check_allows_installer_warnings_and_untrusted_tls() -> None:
     body = _function_body("scenario_check_clean")
     allowed = "tls_untrusted|s3_plain_http|postgres_plain_connection"

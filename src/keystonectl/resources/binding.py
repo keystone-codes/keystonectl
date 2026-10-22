@@ -1831,8 +1831,18 @@ def _failure_from_elsewhere(ctx: Context) -> bool:
 
 
 def unbind_consumer(lock: dict[str, Any], pkg: str) -> list[str]:
-    """Drop a consumer from resources[]. Buckets and databases stay."""
+    """Drop a consumer from resources[]. Buckets and databases stay.
+
+    An ``external`` resource has no provider package to remove it with, so a
+    binding with no consumers left is dropped here: nothing keystonectl
+    manages still points at it, and keeping the entry only blocked a later
+    ``service plan`` with ``resource_already_bound``/``resource_answer_ignored``
+    (there was no consumer to point at, and no command to clear it). A
+    ``catalog`` resource keeps its entry even with zero consumers: the
+    provider package, and the data in its volume, are still installed.
+    """
     messages: list[str] = []
+    dropped: list[str] = []
     for resource in _resources(lock):
         consumers = resource.get("consumers")
         if not isinstance(consumers, list):
@@ -1850,6 +1860,16 @@ def unbind_consumer(lock: dict[str, Any], pkg: str) -> list[str]:
                     f"database {consumer.get('database')} in postgres ({provider}) was kept"
                 )
         resource["consumers"] = kept
+        if not kept and resource.get("origin") == "external":
+            kind = str(resource.get("kind") or "")
+            messages.append(f"the external {kind} connection was dropped (no consumers left)")
+            dropped.append(kind)
+    if dropped:
+        lock["resources"] = [
+            item
+            for item in _resources(lock)
+            if not (item.get("origin") == "external" and str(item.get("kind")) in dropped)
+        ]
     for service in _services(lock):
         if service.get("name") == pkg and isinstance(service.get("resources"), list):
             service["resources"] = []
