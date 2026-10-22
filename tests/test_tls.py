@@ -154,6 +154,26 @@ def test_detect_letsencrypt_wins(tmp_path: Path) -> None:
     assert _tls(script).detect(DOMAIN).kind == "letsencrypt"
 
 
+def test_detect_custom_mode_ignores_a_stale_letsencrypt_live_dir(tmp_path: Path) -> None:
+    """With mode="custom", a /etc/letsencrypt/live/<domain> directory (for example
+    from an earlier certbot attempt, or another service on the same host) must not
+    be read: the chosen mode and the copy in custom_dir are the source of truth."""
+    script = Script(tmp_path)
+    script.enddate = FUTURE
+    _pair(tmp_path / "le" / DOMAIN)
+    _pair(tmp_path / "custom" / DOMAIN)
+    info = _tls(script).detect(DOMAIN, mode="custom")
+    assert info.kind == "custom"
+    assert info.cert_path == str(tmp_path / "custom" / DOMAIN / "fullchain.pem")
+
+
+def test_detect_custom_mode_with_no_custom_copy_is_none(tmp_path: Path) -> None:
+    script = Script(tmp_path)
+    _pair(tmp_path / "le" / DOMAIN)
+    info = _tls(script).detect(DOMAIN, mode="custom")
+    assert info.kind == "none"
+
+
 def test_detect_expired_negative_days(tmp_path: Path) -> None:
     script = Script(tmp_path)
     script.enddate = PAST
@@ -440,6 +460,24 @@ def test_renewal_custom_operator(tmp_path: Path) -> None:
     _pair(tmp_path / "custom" / DOMAIN)
     tls = _tls(script)
     assert tls.renewal_check(DOMAIN).mode == "operator"
+    assert any(item["id"] == "renewal_manual" for item in tls.warnings)
+
+
+def test_renewal_custom_mode_warns_even_with_a_stale_letsencrypt_live_dir(
+    tmp_path: Path,
+) -> None:
+    """Without mode="custom", a stray /etc/letsencrypt/live/<domain> makes detect()
+    report "letsencrypt", so renewal_check() never reaches the custom branch and
+    never warns renewal_manual -- exactly the gap from the stand run."""
+    script = Script(tmp_path)
+    _pair(tmp_path / "le" / DOMAIN)
+    _pair(tmp_path / "custom" / DOMAIN)
+    tls = _tls(script)
+    assert tls.renewal_check(DOMAIN).mode != "operator"
+    assert not any(item["id"] == "renewal_manual" for item in tls.warnings)
+
+    tls = _tls(script)
+    assert tls.renewal_check(DOMAIN, mode="custom").mode == "operator"
     assert any(item["id"] == "renewal_manual" for item in tls.warnings)
 
 
