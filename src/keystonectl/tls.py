@@ -156,11 +156,30 @@ class Tls:
             )
         return parsed
 
-    def detect(self, domain: str) -> CertInfo:
-        live_cert = self.le_live / domain / "fullchain.pem"
-        live_key = self.le_live / domain / "privkey.pem"
+    def detect(self, domain: str, *, mode: str | None = None) -> CertInfo:
+        """Find the certificate currently in use.
+
+        With no ``mode`` (an operator choice not made yet, or ``keep``, which
+        reuses whatever is already active regardless of its source), a
+        Let's Encrypt live directory wins over a custom copy when both
+        happen to exist for the domain. With ``mode="custom"``, the chosen
+        mode is the source of truth: only the copy keystonectl itself
+        maintains in ``custom_dir`` (``/etc/ssl/keystone/<domain>``) is
+        read, even when ``/etc/letsencrypt/live/<domain>`` also exists (for
+        example from an earlier certbot attempt, or another service on the
+        same host). Reading the live directory there would silently nod at
+        certbot's copy while nginx serves the custom one, which neither
+        warns `renewal_manual` nor tracks the certificate that is actually
+        exposed.
+        """
         custom_cert = self.custom_dir / domain / "fullchain.pem"
         custom_key = self.custom_dir / domain / "privkey.pem"
+        if mode == "custom":
+            if self._exists(custom_cert) and self._exists(custom_key):
+                return self._info("custom", custom_cert, custom_key)
+            return CertInfo("none", None, None, None, None)
+        live_cert = self.le_live / domain / "fullchain.pem"
+        live_key = self.le_live / domain / "privkey.pem"
         if self._exists(live_cert) and self._exists(live_key):
             return self._info("letsencrypt", live_cert, live_key)
         if self._exists(custom_cert) and self._exists(custom_key):
@@ -399,8 +418,8 @@ class Tls:
         found.extend(re.findall(r"DNS:([^,\s]+)", san.stdout))
         return found
 
-    def renewal_check(self, domain: str) -> Renewal:
-        info = self.detect(domain)
+    def renewal_check(self, domain: str, *, mode: str | None = None) -> Renewal:
+        info = self.detect(domain, mode=mode)
         if info.kind == "custom":
             self._warn(
                 "renewal_manual", "renewal is on you; service status warns 30 days before expiry"

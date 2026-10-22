@@ -1301,6 +1301,35 @@ def test_status_cert_expiring_thresholds(tmp_path: Path) -> None:
     assert not warn_for(31, kind="custom", mode="custom")
 
 
+def test_status_custom_mode_warns_renewal_manual_over_a_stale_letsencrypt_dir(
+    tmp_path: Path,
+) -> None:
+    """A /etc/letsencrypt/live/<domain> directory left over from an earlier
+    certbot attempt (or another service on the same host) must not make
+    status_public() report the certificate as Let's Encrypt when the service's
+    own recorded mode is "custom": it would then neither warn renewal_manual
+    nor read the certificate nginx actually serves (the copy in custom_dir)."""
+    host = Host()
+    _certs(tmp_path)  # writes tmp_path/le/<domain>
+    custom = tmp_path / "custom" / DOMAIN
+    custom.mkdir(parents=True)
+    (custom / "fullchain.pem").write_text("CERT\n", encoding="utf-8")
+    (custom / "privkey.pem").write_text("KEY\n", encoding="utf-8")
+    ctx = _ctx(tmp_path)
+    ctx.runner = host  # type: ignore[assignment]
+    ctx.le_live = tmp_path / "le"
+    ctx.custom_dir = tmp_path / "custom"
+    ctx.cron_file = tmp_path / "missing-cron"
+    body: dict = {"warnings": []}
+    status_public(
+        ctx,
+        {"public": {"state": "ready", "domain": DOMAIN, "tls": "custom"}},
+        body,
+    )
+    assert any(item["id"] == "renewal_manual" for item in body["warnings"])
+    assert not any(item["id"] == "renewal_timer_missing" for item in body["warnings"])
+
+
 def test_status_renewal_missing(tmp_path: Path) -> None:
     host = Host()
     host.systemctl = "none\n"

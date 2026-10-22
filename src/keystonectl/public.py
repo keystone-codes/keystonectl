@@ -1378,8 +1378,8 @@ def status_public(ctx: Context, entry: Mapping[str, Any], body: dict[str, Any]) 
             info = tls.remote_cert(domain)
             renewal_mode = "operator"
         else:
-            info = tls.detect(domain)
-            renewal_mode = tls.renewal_check(domain).mode
+            info = tls.detect(domain, mode=mode)
+            renewal_mode = tls.renewal_check(domain, mode=mode).mode
     except TlsError as exc:
         body["warnings"].append({"id": "public_pending", "message": exc.message})
         return
