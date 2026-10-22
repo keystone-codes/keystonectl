@@ -515,6 +515,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `resource_answer_ignored` | 0 | false | An answer about a resource that is already bound was ignored. | Tell the operator the service uses the provider that is already there, and name it. |
 | `provider_unused` | 0 | false | A catalog resource provider has no consumers left. | Name the provider and volumes; suggest `service remove` on the provider when they no longer need the data. |
 | `provider_data_kept` | 0 | false | Provider volumes still hold every former consumer's data. | Say reinstall reuses the volumes; backup first, then `docker volume rm` only if they will not reinstall — never run it yourself. |
+| `stale_external_resource` | 0 | false | An external resource binding has no consumers left. | `check` only reports this (it never writes); `service plan`/`service apply` for a package that needs this kind clears it automatically. |
 | `package_name_shadowed` | 0 | false | A package name now exists in more than one catalog. | Install it by full name source/name. |
 | `bundle_name_shadowed` | 0 | false | A bundle name now exists in more than one catalog. | Install it by full name source/name. |
 | `tools_snapshot_missing` | 0 | false | The package lists only the creds_* tools. | Run wrap-stdio again without --no-discovery. |

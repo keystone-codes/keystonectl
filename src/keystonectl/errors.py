@@ -884,6 +884,11 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "Back up first, then delete volumes with docker volume rm if you will not reinstall.",
         ),
         _w(
+            "stale_external_resource",
+            "An external resource binding has no consumers left.",
+            "service plan/apply for a package that needs this kind drops it automatically.",
+        ),
+        _w(
             "policy_check_skipped",
             "The policy check was skipped.",
             "Set KEYSTONE_MCP_RBAC_MODE to something other than off and point "

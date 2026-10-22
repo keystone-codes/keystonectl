@@ -1052,6 +1052,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | s3_lifecycle_unsupported | warning | false | The service still runs. Add a lifecycle rule on the bucket later if you need it. |
 | s3_plain_http | warning | false | Prefer https:// for storage that is not on your own Docker network. |
 | snapshot_moved | warning | false | keystone-mcp now reads the snapshot from keystonectl/. |
+| stale_external_resource | warning | false | service plan/apply for a package that needs this kind drops it automatically. |
 | tls_untrusted | warning | false | The service answered. Install the certificate in the system trust store if clients should trust it. |
 | tools_snapshot_missing | warning | false | Run wrap-stdio again without --no-discovery. |
 | tools_unreachable | warning | false | Ask an administrator to add policy rows (see the recommended policy below). |

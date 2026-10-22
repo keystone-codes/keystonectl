@@ -59,6 +59,8 @@ Removing a service drops it from `resources[].consumers`. The bucket, database, 
 
 An `external` resource has no provider package, so removing its last consumer drops the `resources[]` entry itself (there is nothing left for keystonectl to track, and no public command to clear it otherwise). The next package with that need is asked `KEYSTONE_SETUP_RESOURCE_<KIND>` again; `catalog` now installs a provider instead of reusing the dropped external endpoint. A `catalog` resource keeps its entry with zero consumers: the provider package and its volume are still installed.
 
+A lock written before this (0.1.x, or a 0.2.0 candidate before it) can still have one of these empty `external` entries, since nothing but `service remove` ever cleared it. `service plan`/`service apply` drop it themselves, for the relevant kind, before deciding on a provider or a new external binding — otherwise installing a catalog provider or a fresh external connection of that kind would answer `resource_already_bound`/`resource_answer_ignored` forever, with nothing left to remove by hand. `plan` shows this as its own action and does not write; `apply` performs the same removal before it binds. `check` never writes, so it only warns `stale_external_resource` and names the command that clears the entry.
+
 ## Backups
 
 keystonectl does not back up data. Catalog resource providers keep state in Docker named volumes `ks-pkg-<provider>-<vol>` (for example `ks-pkg-minio-data`, `ks-pkg-postgres-data`). Compose services are `<provider>-<role>` (`minio-server`, `postgres-db`; with another instance name, `<name>-<role>`).
