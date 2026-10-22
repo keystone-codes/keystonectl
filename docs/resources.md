@@ -57,6 +57,8 @@ A catalog provider's admin credentials stay in `packages/<provider>.env`.
 
 Removing a service drops it from `resources[].consumers`. The bucket, database, and user are kept. When the last consumer goes, `provider_unused` says so; removing the provider warns `provider_data_kept`. Removing a provider that still has consumers is refused (`resource_in_use`).
 
+An `external` resource has no provider package, so removing its last consumer drops the `resources[]` entry itself (there is nothing left for keystonectl to track, and no public command to clear it otherwise). The next package with that need is asked `KEYSTONE_SETUP_RESOURCE_<KIND>` again; `catalog` now installs a provider instead of reusing the dropped external endpoint. A `catalog` resource keeps its entry with zero consumers: the provider package and its volume are still installed.
+
 ## Backups
 
 keystonectl does not back up data. Catalog resource providers keep state in Docker named volumes `ks-pkg-<provider>-<vol>` (for example `ks-pkg-minio-data`, `ks-pkg-postgres-data`). Compose services are `<provider>-<role>` (`minio-server`, `postgres-db`; with another instance name, `<name>-<role>`).
