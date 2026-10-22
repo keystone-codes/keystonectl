@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `catalog set-ref <name> <ref>` moves a source to another tag or commit.
 - `default_catalog_behind` warns when the default catalog is pinned behind this keystonectl.
 - Guide for service authors: how to release a new version of a package.
+- Warning `keystone_wiring_stale` when the running gateway is missing a compose file or the upstreams network from the layout.
 
 ### Changed
 
@@ -57,6 +58,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - e2e: An unnumbered scenario upgrades the catalog `minio` provider from 1.0.0 to 1.0.1 and checks the image, the lock, and the bucket data.
 - Binding a second service to an already-installed catalog provider no longer records the catalog's newest version in the lock without redeploying it.
 - `service rollback`/`service remove` delete the `.bak` copies an upgrade left once nothing can roll back to them anymore.
+- Removing the last consumer of an `external` resource drops the binding, so a later package can choose `catalog` instead of `resource_already_bound`.
+- `check` reports `keystone_wiring_stale` when the gateway container is missing a compose file or the upstreams network, and names the fix.
+- `TLS=custom`: `service status` reads the certificate and `renewal_manual` from the operator's copy, not a leftover `/etc/letsencrypt/live/<domain>`.
+- A PostgreSQL host name that fails to resolve is reported as `postgres_unreachable` (retryable), not `postgres_access_denied`.
 
 ## [0.1.1] - 2026-10-15
 
