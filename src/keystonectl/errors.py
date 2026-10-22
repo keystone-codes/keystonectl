@@ -930,6 +930,13 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "Install the Docker Compose plugin 2.24 or newer.",
         ),
         _w(
+            "keystone_wiring_stale",
+            "keystone-mcp is running without every compose file or the upstreams network.",
+            "Recreate it with all compose files, for example "
+            "`docker compose -f docker-compose.yml -f docker-compose.packages.yml "
+            "up -d --force-recreate <keystone service>`.",
+        ),
+        _w(
             "check_skipped_no_docker",
             "A check that needs Docker was skipped.",
             "Install Docker to run this check.",

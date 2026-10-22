@@ -163,6 +163,106 @@ def test_docker_checks_warn_without_docker(
     assert any(item["id"] == "check_skipped_no_docker" for item in document["warnings"])
 
 
+def test_check_flags_keystone_wiring_without_packages_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A gateway started with only docker-compose.yml (no -f docker-compose.packages.yml,
+    for example after a manual `docker compose up -d keystone`) sees no upstream at
+    all, but every file on disk is still correct, so the file-based checks stay
+    green. `check` must compare the *running* container's own compose labels and
+    networks, not just the files, and name the command that reconnects it."""
+    import subprocess
+
+    root = tmp_path / "root"
+    _write(root, _lock(_service()))
+
+    inspect_payload = json.dumps(
+        [
+            {
+                "Config": {
+                    "Labels": {
+                        "com.docker.compose.project.config_files": str(root / "docker-compose.yml"),
+                    }
+                },
+                "NetworkSettings": {"Networks": {"keystone-stage_keystone": {}}},
+            }
+        ]
+    )
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["docker", "compose"] and "version" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "2.29.1\n", "")
+        if cmd[:2] == ["docker", "compose"] and "config" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"services": {}}), "")
+        if cmd[:2] == ["docker", "compose"] and "ps" in cmd and cmd[-1] == "keystone":
+            return subprocess.CompletedProcess(cmd, 0, "deadbeef1234\n", "")
+        if cmd[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(cmd, 0, inspect_payload, "")
+        if cmd[:2] == ["docker", "compose"] and "exec" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "")
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    code, document = _json(capsys, ["--json", "--root", str(root), "check"])
+    assert code == 0, document
+    warning = next(
+        item for item in document["result"]["checks"] if item["id"] == "keystone_wiring_stale"
+    )
+    assert warning["status"] == "warning"
+    assert "docker-compose.packages.yml" in warning["message"]
+    assert "keystone-mcp-upstreams" in warning["message"]
+    assert "up -d --force-recreate keystone" in warning["hint"]
+    assert any(item["id"] == "keystone_wiring_stale" for item in document["warnings"])
+
+
+def test_check_keystone_wiring_ok_when_fully_wired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import subprocess
+
+    root = tmp_path / "root"
+    _write(root, _lock(_service()))
+
+    inspect_payload = json.dumps(
+        [
+            {
+                "Config": {
+                    "Labels": {
+                        "com.docker.compose.project.config_files": (
+                            str(root / "docker-compose.yml")
+                            + ","
+                            + str(root / "docker-compose.packages.yml")
+                        ),
+                    }
+                },
+                "NetworkSettings": {"Networks": {"keystone-mcp-upstreams": {}}},
+            }
+        ]
+    )
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["docker", "compose"] and "version" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "2.29.1\n", "")
+        if cmd[:2] == ["docker", "compose"] and "config" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"services": {}}), "")
+        if cmd[:2] == ["docker", "compose"] and "ps" in cmd and cmd[-1] == "keystone":
+            return subprocess.CompletedProcess(cmd, 0, "deadbeef1234\n", "")
+        if cmd[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(cmd, 0, inspect_payload, "")
+        if cmd[:2] == ["docker", "compose"] and "exec" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "")
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    code, document = _json(capsys, ["--json", "--root", str(root), "check"])
+    assert code == 0, document
+    assert not any(item["id"] == "keystone_wiring_stale" for item in document["result"]["checks"])
+    assert any(
+        item["id"] == "keystone_wiring" and item["status"] == "ok"
+        for item in document["result"]["checks"]
+    )
+
+
 def test_check_warning_ids_are_registered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
