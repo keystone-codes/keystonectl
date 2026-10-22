@@ -572,6 +572,37 @@ def test_remove_last_external_consumer_does_not_warn(
     result = _remove(lab.root, "file-mcp")
     assert result.code == 0, result.error
     assert not any(item["id"] == "provider_unused" for item in result.warnings)
+    lock = load_lock(lab.root / "services.lock.yaml")
+    assert lock["resources"] == []
+
+
+def test_external_then_remove_then_catalog_provider_then_consumer_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """External S3 with no consumers left must not block going back to a
+    catalog provider: KEYSTONE_SETUP_RESOURCE_S3=catalog service plan minio
+    used to answer resource_already_bound ("remove it first") with nothing to
+    remove, and a new consumer's own plan used to answer
+    resource_answer_ignored and ask the external S3 questions again.
+    """
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    assert lab.apply("file-mcp", environ=lab.s3_answers()).code == 0
+    lock = load_lock(lab.root / "services.lock.yaml")
+    resource = next(item for item in lock["resources"] if item["kind"] == "s3")
+    assert resource["origin"] == "external"
+    assert _remove(lab.root, "file-mcp").code == 0
+    lock = load_lock(lab.root / "services.lock.yaml")
+    assert lock["resources"] == []
+    assert lab.apply("minio").code == 0
+    catalog = {"KEYSTONE_SETUP_RESOURCE_S3": "catalog"}
+    result = lab.apply("file-mcp", environ=catalog)
+    assert result.code == 0, result.error
+    lock = load_lock(lab.root / "services.lock.yaml")
+    resource = next(item for item in lock["resources"] if item["kind"] == "s3")
+    assert resource["origin"] == "catalog"
+    assert resource["provider"] == "minio"
+    assert len(resource["consumers"]) == 1
 
 
 def test_upgrade_provider_with_consumers_keeps_bindings(

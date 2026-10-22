@@ -163,7 +163,7 @@ KEYSTONE_SETUP_SERVICE_FILE_MCP_CONFIRM_REMOVE=yes \
 keystonectl --root /srv/keystone service remove file-mcp --json
 ```
 
-Retell `result.kept`. If `generated_secrets_kept` is present, the generated secrets and the volumes both stayed. The secrets are in `.keystonectl/secrets/<name>.generated.env`. Installing the package again reuses them, and the file is removed after that install succeeds. Delete the file only together with those volumes. When `provider_unused` appears, the catalog provider still runs with data on disk; suggest `service remove` on that provider when the operator is done. When `provider_data_kept` appears, name the volumes in the warning and say data stays until they back up and run `docker volume rm` themselves — do not run that command for them.
+Retell `result.kept`. If `generated_secrets_kept` is present, the generated secrets and the volumes both stayed. The secrets are in `.keystonectl/secrets/<name>.generated.env`. Installing the package again reuses them, and the file is removed after that install succeeds. Delete the file only together with those volumes. When `provider_unused` appears, the catalog provider still runs with data on disk; suggest `service remove` on that provider when the operator is done. When `provider_data_kept` appears, name the volumes in the warning and say data stays until they back up and run `docker volume rm` themselves — do not run that command for them. A line like "the external s3 connection was dropped (no consumers left)" means the next service that needs that kind is asked `KEYSTONE_SETUP_RESOURCE_<KIND>` again, external or catalog; nothing was deleted at the operator's server.
 
 ## Rotate a secret
 

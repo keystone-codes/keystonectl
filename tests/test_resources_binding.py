@@ -368,6 +368,67 @@ def test_unbind_consumer_keeps_data(tmp_path: Path, kind: str) -> None:
     assert lock["services"][1]["resources"] == []
 
 
+def test_unbind_last_external_consumer_drops_the_binding(tmp_path: Path, kind: str) -> None:
+    """The last consumer of an external resource leaves resources[] with no way
+    to clear it: no provider package to remove, and no public unbind command.
+    `KEYSTONE_SETUP_RESOURCE_<KIND>=catalog service plan <new consumer>` then
+    failed with resource_answer_ignored/resource_already_bound forever.
+    """
+    if kind == "s3":
+        consumer = {"service": "file-mcp", "bucket": "file-mcp"}
+        params = {"endpoint": "http://s3.internal", "region": "us-east-1", "path_style": True}
+    else:
+        consumer = {"service": "file-mcp", "database": "file_mcp", "user": "file_mcp"}
+        params = {"host": "pg.internal", "port": 5432, "sslmode": "disable"}
+    lock = {
+        "services": [
+            {"name": "file-mcp", "role": "service", "resources": [kind]},
+        ],
+        "resources": [
+            {
+                "kind": kind,
+                "origin": "external",
+                "provider": None,
+                "params": params,
+                "consumers": [consumer],
+            }
+        ],
+    }
+    messages = unbind_consumer(lock, "file-mcp")
+    assert any("was kept" in message for message in messages)
+    assert any("was dropped" in message for message in messages)
+    assert lock["resources"] == []
+
+
+def test_unbind_keeps_other_kind_external_binding(tmp_path: Path, kind: str) -> None:
+    """Dropping an empty s3 (or postgres) external binding must not touch an
+    unrelated external binding of the other kind that still has consumers."""
+    other = "postgres" if kind == "s3" else "s3"
+    lock = {
+        "services": [{"name": "file-mcp", "role": "service", "resources": [kind]}],
+        "resources": [
+            {
+                "kind": kind,
+                "origin": "external",
+                "provider": None,
+                "params": {},
+                "consumers": [{"service": "file-mcp", "bucket": "file-mcp", "database": "x"}],
+            },
+            {
+                "kind": other,
+                "origin": "external",
+                "provider": None,
+                "params": {},
+                "consumers": [{"service": "docs-service", "bucket": "docs", "database": "docs"}],
+            },
+        ],
+    }
+    unbind_consumer(lock, "file-mcp")
+    assert len(lock["resources"]) == 1
+    assert lock["resources"][0]["kind"] == other
+    assert lock["resources"][0]["consumers"] != []
+
+
 def test_lock_has_no_secret_values(
     tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
