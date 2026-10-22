@@ -368,6 +368,32 @@ def _env_checks(root: Path, paths: Paths, lock: Mapping[str, Any]) -> list[dict[
     return checks
 
 
+def _resource_checks(lock: Mapping[str, Any]) -> list[dict[str, str]]:
+    """An external resource with no consumers left (a leftover from a build before
+    unbind_consumer() dropped it on service remove, or from 0.1.x) blocks a later
+    service plan/apply for a new provider or binding with resource_already_bound /
+    resource_answer_ignored. check never writes, so it only warns and names the
+    command that clears it; plan/apply drop the entry themselves before deciding.
+    """
+    checks: list[dict[str, str]] = []
+    for item in lock.get("resources") or []:
+        if not isinstance(item, dict) or item.get("origin") != "external":
+            continue
+        if item.get("consumers"):
+            continue
+        kind = str(item.get("kind") or "")
+        checks.append(
+            _item(
+                "stale_external_resource",
+                "warning",
+                f"The external {kind} connection has no consumers left.",
+                f"Run `service plan`/`service apply` for a package that needs {kind}, "
+                f"or for a catalog {kind} provider; either drops this entry first.",
+            )
+        )
+    return checks
+
+
 def _compat_checks(
     root: Path, lock: Mapping[str, Any], environ: Mapping[str, str]
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
@@ -473,6 +499,7 @@ def run_check(root: Path, *, environ: Mapping[str, str] | None = None) -> Result
                     checks.extend(_snapshot_checks(paths, lock))
                     checks.extend(_fragment_checks(root, lock))
                     checks.extend(_env_checks(root, paths, lock))
+                    checks.extend(_resource_checks(lock))
                     compat, missing = _compat_checks(root, lock, env)
                     checks.extend(compat)
     context = CheckContext(root=root, paths=paths, lock=lock, environ=env)

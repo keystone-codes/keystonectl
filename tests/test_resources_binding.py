@@ -219,6 +219,111 @@ def test_catalog_provider_manifest_is_parsed_before_deploy(tmp_path: Path, kind:
     assert not (lab.root / "packages" / "minio.yml").exists()
 
 
+def _stale_external_resource(kind: str) -> dict:
+    """What an old lock (0.1.x, or a 0.2.0 candidate before unbind_consumer()
+    started dropping this on service remove) leaves once its only consumer is
+    long gone: the entry itself, with an empty consumers list."""
+    if kind == "s3":
+        params = {"endpoint": "http://old.example.com", "region": "us-east-1", "path_style": True}
+    else:
+        params = {"host": "old-pg.example.com", "port": 5432, "sslmode": "disable"}
+    return {
+        "kind": kind,
+        "interface_version": 1,
+        "origin": "external",
+        "provider": None,
+        "params": params,
+        "consumers": [],
+    }
+
+
+def test_plan_and_apply_drop_a_stale_external_resource_from_an_older_lock(
+    tmp_path: Path, kind: str
+) -> None:
+    """A stale external resources[] entry with no consumers (left by a lock written
+    before unbind_consumer() dropped these itself; that only ever ran from
+    service remove, on a different package) used to answer
+    resource_already_bound ("remove it first", with nothing left to remove) for
+    a fresh catalog provider install of the same kind. plan must show the
+    cleanup as an action (and not write it -- plan never writes); apply must
+    actually perform it before deciding on the provider.
+    """
+    lab = Lab(tmp_path, standard_manifests())
+    lock_path = lab.root / "services.lock.yaml"
+    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    lock["resources"] = [_stale_external_resource(kind)]
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
+
+    plan_result = lab.plan(provider_name(kind))
+    assert plan_result.code == 0, plan_result.error
+    assert any(action["id"] == f"resources.{kind}.cleanup" for action in plan_result.actions), (
+        plan_result.actions
+    )
+    unchanged = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    assert unchanged["resources"] == [_stale_external_resource(kind)], "plan must not write"
+
+    apply_result = lab.apply(provider_name(kind))
+    assert apply_result.code == 0, apply_result.error
+    after = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    assert len(after["resources"]) == 1
+    resource = after["resources"][0]
+    assert resource["origin"] == "catalog"
+    assert resource["provider"] == provider_name(kind)
+    assert resource["consumers"] == []
+
+
+def test_stale_external_cleanup_leaves_a_resource_with_consumers_alone(
+    tmp_path: Path, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An external binding that still has a consumer, or a catalog provider's own
+    entry with no consumers (provider_unused: the provider and its volume are
+    still installed), must not be dropped by the same cleanup."""
+    install_ok_probes(monkeypatch)
+    lab = Lab(tmp_path, standard_manifests())
+    answers = lab.s3_answers() if kind == "s3" else lab.pg_answers()
+    assert lab.apply(consumer_name(kind), environ=answers).code == 0
+    lock_path = lab.root / "services.lock.yaml"
+    before = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    resource_before = next(item for item in before["resources"] if item["kind"] == kind)
+    assert resource_before["origin"] == "external"
+    assert resource_before["consumers"] != []
+
+    # A second, unrelated plan for the same kind must not touch it.
+    plan_result = lab.plan(consumer_name(kind))
+    assert plan_result.code == 0, plan_result.error
+    assert not any(action["id"] == f"resources.{kind}.cleanup" for action in plan_result.actions)
+    after = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    resource_after = next(item for item in after["resources"] if item["kind"] == kind)
+    assert resource_after == resource_before
+
+
+def test_stale_external_cleanup_leaves_an_idle_catalog_provider_alone(
+    tmp_path: Path, kind: str
+) -> None:
+    """A catalog provider's resources[] entry with no consumers (provider_unused:
+    the provider package and its volume are still installed) is not "stale" the
+    same way an external one is, and must not be dropped by a later plan/apply
+    of the same provider."""
+    lab = Lab(tmp_path, standard_manifests())
+    assert lab.apply(provider_name(kind)).code == 0
+    lock_path = lab.root / "services.lock.yaml"
+    before = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    resource_before = next(item for item in before["resources"] if item["kind"] == kind)
+    assert resource_before["origin"] == "catalog"
+    assert resource_before["consumers"] == []
+
+    plan_result = lab.plan(provider_name(kind))
+    assert plan_result.code == 0, plan_result.error
+    assert not any(action["id"] == f"resources.{kind}.cleanup" for action in plan_result.actions)
+    apply_result = lab.apply(provider_name(kind))
+    assert apply_result.code == 0, apply_result.error
+    after = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    assert len([item for item in after["resources"] if item["kind"] == kind]) == 1
+    resource_after = next(item for item in after["resources"] if item["kind"] == kind)
+    assert resource_after["origin"] == "catalog"
+    assert resource_after["provider"] == provider_name(kind)
+
+
 def test_direct_provider_install_binds_without_consumers(tmp_path: Path, kind: str) -> None:
     lab = Lab(tmp_path, standard_manifests())
     result = lab.apply(provider_name(kind))

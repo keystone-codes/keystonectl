@@ -150,6 +150,48 @@ def _resource(lock: Mapping[str, Any], kind: str) -> dict[str, Any] | None:
     return None
 
 
+def _drop_stale_external(ctx: Context, kind: str) -> bool:
+    """Drop a leftover external resources[] entry for `kind` with no consumers.
+
+    unbind_consumer() only runs from service remove, so an installation that
+    already had this leftover before that fix (0.1.x, or a 0.2.0 candidate
+    before it) stays stuck: a later plan/apply for a new provider or a new
+    external binding of the same kind answers resource_already_bound or
+    resource_answer_ignored, with nothing to remove it. Called before the
+    "already bound" decision in both _decide_provider() and _decide_need(),
+    so plan and apply see and do the same thing; check never writes, so it
+    only warns (stale_external_resource) and names the command that clears
+    it here.
+
+    A single service plan/apply plans the resources step twice (once before
+    the package is fetched, with a draft resolution, then again -- replacing
+    the first result -- once it is): the actual removal only has something to
+    do on the first pass, since it mutates ctx.lock in place and the second
+    pass starts from the already-cleaned state. ctx remembers which kinds it
+    dropped so the action still shows up in whichever pass's result the
+    caller keeps; the second pass does not do (or need to do) the removal
+    again.
+    """
+    dropped: set[str] = getattr(ctx, "stale_resources_dropped", None) or set()
+    ctx.stale_resources_dropped = dropped  # type: ignore[attr-defined]
+    resources = ctx.lock.get("resources")
+    if isinstance(resources, list):
+        kept = [
+            item
+            for item in resources
+            if not (
+                isinstance(item, dict)
+                and item.get("kind") == kind
+                and item.get("origin") == "external"
+                and not item.get("consumers")
+            )
+        ]
+        if len(kept) != len(resources):
+            ctx.lock["resources"] = kept
+            dropped.add(kind)
+    return kind in dropped
+
+
 def _service(lock: Mapping[str, Any], name: str) -> dict[str, Any] | None:
     for item in _services(lock):
         if item.get("name") == name:
@@ -706,6 +748,14 @@ def _decide_need(ctx: Context, manifest: Mapping[str, Any], need: Mapping[str, A
     if problem:
         _fail(ctx, "manifest_invalid", problem)
         return work
+    if _drop_stale_external(ctx, kind):
+        work.actions.append(
+            {
+                "id": f"resources.{kind}.cleanup",
+                "title": f"Drop the empty external {kind} connection (no consumers left)",
+                "status": "planned",
+            }
+        )
     bound = _resource(ctx.lock, kind)
     if bound is not None:
         problem = _version_problem(
@@ -946,6 +996,14 @@ def _decide_provider(ctx: Context, manifest: Mapping[str, Any]) -> _Work:
     if problem:
         _fail(ctx, "manifest_invalid", problem)
         return work
+    if _drop_stale_external(ctx, kind):
+        work.actions.append(
+            {
+                "id": f"resources.{kind}.cleanup",
+                "title": f"Drop the empty external {kind} connection (no consumers left)",
+                "status": "planned",
+            }
+        )
     bound = _resource(ctx.lock, kind)
     if bound is not None and bound.get("provider") != name:
         _fail(
@@ -1794,6 +1852,7 @@ class ResourcesStep:
                 if not isinstance(need, dict) or ctx.failure is not None or ctx.halt_questions:
                     break
                 kind = str(need.get("kind") or "")
+                _drop_stale_external(ctx, kind)
                 bound = _resource(ctx.lock, kind)
                 consumer = _consumer(bound, str(manifest["name"])) if bound else None
                 relpath = _env_relpath(str(manifest["name"]), manifest, need)
