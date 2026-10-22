@@ -163,6 +163,45 @@ def test_endpoint_unreachable_exit_3():
     assert report.error.retryable is True
 
 
+def test_host_name_resolution_failure_is_endpoint_unreachable_exit_3():
+    """A host name that does not resolve must be endpoint_unreachable/retryable,
+    the same as S3's s3_unreachable -- not postgres_access_denied (not
+    retryable, "check the password"), which is what an OperationalError with
+    no SQLSTATE used to get whenever its message text did not happen to match
+    one of a short, hard-coded list of substrings. A genuine Postgres server
+    always tags its own rejections with an SQLSTATE; this one never answered.
+    """
+    factory = make_connect_factory(
+        {},
+        connect_error=psycopg.OperationalError(
+            'connection failed: could not translate host name "db.invalid" to '
+            "address: nodename nor servname provided, or not known"
+        ),
+    )
+    report = probe.probe_postgres(GOOD, connect=factory, probe_id=PROBE_ID)
+    assert report.exit_code == 3
+    assert report.error.code == "endpoint_unreachable"
+    assert report.error.retryable is True
+
+
+def test_unrecognized_message_text_with_no_sqlstate_is_still_endpoint_unreachable():
+    """The old classifier matched specific message substrings and otherwise fell
+    back to provider_error (postgres_access_denied, not retryable) even with no
+    SQLSTATE at all -- i.e. the server never responded. Any wording keystonectl
+    does not recognize, as long as there is no SQLSTATE, is a connectivity
+    problem, not an access one."""
+    factory = make_connect_factory(
+        {},
+        connect_error=psycopg.OperationalError(
+            "some future libpq wording keystonectl has never seen"
+        ),
+    )
+    report = probe.probe_postgres(GOOD, connect=factory, probe_id=PROBE_ID)
+    assert report.exit_code == 3
+    assert report.error.code == "endpoint_unreachable"
+    assert report.error.retryable is True
+
+
 def test_version_too_old_exit_1():
     factory = make_connect_factory(ok_responses(server_version_num=130012))
     report = probe.probe_postgres(GOOD, connect=factory, probe_id=PROBE_ID)

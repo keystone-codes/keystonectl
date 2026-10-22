@@ -319,30 +319,26 @@ def _classify_connection_error(exc: BaseException, password: str) -> ProbeError:
         return ProbeError(
             code="database_not_found", message=_server_message(exc, password), retryable=False
         )
-    if isinstance(exc, psycopg.OperationalError) or sqlstate.startswith("08") or not sqlstate:
-        lower = str(exc).lower()
-        if any(
-            token in lower
-            for token in (
-                "connection refused",
-                "timeout expired",
-                "could not translate host name",
-                "could not connect",
-                "network is unreachable",
-            )
-        ):
-            return ProbeError(
-                code="endpoint_unreachable",
-                message=_server_message(exc, password),
-                retryable=True,
-            )
-    if sqlstate.startswith("08") or (sqlstate.startswith("57P") and sqlstate != "57P01"):
+    if sqlstate.startswith(("08", "57P")):
         return ProbeError(
             code="provider_error", message=_server_message(exc, password), retryable=True
         )
-    if sqlstate.startswith("57P"):
+    if not sqlstate and isinstance(exc, psycopg.OperationalError):
+        # No SQLSTATE means the server never answered: a real Postgres server
+        # always tags its own rejections (28P01/28000 wrong password, 3D000
+        # missing database, 08xxx/57Pxx admin issues) with one, all handled
+        # above. What is left here is DNS, "connection refused", a timeout, an
+        # unreachable network, or a TLS failure -- host resolution included,
+        # whatever libpq's exact wording for it is. Matching message text was
+        # unreliable: an unresolvable host name that did not happen to match
+        # one of the specific "connection refused"/"could not translate host
+        # name"/etc. phrases fell through to provider_error below, i.e.
+        # postgres_access_denied, retryable false, "check the password" --
+        # wrong advice for something DNS or the network could still fix.
         return ProbeError(
-            code="provider_error", message=_server_message(exc, password), retryable=True
+            code="endpoint_unreachable",
+            message=_server_message(exc, password),
+            retryable=True,
         )
     return ProbeError(
         code="provider_error", message=_server_message(exc, password), retryable=False
