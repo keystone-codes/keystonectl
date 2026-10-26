@@ -66,6 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `service plan`/`service apply` drop a stale `external` resource binding (no consumers, from an older lock) before deciding on a provider.
 - `check` warns `stale_external_resource` for the same leftover binding instead, since `check` never writes.
 - The `keystone_wiring_stale` hint adds `--no-deps`, so following it recreates only the gateway, not redis/postgres next to it.
+- The published HTTPS site sends `Referrer-Policy: same-origin` instead of `no-referrer`, so browsers submit a box's credential form with its real `Origin` instead of `null`.
 
 ## [0.1.1] - 2026-10-15
 
