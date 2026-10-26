@@ -1023,7 +1023,7 @@ Same order as `bundle plan`, then `service apply` for each package. Already inst
 | inline_registry_ignored | warning | false | Upstreams are read from keystonectl/upstreams.yaml. |
 | installed_version_missing | warning | false | Upgrade or apply will need another version of that package. |
 | keystone_compose_missing | warning | false | Put keystone-mcp's docker-compose.yml and .env here (see keystone-mcp examples/production) and run keystonectl init again. |
-| keystone_wiring_stale | warning | false | Recreate it with all compose files, for example `docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d --force-recreate <keystone service>`. |
+| keystone_wiring_stale | warning | false | Recreate it with all compose files, for example `docker compose -f docker-compose.yml -f docker-compose.packages.yml up -d --force-recreate --no-deps <keystone service>`. |
 | layout_changed | warning | false | Review the listed fields. The lock was updated to match the compose file. |
 | local_source | warning | false | file:// is for tests and local development, not for a shared catalog. |
 | orphan_fragment | warning | false | Remove the file or install the package that owns it. |
