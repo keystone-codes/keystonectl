@@ -4,16 +4,16 @@
 set -euo pipefail
 
 # release/0.5.0 of keystone-mcp. examples/production is copied from this commit.
-KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-6b04a198101dac22815b17d5bcf55b0e1c6463d8}"
+KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-f73310df8634a19406bf21972e023af9a3b44ac0}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
 # keystone-codes/deploy, branch release/catalog. Commit after D01 (CI bats) and
 # D02 (public keystonectl interface instead of parsing its files).
-KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3}"
+KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-5b6c8f5db02a09248c1f12e48e03500c1becb8a1}"
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
-# tag v1.2.0 = 3673c30, 2026-10-21.
-CATALOG_REF="${E2E_CATALOG_REF:-3673c30cc96861fb92682140522407dac97544fb}"
+# tag v1.2.0 = 709d7e6, 2026-10-21.
+CATALOG_REF="${E2E_CATALOG_REF:-709d7e69b2e1c9325807fd8544208ccc63873b91}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
 # file-mcp 1.0.1, git 81f8e9d. hello-upstream 1.0.1, git b0a2086.
 FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323"
@@ -28,7 +28,7 @@ REDIS_IMAGE="redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda437
 # stdio-box tag atlassian/v1.0.0, read 2026-10-15. v0.1.0 points at the same
 # commit. The image reference is the IMAGE file in that tree (index digest).
 STDIO_BOX_URL=https://github.com/keystone-codes/stdio-box.git
-STDIO_BOX_GIT_SHA=1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f
+STDIO_BOX_GIT_SHA=20c1603a7b5339816ac897462b94206d9a00bfa6
 STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519
 # Scenario 12 partner catalog. E2E_PARTNER_CATALOG_URL is filled in after
 # --profile is known: vm uses the published repository, ci leaves the URL
@@ -458,7 +458,7 @@ ensure_self_signed_cert() {
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
     -subj "/CN=${DOMAIN}" \
     -addext "subjectAltName=DNS:${DOMAIN},DNS:atlassian.e2e.test" \
-    -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1
+    -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1 || return 1
   chmod 600 "$WORK/tls/key.pem"
   chmod 644 "$WORK/tls/cert.pem"
 }
@@ -790,7 +790,7 @@ mcp_check() {
   if [[ -n "$namespace" ]]; then
     args+=(--namespace "$namespace")
   fi
-  if [[ "$mode" == "files" ]]; then
+  if [[ "$mode" == "files" && -f "$WORK/tls/cert.pem" ]]; then
     args+=(--ca /tls/cert.pem)
   fi
   docker run --rm --network host --env-file "$WORK/secrets/client.env" \
@@ -826,11 +826,15 @@ export_file_public() {
 
 curl_public() {
   local code rc=0
-  curl --cacert "$WORK/tls/cert.pem" -fsS "https://${DOMAIN}/healthz" >/dev/null || rc=$?
+  local -a ca=()
+  if [[ -f "$WORK/tls/cert.pem" ]]; then
+    ca=(--cacert "$WORK/tls/cert.pem")
+  fi
+  curl "${ca[@]}" -fsS "https://${DOMAIN}/healthz" >/dev/null || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     return 1
   fi
-  code="$(curl --cacert "$WORK/tls/cert.pem" -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/mcp")"
+  code="$(curl "${ca[@]}" -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/mcp")"
   [[ "$code" == "404" ]]
 }
 
@@ -1631,7 +1635,7 @@ install_manual_vhost() {
   # Used on both profiles: a host nginx vhost serving the self-signed
   # certificate from ensure_self_signed_cert, so keystonectl's reachability
   # probe for the "manual" TLS mode finds something answering on 443.
-  ensure_self_signed_cert
+  ensure_self_signed_cert || return 1
   local sample="$ROOT/.keystonectl/nginx/keystone-svc-file-mcp.conf"
   [[ -f "$sample" ]] || return 1
   local dest="/etc/nginx/sites-available/keystone-svc-file-mcp"
@@ -2039,7 +2043,7 @@ box_service() {
 }
 
 box_credsctl() {
-  compose exec -T "$(box_service)" credsctl "$@"
+  compose exec -T "$(box_service </dev/null)" credsctl "$@"
 }
 
 policy_add_atlassian_roles() {
@@ -2465,7 +2469,7 @@ main() {
   note "containers created by this script are named ks-cat-e2e-*; network aliases stay redis, e2e-external-s3, e2e-external-pg, and atlassian-mock"
   WORK="$(mktemp -d /tmp/ks-cat-e2e.XXXXXX)"
   DIAG="${REPO}/e2e-diagnostics"
-  mkdir -p "$WORK/secrets" "$WORK/log" "$WORK/state" "$WORK/src"
+  mkdir -p "$WORK/secrets" "$WORK/log" "$WORK/state" "$WORK/src" "$WORK/tls"
   : >"$WORK/state/kept.txt"
   chmod 700 "$WORK" "$WORK/secrets" "$WORK/log"
   verify_image_pins

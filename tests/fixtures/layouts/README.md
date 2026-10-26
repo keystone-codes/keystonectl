@@ -7,7 +7,7 @@ the new commit here.
 ## keystone-mcp-production
 
 Source: keystone-mcp `examples/production/` on branch `release/0.5.0`.
-Commit: `6b04a198101dac22815b17d5bcf55b0e1c6463d8`.
+Commit: `f73310df8634a19406bf21972e023af9a3b44ac0`.
 
 Files: `docker-compose.yml`, `upstreams.yaml`, `policy/rbac-policy.yaml`, `Caddyfile`.
 Copied as published. The pinned image in this tree is
@@ -16,7 +16,7 @@ Copied as published. The pinned image in this tree is
 ## keystone-deploy-mcp
 
 Source: keystone-deploy `mcp/` on branch `release/catalog`.
-Commit: `aef1ab37b4657574ab24466e5b84b00c6c8f6e18`.
+Commit: `dab74b9a4eeb28caa82f3571d9de7b5ae63bc518`.
 
 `docker-compose.yml` is the upstream file with comments removed.
 `keystone-mcp.vars` lists every `KEYSTONE_MCP_*` variable from `mcp/.env.example`

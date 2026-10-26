@@ -14,13 +14,13 @@ The 0.1.0 run is archived at [`docs/releases/0.1.0-checklist.md`](releases/0.1.0
 | Date | |
 | Checked by | |
 | keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.5.0` |
-| keystone-mcp commit | `6b04a198101dac22815b17d5bcf55b0e1c6463d8` (`release/0.5.0`) |
-| keystone-deploy commit | `bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3` (`release/catalog`, after D01 and D02) |
-| keystone-catalog commit | `3673c30cc96861fb92682140522407dac97544fb` (tag `v1.2.0` = `3673c30`) |
+| keystone-mcp commit | `f73310df8634a19406bf21972e023af9a3b44ac0` (`release/0.5.0`) |
+| keystone-deploy commit | `5b6c8f5db02a09248c1f12e48e03500c1becb8a1` (`release/catalog`, after D01 and D02) |
+| keystone-catalog commit | `709d7e69b2e1c9325807fd8544208ccc63873b91` (tag `v1.2.0` = `709d7e6`) |
 | file-mcp | `1.0.1` — `ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323` |
 | hello-upstream | `1.0.1` — `ghcr.io/keystone-codes/hello-upstream@sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798` |
 | minio-resource / postgres-resource | minio `1.0.1` — `ghcr.io/keystone-codes/minio-server@sha256:a9dca07071a50045809704bb10681922448c9d7680d36afdbc2f7f759caaea6e`, mc `ghcr.io/keystone-codes/minio-client@sha256:468a6df578c096e46a8dbff6e133ae5b480cf9fa802fde150a2430b10f63be92`; postgres-resource git tag `v1.0.0` (unchanged), images are the foreign digests in that manifest |
-| stdio-box | `0.1.0` — `ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`, commit `1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f` (tag `atlassian/v1.0.0`) |
+| stdio-box | `0.1.0` — `ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`, commit `20c1603a7b5339816ac897462b94206d9a00bfa6` (tag `atlassian/v1.0.0`) |
 | Catalog boxes | `atlassian` `1.0.0`, `notion` `1.0.0` |
 | Package versions from the lock | |
 
