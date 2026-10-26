@@ -491,6 +491,24 @@ def test_vhost_matches_golden_http_and_https() -> None:
     ).read_text(encoding="utf-8")
 
 
+def test_https_referrer_policy_is_same_origin() -> None:
+    # "no-referrer" strips Origin from box credential form POSTs too, which
+    # the stdio-box form rejects; "same-origin" keeps same-site forms working.
+    manifest = _manifest()
+    text = render_vhost(
+        "https",
+        vhost_substitutions(
+            manifest,
+            domain=DOMAIN,
+            host_port=47600,
+            cert_path="/etc/letsencrypt/live/files.example.com/fullchain.pem",
+            key_path="/etc/letsencrypt/live/files.example.com/privkey.pem",
+        ),
+    )
+    assert 'Referrer-Policy "same-origin"' in text
+    assert "no-referrer" not in text
+
+
 def test_locations_only_public_paths_and_healthz() -> None:
     manifest = _manifest()
     text = render_vhost(
