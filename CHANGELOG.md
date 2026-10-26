@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `default_catalog_behind` warns when the default catalog is pinned behind this keystonectl.
 - Guide for service authors: how to release a new version of a package.
 - Warning `keystone_wiring_stale` when the running gateway is missing a compose file or the upstreams network from the layout.
+- Warning `stale_external_resource` when a lock has an `external` resource binding with no consumers left.
 
 ### Changed
 
@@ -62,6 +63,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `check` reports `keystone_wiring_stale` when the gateway container is missing a compose file or the upstreams network, and names the fix.
 - `TLS=custom`: `service status` reads the certificate and `renewal_manual` from the operator's copy, not a leftover `/etc/letsencrypt/live/<domain>`.
 - A PostgreSQL host name that fails to resolve is reported as `postgres_unreachable` (retryable), not `postgres_access_denied`.
+- `service plan`/`service apply` drop a stale `external` resource binding (no consumers, from an older lock) before deciding on a provider.
+- `check` warns `stale_external_resource` for the same leftover binding instead, since `check` never writes.
+- The `keystone_wiring_stale` hint adds `--no-deps`, so following it recreates only the gateway, not redis/postgres next to it.
 
 ## [0.1.1] - 2026-10-15
 
