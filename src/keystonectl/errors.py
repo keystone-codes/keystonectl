@@ -939,7 +939,7 @@ WARNINGS: dict[str, WarningSpec] = dict(
             "keystone-mcp is running without every compose file or the upstreams network.",
             "Recreate it with all compose files, for example "
             "`docker compose -f docker-compose.yml -f docker-compose.packages.yml "
-            "up -d --force-recreate <keystone service>`.",
+            "up -d --force-recreate --no-deps <keystone service>`.",
         ),
         _w(
             "check_skipped_no_docker",

@@ -211,7 +211,7 @@ def test_check_flags_keystone_wiring_without_packages_file(
     assert warning["status"] == "warning"
     assert "docker-compose.packages.yml" in warning["message"]
     assert "keystone-mcp-upstreams" in warning["message"]
-    assert "up -d --force-recreate keystone" in warning["hint"]
+    assert "up -d --force-recreate --no-deps keystone" in warning["hint"]
     assert any(item["id"] == "keystone_wiring_stale" for item in document["warnings"])
 
 

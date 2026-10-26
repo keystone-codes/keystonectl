@@ -205,7 +205,7 @@ def check_keystone_wiring(context: Any) -> dict[str, str] | None:
         reasons = [*missing_files]
         if missing_network:
             reasons.append(f"network {network_name}")
-        command = " ".join([*prefix, "up", "-d", "--force-recreate", service])
+        command = " ".join([*prefix, "up", "-d", "--force-recreate", "--no-deps", service])
         return _item(
             "keystone_wiring_stale",
             "warning",

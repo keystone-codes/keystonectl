@@ -494,7 +494,7 @@ Warnings stay on code 0. Retell them. Do not hide them behind "done".
 | `override_widens_access` | 0 | false | The merged compose model gives a package service more access than the manifest. | This is the operator's choice. Review ports, privileges, and host mounts. |
 | `override_unchecked` | 0 | false | Override access could not be checked. | Say the check did not run; fix the compose files and run check again. |
 | `compose_version_unknown` | 0 | false | Docker Compose version could not be read. | Say compose version is unknown; install the Docker Compose plugin. |
-| `keystone_wiring_stale` | 0 | false | keystone-mcp is running without every compose file or the upstreams network. | It cannot see any upstream service. Give the operator the exact `docker compose … up -d --force-recreate <service>` command from the check result. |
+| `keystone_wiring_stale` | 0 | false | keystone-mcp is running without every compose file or the upstreams network. | It cannot see any upstream service. Give the operator the exact `docker compose … up -d --force-recreate --no-deps <service>` command from the check result (`--no-deps` recreates only the gateway, not redis/postgres or other dependencies next to it). |
 | `check_skipped_no_docker` | 0 | false | A check that needs Docker was skipped. | Say the check did not run because Docker is unavailable. |
 | `unparsed_enddate` | 0 | false | The certificate end date could not be read. | Say the certificate end date is unreadable; check the certificate file. |
 | `tls_untrusted` | 0 | false | The public certificate is not trusted by the system trust store. | The service answered. Install the certificate in the system trust store if clients should trust it. |
