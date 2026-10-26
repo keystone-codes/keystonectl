@@ -4,16 +4,16 @@
 set -euo pipefail
 
 # release/0.5.0 of keystone-mcp. examples/production is copied from this commit.
-KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-6b04a198101dac22815b17d5bcf55b0e1c6463d8}"
+KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-f73310df8634a19406bf21972e023af9a3b44ac0}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
 # keystone-codes/deploy, branch release/catalog. Commit after D01 (CI bats) and
 # D02 (public keystonectl interface instead of parsing its files).
-KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-bb7dea15c0ab3fe77d3cf2a95e7204f0188c23b3}"
+KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-5b6c8f5db02a09248c1f12e48e03500c1becb8a1}"
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
-# tag v1.2.0 = 3673c30, 2026-10-21.
-CATALOG_REF="${E2E_CATALOG_REF:-3673c30cc96861fb92682140522407dac97544fb}"
+# tag v1.2.0 = 709d7e6, 2026-10-21.
+CATALOG_REF="${E2E_CATALOG_REF:-709d7e69b2e1c9325807fd8544208ccc63873b91}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
 # file-mcp 1.0.1, git 81f8e9d. hello-upstream 1.0.1, git b0a2086.
 FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323"
@@ -28,7 +28,7 @@ REDIS_IMAGE="redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda437
 # stdio-box tag atlassian/v1.0.0, read 2026-10-15. v0.1.0 points at the same
 # commit. The image reference is the IMAGE file in that tree (index digest).
 STDIO_BOX_URL=https://github.com/keystone-codes/stdio-box.git
-STDIO_BOX_GIT_SHA=1eb92a6ec2e527f4c691f5a76b83d7ee6930c19f
+STDIO_BOX_GIT_SHA=20c1603a7b5339816ac897462b94206d9a00bfa6
 STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519
 # Scenario 12 partner catalog. E2E_PARTNER_CATALOG_URL is filled in after
 # --profile is known: vm uses the published repository, ci leaves the URL
