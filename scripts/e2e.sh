@@ -458,7 +458,7 @@ ensure_self_signed_cert() {
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
     -subj "/CN=${DOMAIN}" \
     -addext "subjectAltName=DNS:${DOMAIN},DNS:atlassian.e2e.test" \
-    -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1
+    -keyout "$WORK/tls/key.pem" -out "$WORK/tls/cert.pem" >/dev/null 2>&1 || return 1
   chmod 600 "$WORK/tls/key.pem"
   chmod 644 "$WORK/tls/cert.pem"
 }
@@ -790,7 +790,7 @@ mcp_check() {
   if [[ -n "$namespace" ]]; then
     args+=(--namespace "$namespace")
   fi
-  if [[ "$mode" == "files" ]]; then
+  if [[ "$mode" == "files" && -f "$WORK/tls/cert.pem" ]]; then
     args+=(--ca /tls/cert.pem)
   fi
   docker run --rm --network host --env-file "$WORK/secrets/client.env" \
@@ -826,11 +826,15 @@ export_file_public() {
 
 curl_public() {
   local code rc=0
-  curl --cacert "$WORK/tls/cert.pem" -fsS "https://${DOMAIN}/healthz" >/dev/null || rc=$?
+  local -a ca=()
+  if [[ -f "$WORK/tls/cert.pem" ]]; then
+    ca=(--cacert "$WORK/tls/cert.pem")
+  fi
+  curl "${ca[@]}" -fsS "https://${DOMAIN}/healthz" >/dev/null || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     return 1
   fi
-  code="$(curl --cacert "$WORK/tls/cert.pem" -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/mcp")"
+  code="$(curl "${ca[@]}" -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/mcp")"
   [[ "$code" == "404" ]]
 }
 
@@ -1631,7 +1635,7 @@ install_manual_vhost() {
   # Used on both profiles: a host nginx vhost serving the self-signed
   # certificate from ensure_self_signed_cert, so keystonectl's reachability
   # probe for the "manual" TLS mode finds something answering on 443.
-  ensure_self_signed_cert
+  ensure_self_signed_cert || return 1
   local sample="$ROOT/.keystonectl/nginx/keystone-svc-file-mcp.conf"
   [[ -f "$sample" ]] || return 1
   local dest="/etc/nginx/sites-available/keystone-svc-file-mcp"
@@ -2039,7 +2043,7 @@ box_service() {
 }
 
 box_credsctl() {
-  compose exec -T "$(box_service)" credsctl "$@"
+  compose exec -T "$(box_service </dev/null)" credsctl "$@"
 }
 
 policy_add_atlassian_roles() {
@@ -2465,7 +2469,7 @@ main() {
   note "containers created by this script are named ks-cat-e2e-*; network aliases stay redis, e2e-external-s3, e2e-external-pg, and atlassian-mock"
   WORK="$(mktemp -d /tmp/ks-cat-e2e.XXXXXX)"
   DIAG="${REPO}/e2e-diagnostics"
-  mkdir -p "$WORK/secrets" "$WORK/log" "$WORK/state" "$WORK/src"
+  mkdir -p "$WORK/secrets" "$WORK/log" "$WORK/state" "$WORK/src" "$WORK/tls"
   : >"$WORK/state/kept.txt"
   chmod 700 "$WORK" "$WORK/secrets" "$WORK/log"
   verify_image_pins
