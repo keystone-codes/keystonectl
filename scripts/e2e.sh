@@ -928,7 +928,8 @@ minio_bucket_object_count() {
   MC_E2E_BUCKET="$bucket" docker run --rm --network keystone-resources \
     --env-file "$ROOT/packages/minio.env" -e "MC_E2E_BUCKET=${bucket}" \
     --entrypoint sh "$MC_IMAGE" -c '
-      mc alias set local http://minio-server:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
+      # The generated password may start with "-"; as an argument mc would read it as a flag.
+      export MC_HOST_local="http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio-server:9000"
       mc ls --recursive "local/$MC_E2E_BUCKET" 2>/dev/null | wc -l
     ' | tr -d '[:space:]'
 }
