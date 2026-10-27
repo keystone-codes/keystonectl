@@ -25,10 +25,10 @@ from keystonectl.output import Result
 from keystonectl.resources import schema_text
 
 STDIO_BOX_IMAGE = (
-    "ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:"
-    "4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519"
+    "ghcr.io/keystone-codes/stdio-box:0.3.0@sha256:"
+    "fe00911601f626a333897c42efa35f513b8984ca6a73f0dae7809d6f2c7e2ac9"
 )
-STDIO_BOX_REF = "v0.1.0"
+STDIO_BOX_REF = "v0.3.0"
 PROVIDER_SCHEMA_SHA256 = "4ffc23499879d983dd0fb8028c6f91a92fd6f4799cdd99139b02cc77d99db2b0"
 _DIGEST_PLACEHOLDER = "0" * 64
 _PUBLISHER = "keystone-codes"

@@ -3,8 +3,8 @@
 # Pins are updated with the release. Digests are indexes, not tags.
 set -euo pipefail
 
-# release/0.5.0 of keystone-mcp. examples/production is copied from this commit.
-KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-f73310df8634a19406bf21972e023af9a3b44ac0}"
+# tag v0.6.2 of keystone-mcp. examples/production is copied from this commit.
+KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-5d7084ddc2fd65fc5377e66710781d9e9cd613b3}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
 # keystone-codes/deploy, branch release/catalog. Commit after D01 (CI bats) and
 # D02 (public keystonectl interface instead of parsing its files).
@@ -12,8 +12,8 @@ KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-5b6c8f5db02a09248c1f12e48e03500c
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
-# tag v1.2.0 = 709d7e6, 2026-10-21.
-CATALOG_REF="${E2E_CATALOG_REF:-709d7e69b2e1c9325807fd8544208ccc63873b91}"
+# tag v1.3.0 = df995ba, 2026-10-27.
+CATALOG_REF="${E2E_CATALOG_REF:-df995ba0d8dc8d3e807545a325fca79d2e8d91c7}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
 # file-mcp 1.0.1, git 81f8e9d. hello-upstream 1.0.1, git b0a2086.
 FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323"
@@ -25,11 +25,11 @@ MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:468a6df578c096e46a8dbff6e13
 PG_IMAGE="postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 # redis:7-alpine index, docker buildx imagetools inspect on 2026-10-13.
 REDIS_IMAGE="redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
-# stdio-box tag atlassian/v1.0.0, read 2026-10-15. v0.1.0 points at the same
+# stdio-box tag atlassian/v1.1.0, read 2026-10-27. v0.3.0 points at the same
 # commit. The image reference is the IMAGE file in that tree (index digest).
 STDIO_BOX_URL=https://github.com/keystone-codes/stdio-box.git
-STDIO_BOX_GIT_SHA=20c1603a7b5339816ac897462b94206d9a00bfa6
-STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519
+STDIO_BOX_GIT_SHA=855589babe7e9c7212b60654855b7ccd4086f53a
+STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0.3.0@sha256:fe00911601f626a333897c42efa35f513b8984ca6a73f0dae7809d6f2c7e2ac9
 # Scenario 12 partner catalog. E2E_PARTNER_CATALOG_URL is filled in after
 # --profile is known: vm uses the published repository, ci leaves the URL
 # empty and builds a file:// catalog. An explicit value, including empty, wins.
@@ -1043,11 +1043,11 @@ network_names() {
 build_local_catalogs() {
   local docs="$WORK/src/docs-service" files="$WORK/src/file-mcp-e2e" catalog="$WORK/e2e-catalog"
   pin_clone "$STDIO_BOX_URL" "$STDIO_BOX_GIT_SHA" "$WORK/src/stdio-box"
-  if ! git -C "$WORK/src/stdio-box" rev-parse -q --verify refs/tags/atlassian/v1.0.0 >/dev/null; then
-    git -C "$WORK/src/stdio-box" tag atlassian/v1.0.0
+  if ! git -C "$WORK/src/stdio-box" rev-parse -q --verify refs/tags/atlassian/v1.1.0 >/dev/null; then
+    git -C "$WORK/src/stdio-box" tag atlassian/v1.1.0
   fi
-  [[ "$(git -C "$WORK/src/stdio-box" rev-parse HEAD)" == "$(git -C "$WORK/src/stdio-box" rev-parse 'atlassian/v1.0.0^{}')" ]] \
-    || fail prepare "atlassian/v1.0.0 is not the pinned commit"
+  [[ "$(git -C "$WORK/src/stdio-box" rev-parse HEAD)" == "$(git -C "$WORK/src/stdio-box" rev-parse 'atlassian/v1.1.0^{}')" ]] \
+    || fail prepare "atlassian/v1.1.0 is not the pinned commit"
   [[ -f "$WORK/src/stdio-box/packages/atlassian/keystone-service.yaml" ]] \
     || fail prepare "atlassian manifest missing"
   verify_image_pins
@@ -1104,7 +1104,7 @@ packages:
     source: file://${WORK}/src/stdio-box
     path: packages/atlassian
     versions:
-      - {version: 1.0.0, ref: atlassian/v1.0.0, keystone_mcp: ">=0.5.0,<2.0"}
+      - {version: 1.1.0, ref: atlassian/v1.1.0, keystone_mcp: ">=0.5.0,<2.0"}
 EOF
   git init -q "$catalog"
   git -C "$catalog" add catalog.yaml
