@@ -31,6 +31,8 @@ critical_tools:
   - atlassian_creds_profile_delete
   - atlassian_creds_bind
   - atlassian_creds_unbind
+  - atlassian_creds_desired_set
+  - atlassian_creds_sync
 # Only a signed-in person may change accounts; API keys and service accounts may not.
 requires_human_identity:
   - atlassian_creds_profile_create
@@ -38,3 +40,5 @@ requires_human_identity:
   - atlassian_creds_profile_delete
   - atlassian_creds_bind
   - atlassian_creds_unbind
+  - atlassian_creds_desired_set
+  - atlassian_creds_sync
