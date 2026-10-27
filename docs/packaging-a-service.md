@@ -258,13 +258,13 @@ Packages without an MCP facade omit `mcp` entirely; `keystonectl` installs them 
 
 ## Wrapping a stdio server
 
-Use a box when the server speaks only stdio. One image, [`stdio-box`](https://github.com/keystone-codes/stdio-box/tree/v0.1.0/packages), runs every such server. In that repository each server is a directory `packages/<name>/` with a provider descriptor (`provider.yaml`) and a lock file (`requirements.txt` for `uvx`, or `package-lock.json` beside `package.json` for `npx`).
+Use a box when the server speaks only stdio. One image, [`stdio-box`](https://github.com/keystone-codes/stdio-box/tree/v0.3.0/packages), runs every such server. In that repository each server is a directory `packages/<name>/` with a provider descriptor (`provider.yaml`) and a lock file (`requirements.txt` for `uvx`, or `package-lock.json` beside `package.json` for `npx`).
 
 `keystonectl package wrap-stdio <provider-dir>` asks that image for the server's tools once, then writes `tools.snapshot.json`, `keystone-service.yaml` (with `mcp.tools` filled in), and `policy.example.yaml`. A catalog row points at the directory with `path`, for example `packages/atlassian`, so one repository holds several packages. keystonectl does not know about credential profiles; the command only writes files.
 
 `--derived-image` writes a two-line `Dockerfile` (`FROM` the stdio-box image, `COPY` into `/opt/box/packages/<name>/`) for an author who publishes from their own repository.
 
-The image reference written into a new manifest is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`), unless `--derived-image` selects a derived publisher image.
+The image reference written into a new manifest is the digest-pinned stdio-box 0.3.0 release (`ghcr.io/keystone-codes/stdio-box:0.3.0@sha256:fe00911601f626a333897c42efa35f513b8984ca6a73f0dae7809d6f2c7e2ac9`), unless `--derived-image` selects a derived publisher image.
 
 ## Check it locally
 

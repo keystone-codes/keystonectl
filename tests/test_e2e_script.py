@@ -420,7 +420,7 @@ def test_atlassian_profiles_is_wired_into_main() -> None:
     assert "path: packages/atlassian" in _function_body("scenario_atlassian_profiles")
     assert "path: packages/atlassian" in _function_body("build_local_catalogs")
     assert re.search(
-        r"STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0\.1\.0@sha256:[0-9a-f]{64}",
+        r"STDIO_BOX_IMAGE=ghcr.io/keystone-codes/stdio-box:0\.3\.0@sha256:[0-9a-f]{64}",
         SCRIPT,
     )
     assert "16. `atlassian_profiles`" in README
