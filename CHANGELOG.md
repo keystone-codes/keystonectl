@@ -31,11 +31,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- The default catalog `keystone-codes` is pinned at tag `v1.2.0`: the credential boxes and 1.0.1 of `minio`, `hello-upstream`, `file-mcp`.
-- A recorded `sources.yaml` keeps its `keystone-codes` ref; `keystonectl catalog set-ref keystone-codes v1.2.0` moves it.
+- The default catalog `keystone-codes` is pinned at tag `v1.3.0`: the credential boxes at 1.1.0 and 1.0.1 of `minio`, `hello-upstream`, `file-mcp`.
+- A recorded `sources.yaml` keeps its `keystone-codes` ref; `keystonectl catalog set-ref keystone-codes v1.3.0` moves it.
 - Skill: requires sign-in through the provider before the first service, and points to `keystone-gateway-bootstrap` otherwise.
 - Skill: `service add-remote` examples pass `--tools`, name the two tools warnings, and ask a yes before `--no-auth`.
-- `package wrap-stdio` pins the default `--image` to the published stdio-box 0.1.0 digest.
+- `package wrap-stdio` pins the default `--image` to the published stdio-box 0.3.0 digest.
 - Provider contract: the secret file is the desired secret.
 - docs: Backups of catalog providers, `tools_unreachable` as the state before policy, confirmations as a contract, manual registry edits during apply.
 - Removing a provider uses one consumer check; warnings `provider_unused` and `provider_data_kept` name the volumes that stay.
@@ -46,7 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `output.schema.json` types `result` for apply, list, status, remove, bundle and catalog list; `service apply` reports `result.resources`.
 - `service remove` keeps generated secrets of a package with volumes in `.keystonectl/secrets/<name>.generated.env`; reinstalling reuses them.
 - e2e: The vm profile requires `--domain` and a real `E2E_TLS_EMAIL` for certbot, and installs the keystonectl version of the checkout from PyPI.
-- e2e: Pins catalog `v1.2.0`, packages 1.0.1, and the deploy commit with the public keystonectl interface; scenario 6 upgrades file-mcp 1.0.0 to 1.0.1.
+- e2e: Pins catalog `v1.3.0`, keystone-mcp `v0.6.2`, packages 1.0.1, and the deploy commit with the public keystonectl interface; scenario 6 upgrades file-mcp 1.0.0 to 1.0.1.
 
 ### Fixed
 

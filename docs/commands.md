@@ -123,7 +123,7 @@ Same check as `keystonectl lint`.
 
 Writes a box package into a stdio provider directory. It does not install anything and does not read credential profiles. With neither `--tools-snapshot` nor `--no-discovery`, it runs `snapshot-tools` in the stdio-box image and writes `tools.snapshot.json`. `--no-discovery` lists only the `creds_*` tools and warns `tools_snapshot_missing`. An existing manifest is updated in place (`mcp.tools`, `mcp.critical`, and the `BOX_COMMAND` default) unless `--force` rewrites it. `--derived-image` also writes a two-line `Dockerfile`.
 
-The default `--image` is the digest-pinned stdio-box 0.1.0 release (`ghcr.io/keystone-codes/stdio-box:0.1.0@sha256:4d6081cb1608c922c6c7299d30570a145187e65e4be274f9bb98aaaa7d67c519`).
+The default `--image` is the digest-pinned stdio-box 0.3.0 release (`ghcr.io/keystone-codes/stdio-box:0.3.0@sha256:fe00911601f626a333897c42efa35f513b8984ca6a73f0dae7809d6f2c7e2ac9`).
 
 ```json
 {
