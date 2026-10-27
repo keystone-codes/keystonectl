@@ -42,7 +42,9 @@
       "atlassian_creds_profile_rotate",
       "atlassian_creds_profile_delete",
       "atlassian_creds_bind",
-      "atlassian_creds_unbind"
+      "atlassian_creds_unbind",
+      "atlassian_creds_desired_set",
+      "atlassian_creds_sync"
     ],
     "public": {
       "state": "ready",

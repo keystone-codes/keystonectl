@@ -62,13 +62,21 @@ CREDS_TOOLS = (
     "creds_unbind",
     "creds_whoami",
     "creds_check",
+    "creds_snapshot_tools",
+    "creds_desired_get",
+    "creds_desired_set",
+    "creds_sync",
 )
+# Box tools that change accounts: critical, and for a signed-in person only.
+# The same list as stdio-box's creds_tools.changing_tool_names().
 CHANGING_CREDS = (
     "creds_profile_create",
     "creds_profile_rotate",
     "creds_profile_delete",
     "creds_bind",
     "creds_unbind",
+    "creds_desired_set",
+    "creds_sync",
 )
 _POLICY_CREDS = ("creds_whoami", "creds_providers")
 
