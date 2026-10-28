@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `service upgrade`/`service adopt` of a box package (catalog `path`) read the cached manifest from that `path`, not the cache root.
 
+### Security
+
+- `certifi` 2026.7.22 → 2026.10.23 (PYSEC-2026-4320).
+
 ## [0.2.0] - 2026-10-21
 
 ### Added
