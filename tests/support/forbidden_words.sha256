@@ -1,0 +1,7 @@
+# SHA-256 of each lower-cased forbidden word/domain, one per line.
+# Generated from the words themselves; the words are not stored in this
+# repository anywhere else. See tests/test_packaging_guide.py for how this
+# file is used.
+2972f9afb85ba78fdc5aa4970eef30ddecc4ed690bdef28dcfdb494543b6f401
+869a8fadf0fed222d8c75376090524b0881ead433b6cdab2df3a973e2d233344
+8d9883de2ac6935fed4d4fe62dcee413b5b79f59f90ae3342ac1e9f85f547f95
