@@ -149,18 +149,35 @@ def _manifest_at(
     chosen = version or (str(entry.get("version")) if entry.get("version") else None)
     if not isinstance(source, str) or not chosen:
         return None
-    path = package_cache(root, source, name, chosen) / "keystone-service.yaml"
+    base = package_cache(root, source, name, chosen)
+    catalog_entry = _package_catalog_entry(root, name, source=source)
+    sub = catalog_entry.get("path") if isinstance(catalog_entry, dict) else None
+    if isinstance(sub, str) and sub not in ("", "."):
+        path = base / sub / "keystone-service.yaml"
+    else:
+        path = base / "keystone-service.yaml"
     if not path.is_file():
         return None
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     return loaded if isinstance(loaded, dict) else None
 
 
-def _package_catalog_entry(root: Path, name: str) -> dict[str, Any] | None:
+def _package_catalog_entry(
+    root: Path, name: str, *, source: str | None = None
+) -> dict[str, Any] | None:
     catalogs = root / ".keystonectl" / "catalogs"
     if not catalogs.is_dir():
         return None
-    for path in catalogs.glob("*/catalog.yaml"):
+    # A package is only ever looked up by the source it was actually
+    # installed from (or is being fetched from). Globbing every cached
+    # catalog and returning the first name match would silently borrow the
+    # `path` of a same-named package from an unrelated source.
+    paths = (
+        [catalogs / source / "catalog.yaml"] if source else sorted(catalogs.glob("*/catalog.yaml"))
+    )
+    for path in paths:
+        if not path.is_file():
+            continue
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         packages = document.get("packages") if isinstance(document, dict) else None
         if isinstance(packages, dict) and isinstance(packages.get(name), dict):
@@ -185,7 +202,7 @@ def _fetch_version_into_cache(
     prior ``service plan <name>@<version>`` just to warm the cache, even
     though ``service plan`` fetches the same way.
     """
-    catalog_entry = _package_catalog_entry(root, name)
+    catalog_entry = _package_catalog_entry(root, name, source=source)
     if not isinstance(catalog_entry, dict):
         return None
     git_url = catalog_entry.get("source")
