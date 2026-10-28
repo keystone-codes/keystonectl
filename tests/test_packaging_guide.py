@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -13,7 +14,56 @@ from keystonectl.manifest import manifest_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUIDE = REPO_ROOT / "docs" / "packaging-a-service.md"
-FORBIDDEN = Path(__file__).resolve().parent / "support" / "forbidden_words.txt"
+
+# The forbidden list stores SHA-256 hashes of lower-cased words/domains, not
+# the words themselves, so the public repository never carries the plain
+# text of an internal name again (see docs/adr and the Т2б scrub task).
+FORBIDDEN_HASHES = Path(__file__).resolve().parent / "support" / "forbidden_words.sha256"
+
+_FORBIDDEN_WORD_RE = re.compile(r"[a-z0-9]+")
+_FORBIDDEN_DOMAIN_RE = re.compile(r"[a-z0-9.-]+")
+
+# Markdown files that may legitimately carry a name the scan would otherwise
+# flag. Keep this empty unless a real run below actually fails on a file;
+# list the file and the reason here instead of weakening the scan itself.
+_FORBIDDEN_SCAN_EXCEPTIONS: dict[Path, str] = {}
+
+
+def _forbidden_hashes() -> set[str]:
+    assert FORBIDDEN_HASHES.is_file()
+    return {
+        line.strip()
+        for line in FORBIDDEN_HASHES.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+
+
+def _token_hashes(text: str) -> set[str]:
+    """Split text into candidate words/domains and hash each one.
+
+    Two tokenizers run over the same lower-cased text: ``[a-z0-9]+`` catches
+    a bare internal word (e.g. a codename), ``[a-z0-9.-]+`` additionally
+    keeps dots and hyphens so a whole forbidden domain (e.g.
+    ``sub.example.com``) is hashed as one token instead of being split into
+    harmless fragments.
+    """
+    lowered = text.lower()
+    tokens = set(_FORBIDDEN_WORD_RE.findall(lowered))
+    tokens |= set(_FORBIDDEN_DOMAIN_RE.findall(lowered))
+    return {hashlib.sha256(token.encode("utf-8")).hexdigest() for token in tokens}
+
+
+def _markdown_scan_targets() -> list[Path]:
+    files = {GUIDE}
+    for root_name in ("docs", "skills"):
+        root = REPO_ROOT / root_name
+        if root.is_dir():
+            files.update(root.rglob("*.md"))
+    readme = REPO_ROOT / "README.md"
+    if readme.is_file():
+        files.add(readme)
+    return sorted(f for f in files if f not in _FORBIDDEN_SCAN_EXCEPTIONS)
+
 
 _MD_LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
@@ -247,12 +297,40 @@ def test_checklist_table_present() -> None:
 
 
 def test_no_customer_names() -> None:
-    assert FORBIDDEN.is_file()
-    words = [
-        line.strip()
-        for line in FORBIDDEN.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    ]
-    text = _guide_text().lower()
-    hits = [word for word in words if word.lower() in text]
-    assert not hits, f"forbidden word(s) in guide: {hits}"
+    forbidden = _forbidden_hashes()
+    offenders: list[tuple[str, list[str]]] = []
+    for path in _markdown_scan_targets():
+        text = path.read_text(encoding="utf-8")
+        hit_hashes = sorted(_token_hashes(text) & forbidden)
+        if hit_hashes:
+            offenders.append((path.relative_to(REPO_ROOT).as_posix(), hit_hashes))
+    # Only the hash and the file are reported: a hit here would otherwise
+    # print the very name this test exists to keep out of the repository.
+    assert not offenders, f"forbidden word hash(es) found: {offenders}"
+
+
+@pytest.mark.parametrize(
+    ("text", "should_match"),
+    [
+        pytest.param(
+            "Some guide text that names the `zzz-scrub-test-codename` stand by mistake.",
+            True,
+            id="leak",
+        ),
+        pytest.param(
+            "Some guide text with no internal names in it at all.",
+            False,
+            id="clean",
+        ),
+    ],
+)
+def test_forbidden_word_scan_catches_a_synthetic_leak(text: str, should_match: bool) -> None:
+    """Prove the tokenize-and-hash mechanism actually detects a leak.
+
+    ``zzz-scrub-test-codename`` is a synthetic placeholder invented for this
+    test only (it is not a real internal name), so the real forbidden words
+    never have to appear in this file to prove the scan works.
+    """
+    synthetic_hash = hashlib.sha256(b"zzz-scrub-test-codename").hexdigest()
+    hit = synthetic_hash in _token_hashes(text)
+    assert hit is should_match
