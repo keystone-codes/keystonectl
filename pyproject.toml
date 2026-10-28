@@ -1,6 +1,6 @@
 [project]
 name = "keystonectl"
-version = "0.2.0"
+version = "0.2.1"
 description = "Install and check services behind a Keystone MCP gateway: package lint, deployment check, plan/apply"
 readme = "README.md"
 license = "Apache-2.0"

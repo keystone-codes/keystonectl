@@ -42,9 +42,16 @@ def test_extract_changelog_prints_0_2_0() -> None:
     assert "catalog set-ref" in section
 
 
+def test_extract_changelog_prints_0_2_1() -> None:
+    text = (_REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    section = extract_changelog.extract_section(text, "0.2.1")
+    assert section is not None
+    assert "certifi" in section
+
+
 def test_check_version_passes_for_release_tag() -> None:
     result = subprocess.run(
-        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.2.0"],
+        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.2.1"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
