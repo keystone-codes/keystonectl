@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from keystonectl.answers import pkg_var
 from keystonectl.envfiles import read_env
 from keystonectl.generate.compose import fragment_digest
 from keystonectl.lifecycle import (
+    _manifest_at,
     adopt_service,
     eject_service,
     prune_retired_names,
@@ -720,6 +722,105 @@ def test_upgrade_fetches_a_version_not_yet_in_the_cache(tmp_path: Path) -> None:
     lock = load_lock(lab.root / "services.lock.yaml")
     minio = next(item for item in lock["services"] if item["name"] == "minio")
     assert minio["version"] == "1.0.1"
+
+
+_BOX_SUBPATH = "packages/minio"
+
+
+def _box_lab(tmp_path: Path) -> Lab:
+    """A Lab whose catalog `path: packages/minio` moves the manifest into a
+    subdirectory of the package tree, the way every stdio-box package does.
+    """
+    lab = Lab(tmp_path, [s3_provider()])
+    catalog_path = lab.root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
+    catalog_doc = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    catalog_doc["packages"]["minio"]["path"] = _BOX_SUBPATH
+    catalog_text = yaml.safe_dump(catalog_doc, sort_keys=False)
+    catalog_path.write_text(catalog_text, encoding="utf-8")
+    lab.by_url["https://example.com/catalog.git"] = catalog_text
+
+    def _move_into_subpath(tree: Path) -> None:
+        sub = tree / _BOX_SUBPATH
+        sub.mkdir(parents=True)
+        for name in ("keystone-service.yaml", "provision.sh"):
+            if (tree / name).exists():
+                shutil.move(str(tree / name), str(sub / name))
+
+    # The pre-seeded cache for the already-installed version...
+    _move_into_subpath(package_cache(lab.root, "local", "minio", "1.0.0"))
+    # ...and every future clone of minio.git, the way a real box package repo
+    # keeps its manifest under packages/<name>/.
+    rules = lab.runner.rules
+    for index, (prefix, outcome) in enumerate(rules):
+        if tuple(prefix) == ("git", "clone"):
+
+            def clone(args, _orig=outcome, **kwargs):
+                result = _orig(args, **kwargs)
+                dest = Path(args[-1])
+                if str(args[-2]).endswith("/minio.git"):
+                    _move_into_subpath(dest)
+                return result
+
+            rules[index] = (prefix, clone)
+    return lab
+
+
+def test_manifest_at_reads_box_layout(tmp_path: Path) -> None:
+    """`_manifest_at` must honour the catalog `path`, not just assume the
+    manifest sits at the root of the cached package tree (`plan.py` already
+    gets this right for the initial install)."""
+    lab = _box_lab(tmp_path)
+    assert lab.apply("minio").code == 0  # plan.py honours `path`
+    lock = load_lock(lab.root / "services.lock.yaml")
+    entry = next(item for item in lock["services"] if item["name"] == "minio")
+    assert _manifest_at(lab.root, entry) is not None
+
+
+def test_upgrade_box_layout_package(tmp_path: Path) -> None:
+    """`service upgrade` of a box package to a version that is not yet cached
+    must find the fetched manifest under its `path`, not report
+    `version_not_found`."""
+    lab = _box_lab(tmp_path)
+    assert lab.apply("minio").code == 0
+    catalog_path = lab.root / ".keystonectl" / "catalogs" / "local" / "catalog.yaml"
+    catalog_doc = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    catalog_doc["packages"]["minio"]["versions"].append({"version": "1.0.1", "ref": "v1.0.1"})
+    catalog_text = yaml.safe_dump(catalog_doc, sort_keys=False)
+    catalog_path.write_text(catalog_text, encoding="utf-8")
+    lab.by_url["https://example.com/catalog.git"] = catalog_text
+    document = yaml.safe_load(lab.texts["minio"])
+    document["version"] = "1.0.1"
+    lab.by_url["https://example.com/minio.git"] = yaml.safe_dump(document, sort_keys=False)
+    upgraded = upgrade_service(
+        lab.root,
+        "minio",
+        runner=lab.runner,
+        secrets=SecretRegistry(),
+        sets={pkg_var("minio", "CONFIRM_UPGRADE"): "1.0.1"},
+        environ={"KEYSTONE_SETUP_KEYSTONE_MCP_VERSION": "0.5.0"},
+        interactive=False,
+        clock=lambda: CLOCK,
+    )
+    assert upgraded.code == 0, upgraded.error
+
+
+def test_adopt_box_layout_package_after_eject(tmp_path: Path) -> None:
+    """`service adopt` of an ejected box package must find its cached
+    manifest, not report `manifest_invalid: ... has no cached manifest`."""
+    lab = _box_lab(tmp_path)
+    assert lab.apply("minio").code == 0
+    eject_service(lab.root, "minio", clock=lambda: CLOCK)
+    result = adopt_service(
+        lab.root,
+        "minio",
+        runner=lab.runner,
+        sets={pkg_var("minio", "CONFIRM_ADOPT"): "yes"},
+        environ={},
+        interactive=False,
+        clock=lambda: CLOCK,
+        json_mode=False,
+    )
+    assert result.code == 0, result.error
 
 
 def _upgrade(root: Path, ref: str = "file-mcp", *, sets: dict | None = None, runner=None):
