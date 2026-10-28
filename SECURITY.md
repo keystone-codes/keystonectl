@@ -14,7 +14,7 @@ follow up with next steps as we investigate.
 
 | Version | Supported |
 |---|---|
-| `0.1.x` | yes |
+| `0.2.x` | yes |
 
 Only the latest released minor version receives security fixes.
 

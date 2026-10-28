@@ -63,4 +63,4 @@ def test_readme_has_no_relative_repo_links() -> None:
 def test_security_md_exists_and_lists_supported_versions() -> None:
     text = (_REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
     assert "Supported versions" in text
-    assert "0.1.x" in text
+    assert "0.2.x" in text
