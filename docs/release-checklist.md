@@ -15,7 +15,7 @@ The 0.1.0 run is archived at [`docs/releases/0.1.0-checklist.md`](releases/0.1.0
 | Checked by | |
 | keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.6.2` |
 | keystone-mcp commit | `5d7084ddc2fd65fc5377e66710781d9e9cd613b3` (tag `v0.6.2`) |
-| keystone-deploy commit | `5b6c8f5db02a09248c1f12e48e03500c1becb8a1` (`release/catalog`, after D01 and D02) |
+| keystone-deploy commit | `<deploy-commit>` (`release/catalog`, after D01 and D02) |
 | keystone-catalog commit | `df995ba0d8dc8d3e807545a325fca79d2e8d91c7` (tag `v1.3.0` = `df995ba`) |
 | file-mcp | `1.0.1` — `ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323` |
 | hello-upstream | `1.0.1` — `ghcr.io/keystone-codes/hello-upstream@sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798` |
