@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `package wrap-stdio` marks `creds_desired_set` and `creds_sync` critical and human-only in the manifest and the example policy.
 - Skill: `creds_desired_set` and `creds_sync` need an explicit yes like the other changing box tools; `creds_sync` is confirmed with the code from its plan.
 
+### Security
+
+- `certifi` 2026.7.22 → 2026.10.23 (PYSEC-2026-4320).
+
 ## [0.2.0] - 2026-10-21
 
 ### Added
