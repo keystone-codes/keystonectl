@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `service upgrade` without a version picks the newest version from the catalog the package was installed from. It used to take the newest version across every configured catalog, so a newer same-named package in another catalog ended in `version_not_found`.
 - `service upgrade`/`service adopt` of a box package (catalog `path`) read the cached manifest from that `path`, not the cache root.
 
 ### Security

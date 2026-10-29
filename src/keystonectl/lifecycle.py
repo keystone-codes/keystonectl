@@ -875,12 +875,19 @@ class _Host:
         self.nginx_root = nginx_root
 
 
-def _catalog_versions(root: Path, name: str) -> list[dict[str, Any]]:
+def _catalog_versions(root: Path, name: str, *, source: str | None = None) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     catalogs = root / ".keystonectl" / "catalogs"
     if not catalogs.is_dir():
         return found
-    for path in catalogs.glob("*/catalog.yaml"):
+    # Same rule as _package_catalog_entry: an installed package upgrades
+    # within the source it came from. A newer same-named version in another
+    # catalog is not fetchable from this source and would end in
+    # version_not_found.
+    paths = [catalogs / source / "catalog.yaml"] if source else catalogs.glob("*/catalog.yaml")
+    for path in paths:
+        if not path.is_file():
+            continue
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         packages = document.get("packages") if isinstance(document, dict) else None
         if not isinstance(packages, dict) or name not in packages:
@@ -980,7 +987,10 @@ def upgrade_service(
     layout = _layout(lock)
     keystone = layout.get("keystone_mcp_version")
     keystone_text = str(keystone) if isinstance(keystone, str) else None
-    target = requested or _newer_version(current, _catalog_versions(root, name), keystone_text)
+    installed_source = entry.get("source") if isinstance(entry.get("source"), str) else None
+    target = requested or _newer_version(
+        current, _catalog_versions(root, name, source=installed_source or None), keystone_text
+    )
     if target is None or target == current:
         return Result(
             code=0,

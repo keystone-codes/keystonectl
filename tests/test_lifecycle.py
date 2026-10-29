@@ -836,6 +836,21 @@ def _upgrade(root: Path, ref: str = "file-mcp", *, sets: dict | None = None, run
     )
 
 
+def test_upgrade_target_comes_from_the_installed_source(tmp_path: Path) -> None:
+    root = _install(tmp_path)
+    _prepare_upgrade(root)
+    _add_duplicate_catalog(root)
+    other = root / ".keystonectl" / "catalogs" / "e2e" / "catalog.yaml"
+    catalog = yaml.safe_load(other.read_text(encoding="utf-8"))
+    catalog["packages"]["file-mcp"]["versions"].append(
+        {"version": "1.2.0", "ref": "v1.2.0", "keystone_mcp": ">=0.5.0,<2.0"}
+    )
+    other.write_text(yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8")
+    result = _upgrade(root, runner=_diff_runner())
+    assert result.code == 2, result.error
+    assert "1.0.0 -> 1.1.0" in result.missing[0]["question"]
+
+
 def test_upgrade_up_to_date(tmp_path: Path) -> None:
     root = _install(tmp_path)
     runner = FakeCommandRunner()
