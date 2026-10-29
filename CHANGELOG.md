@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The default catalog is `keystone-codes` at tag `v1.4.0`: file-mcp 1.0.2, hello-upstream 1.0.2, minio 1.0.2 and the stdio-box packages 1.1.1; minio 1.0.0 is gone from the catalog. An installed minio 1.0.0 keeps resolving from the lock file and upgrades to 1.0.2.
 - `package wrap-stdio` lists `creds_snapshot_tools`, `creds_desired_get`, `creds_desired_set`, and `creds_sync` in `mcp.tools`.
 - `package wrap-stdio` marks `creds_desired_set` and `creds_sync` critical and human-only in the manifest and the example policy.
 - Skill: `creds_desired_set` and `creds_sync` need an explicit yes like the other changing box tools; `creds_sync` is confirmed with the code from its plan.

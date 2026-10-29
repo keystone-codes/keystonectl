@@ -19,9 +19,9 @@ on:
         required: false
         default: 5b6c8f5db02a09248c1f12e48e03500c1becb8a1
       keystone_mcp_ref:
-        description: keystone-mcp commit (tag v0.6.2)
+        description: keystone-mcp commit (tag v0.6.3)
         required: false
-        default: 5d7084ddc2fd65fc5377e66710781d9e9cd613b3
+        default: 13038e761767da9510b64cb6d0267dac008274c1
       partner_catalog_url:
         description: partner catalog URL (empty keeps the local file:// catalog)
         required: false
@@ -40,7 +40,7 @@ jobs:
         layout: [production-example, keystone-deploy]
     env:
       E2E_KEYSTONE_DEPLOY_REF: ${{ inputs.keystone_deploy_ref || '5b6c8f5db02a09248c1f12e48e03500c1becb8a1' }}
-      E2E_KEYSTONE_MCP_REF: ${{ inputs.keystone_mcp_ref || '5d7084ddc2fd65fc5377e66710781d9e9cd613b3' }}
+      E2E_KEYSTONE_MCP_REF: ${{ inputs.keystone_mcp_ref || '13038e761767da9510b64cb6d0267dac008274c1' }}
       E2E_PARTNER_CATALOG_URL: ${{ inputs.partner_catalog_url }}
       KEYSTONE_DEPLOY_TOKEN: ${{ secrets.KEYSTONE_DEPLOY_TOKEN }}
     steps:

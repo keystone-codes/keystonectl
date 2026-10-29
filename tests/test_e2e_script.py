@@ -457,14 +457,14 @@ def test_minio_provider_upgrade_is_wired_into_main() -> None:
     )
     assert body.index("scenario_minio_provider_upgrade") < body.index("scenario_policy_untouched")
     install_body = _function_body("scenario_install_file_mcp_minio")
-    assert "service apply minio@1.0.0" in install_body
+    assert "service apply minio@1.0.1" in install_body
     upgrade_body = _function_body("scenario_minio_provider_upgrade")
-    assert 'UPGRADE_ACCEPT="1.0.1"' in upgrade_body
+    assert 'UPGRADE_ACCEPT="1.0.2"' in upgrade_body
     assert "run_answered service upgrade minio" in upgrade_body
     # The defects this guards: upgrade left the lock version, the image, and
-    # the fragment at 1.0.0 (no real redeploy) while reporting success, and
+    # the fragment at the old version (no real redeploy) while reporting success, and
     # the bucket data has to survive the real container recreation.
-    assert "lockq service minio version | has_line 1.0.1" in upgrade_body
+    assert "lockq service minio version | has_line 1.0.2" in upgrade_body
     assert 'lockq service-image minio server | has_line "$MINIO_IMAGE"' in upgrade_body
     assert "minio-server was not recreated" in upgrade_body
     assert "bucket object count changed" in upgrade_body
