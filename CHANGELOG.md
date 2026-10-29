@@ -6,11 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-28
+
 ### Changed
 
+- The default catalog is `keystone-codes` at tag `v1.4.0`: file-mcp 1.0.2, hello-upstream 1.0.2, minio 1.0.2 and the stdio-box packages 1.1.1; minio 1.0.0 is gone from the catalog. An installed minio 1.0.0 keeps resolving from the lock file and upgrades to 1.0.2.
 - `package wrap-stdio` lists `creds_snapshot_tools`, `creds_desired_get`, `creds_desired_set`, and `creds_sync` in `mcp.tools`.
 - `package wrap-stdio` marks `creds_desired_set` and `creds_sync` critical and human-only in the manifest and the example policy.
 - Skill: `creds_desired_set` and `creds_sync` need an explicit yes like the other changing box tools; `creds_sync` is confirmed with the code from its plan.
+
+### Fixed
+
+- `service upgrade` without a version picks the newest version from the catalog the package was installed from. It used to take the newest version across every configured catalog, so a newer same-named package in another catalog ended in `version_not_found`.
+- `service upgrade`/`service adopt` of a box package (catalog `path`) read the cached manifest from that `path`, not the cache root.
+
+### Security
+
+- `certifi` 2026.7.22 → 2026.10.23 (PYSEC-2026-4320).
 
 ## [0.2.0] - 2026-10-21
 

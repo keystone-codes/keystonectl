@@ -3,8 +3,8 @@
 # Pins are updated with the release. Digests are indexes, not tags.
 set -euo pipefail
 
-# tag v0.6.2 of keystone-mcp. examples/production is copied from this commit.
-KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-5d7084ddc2fd65fc5377e66710781d9e9cd613b3}"
+# tag v0.6.3 of keystone-mcp. examples/production is copied from this commit.
+KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-13038e761767da9510b64cb6d0267dac008274c1}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
 # keystone-codes/deploy, branch release/catalog. Commit after D01 (CI bats) and
 # D02 (public keystonectl interface instead of parsing its files).
@@ -12,15 +12,15 @@ KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-5b6c8f5db02a09248c1f12e48e03500c
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
-# tag v1.3.0 = df995ba, 2026-10-27.
-CATALOG_REF="${E2E_CATALOG_REF:-df995ba0d8dc8d3e807545a325fca79d2e8d91c7}"
+# tag v1.4.0 = 04bad09, 2026-10-29.
+CATALOG_REF="${E2E_CATALOG_REF:-04bad094808cdf0fd329b93f773edd000742a9a4}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
 # file-mcp 1.0.1, git 81f8e9d. hello-upstream 1.0.1, git b0a2086.
 FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323"
 HELLO_IMAGE="ghcr.io/keystone-codes/hello-upstream@sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798"
-# minio-resource 1.0.1, git f7da576: official RELEASE.2025-09-07 and mc RELEASE.2025-08-13, packaged for GHCR.
-MINIO_IMAGE="ghcr.io/keystone-codes/minio-server@sha256:a9dca07071a50045809704bb10681922448c9d7680d36afdbc2f7f759caaea6e"
-MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:468a6df578c096e46a8dbff6e133ae5b480cf9fa802fde150a2430b10f63be92"
+# minio-resource 1.0.2, git fdfcffc: official RELEASE.2025-09-07 and mc RELEASE.2025-08-13, packaged for GHCR.
+MINIO_IMAGE="ghcr.io/keystone-codes/minio-server@sha256:21ae817b30283b62ef184f58fbd1e9891c8ac62c5f2337543b97075bd077cd5b"
+MC_IMAGE="ghcr.io/keystone-codes/minio-client@sha256:b0d314c8471e4b6cb78ea50df3ca176073f1ac97a810041a4ff0c427046d4f4c"
 # postgres-resource 7953f7a: postgres:16-alpine 16.15-alpine3.24.
 PG_IMAGE="postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 # redis:7-alpine index, docker buildx imagetools inspect on 2026-10-13.
@@ -887,12 +887,12 @@ scenario_install_file_mcp_minio() {
   fi
   export KEYSTONE_SETUP_RESOURCE_S3=catalog
   export_file_public
-  # Pin the provider at 1.0.0 before the bundle: an unpinned `bundle install`
-  # resolves the newest compatible version (1.0.1 as of this catalog), which
+  # Pin the provider at 1.0.1 before the bundle: an unpinned `bundle install`
+  # resolves the newest compatible version (1.0.2 as of this catalog), which
   # would leave scenario_minio_provider_upgrade with nothing to upgrade from.
   # Once minio is installed and bound, bundle install reuses it as-is.
-  kc service apply minio@1.0.0
-  [[ "$KC_RC" -eq 0 ]] || fail install_file_mcp_minio "minio@1.0.0 apply exited ${KC_RC}"
+  kc service apply minio@1.0.1
+  [[ "$KC_RC" -eq 0 ]] || fail install_file_mcp_minio "minio@1.0.1 apply exited ${KC_RC}"
   run_answered bundle install minimal || fail install_file_mcp_minio "bundle install exited ${KC_RC}"
   cp "$WORK/log/kc.out" "$WORK/log/install.json"
   curl_public || fail install_file_mcp_minio "public HTTP check failed"
@@ -906,8 +906,8 @@ scenario_install_file_mcp_minio() {
   fi
   lockq resource s3 origin | has_line catalog || fail install_file_mcp_minio "s3 origin is not catalog"
   lockq service minio role | has_line resource || fail install_file_mcp_minio "minio is not a resource"
-  lockq service minio version | has_line 1.0.0 \
-    || fail install_file_mcp_minio "bundle install did not reuse the pinned minio 1.0.0"
+  lockq service minio version | has_line 1.0.1 \
+    || fail install_file_mcp_minio "bundle install did not reuse the pinned minio 1.0.1"
   if [[ "$LAYOUT" == "production-example" ]]; then
     # .env does not set this ahead of time on this layout; keystonectl must add
     # it to the managed block itself once an upstream needs plain HTTP.
@@ -945,20 +945,20 @@ scenario_minio_provider_upgrade() {
     skip minio_provider_upgrade "minio is not installed"
     return 0
   fi
-  lockq service minio version | has_line 1.0.0 \
-    || fail minio_provider_upgrade "minio is not at 1.0.0 before the upgrade"
+  lockq service minio version | has_line 1.0.1 \
+    || fail minio_provider_upgrade "minio is not at 1.0.1 before the upgrade"
   before_started="$(container_started minio-server)"
   objects_before="$(minio_bucket_object_count file-mcp)"
   [[ "$objects_before" -ge 1 ]] \
     || fail minio_provider_upgrade "no objects in the file-mcp bucket before the upgrade"
-  UPGRADE_ACCEPT="1.0.1"
+  UPGRADE_ACCEPT="1.0.2"
   run_answered service upgrade minio || fail minio_provider_upgrade "upgrade exited ${KC_RC}"
-  lockq service minio version | has_line 1.0.1 \
-    || fail minio_provider_upgrade "lock version did not move to 1.0.1"
+  lockq service minio version | has_line 1.0.2 \
+    || fail minio_provider_upgrade "lock version did not move to 1.0.2"
   lockq service-image minio server | has_line "$MINIO_IMAGE" \
-    || fail minio_provider_upgrade "lock image did not move to the 1.0.1 pin"
+    || fail minio_provider_upgrade "lock image did not move to the 1.0.2 pin"
   grep -F -q "$MINIO_IMAGE" "$ROOT/packages/minio.yml" \
-    || fail minio_provider_upgrade "fragment does not reference the 1.0.1 image"
+    || fail minio_provider_upgrade "fragment does not reference the 1.0.2 image"
   after_started="$(container_started minio-server)"
   [[ "$before_started" != "$after_started" ]] \
     || fail minio_provider_upgrade "minio-server was not recreated"

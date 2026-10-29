@@ -68,7 +68,7 @@ Filled on the owner's stand. Not run from the repository checkout.
 - Host: `<stand-host>` (keystone-mcp directory is `mcp/` of the keystone-deploy checkout)
 - Skill connected in Claude Code on that host. The agent is connected to keystone-mcp as an administrator.
 
-Operator message: "Install the file service on <stand-host>."
+Operator message: "Install the file service on `<stand-host>`."
 
 - [ ] Agent runs `--version`, `check`, `service list`, `catalog list`, and `service plan` itself
 - [ ] Sign-in through the provider is confirmed before the first service goes on a fresh gateway; if the operator says nobody signed in, the agent stops and names `keystone-gateway-bootstrap` without calling `apply`

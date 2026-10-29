@@ -42,9 +42,16 @@ def test_extract_changelog_prints_0_2_0() -> None:
     assert "catalog set-ref" in section
 
 
+def test_extract_changelog_prints_0_2_1() -> None:
+    text = (_REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    section = extract_changelog.extract_section(text, "0.2.1")
+    assert section is not None
+    assert "certifi" in section
+
+
 def test_check_version_passes_for_release_tag() -> None:
     result = subprocess.run(
-        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.2.0"],
+        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.2.1"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
@@ -63,4 +70,4 @@ def test_readme_has_no_relative_repo_links() -> None:
 def test_security_md_exists_and_lists_supported_versions() -> None:
     text = (_REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
     assert "Supported versions" in text
-    assert "0.1.x" in text
+    assert "0.2.x" in text
