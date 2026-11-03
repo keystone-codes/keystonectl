@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-03
+
+### Changed
+
+- The default catalog is `keystone-codes` at tag `v1.4.2`: file-mcp 1.0.3, and the stdio-box packages on image 0.3.2 — `atlassian` and `yandex-wiki` 1.1.3, `notion`, `tavily` and `yandex-tracker` 1.1.2 — all with `joserfc` 1.7.7 where the package depends on it.
+- e2e runs against keystone-mcp 0.6.4.
+
 ## [0.2.1] - 2026-10-28
 
 ### Changed
