@@ -16,9 +16,9 @@ def test_layout_a_patch_has_no_diff() -> None:
 
 def test_script_pins_published_refs() -> None:
     pins = [
-        "13038e761767da9510b64cb6d0267dac008274c1",
+        "f275faa8a2f34da34a14ab292c0680bd9eb44e46",
         "5b6c8f5db02a09248c1f12e48e03500c1becb8a1",
-        "04bad094808cdf0fd329b93f773edd000742a9a4",
+        "5f987c2b0a19ae96c81ad8b08be244a19006af36",
         "855589babe7e9c7212b60654855b7ccd4086f53a",
         "sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323",
         "sha256:5129e83cd5a3e44760fd71afa5d90cc0fb840e29f19cada263aaff0603464798",

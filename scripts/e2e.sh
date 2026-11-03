@@ -3,8 +3,8 @@
 # Pins are updated with the release. Digests are indexes, not tags.
 set -euo pipefail
 
-# tag v0.6.3 of keystone-mcp. examples/production is copied from this commit.
-KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-13038e761767da9510b64cb6d0267dac008274c1}"
+# tag v0.6.4 of keystone-mcp. examples/production is copied from this commit.
+KEYSTONE_MCP_REF="${E2E_KEYSTONE_MCP_REF:-f275faa8a2f34da34a14ab292c0680bd9eb44e46}"
 KEYSTONE_MCP_URL="${E2E_KEYSTONE_MCP_URL:-https://github.com/keystone-codes/keystone-mcp.git}"
 # keystone-codes/deploy, branch release/catalog. Commit after D01 (CI bats) and
 # D02 (public keystonectl interface instead of parsing its files).
@@ -12,8 +12,8 @@ KEYSTONE_DEPLOY_REF="${E2E_KEYSTONE_DEPLOY_REF:-5b6c8f5db02a09248c1f12e48e03500c
 KEYSTONE_DEPLOY_URL="${E2E_KEYSTONE_DEPLOY_URL:-https://github.com/keystone-codes/deploy.git}"
 # keystone-catalog commit under test. The product default is the tag DEFAULT_CATALOG_REF;
 # the script pins a commit so the run is reproducible.
-# tag v1.4.0 = 04bad09, 2026-10-29.
-CATALOG_REF="${E2E_CATALOG_REF:-04bad094808cdf0fd329b93f773edd000742a9a4}"
+# tag v1.4.2 = 5f987c2, 2026-11-03.
+CATALOG_REF="${E2E_CATALOG_REF:-5f987c2b0a19ae96c81ad8b08be244a19006af36}"
 CATALOG_URL="${E2E_CATALOG_URL:-https://github.com/keystone-codes/keystone-catalog.git}"
 # file-mcp 1.0.1, git 81f8e9d. hello-upstream 1.0.1, git b0a2086.
 FILE_MCP_IMAGE="ghcr.io/keystone-codes/file-mcp@sha256:d0aeabb77937cabb2e75fbfa1e3191a771587032bf1b052d900bb53a54073323"
