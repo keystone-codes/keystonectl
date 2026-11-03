@@ -49,9 +49,16 @@ def test_extract_changelog_prints_0_2_1() -> None:
     assert "certifi" in section
 
 
+def test_extract_changelog_prints_0_2_2() -> None:
+    text = (_REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    section = extract_changelog.extract_section(text, "0.2.2")
+    assert section is not None
+    assert "v1.4.2" in section
+
+
 def test_check_version_passes_for_release_tag() -> None:
     result = subprocess.run(
-        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.2.1"],
+        [sys.executable, str(_CHECK_VERSION_PATH), "--tag", "v0.2.2"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
