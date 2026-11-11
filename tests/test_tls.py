@@ -55,7 +55,7 @@ class Script:
         body = list(args)
         if body[:2] == ["sudo", "-n"]:
             body = body[2:]
-        if body[:2] == ["test", "-f"] or body[:2] == ["test", "-r"]:
+        if body[:2] == ["test", "-f"] or body[:2] == ["head", "-c"]:
             path = body[-1]
             if path in self.unreadable or not Path(path).is_file():
                 return CommandResult(tuple(args), 1, "", "")
@@ -385,6 +385,26 @@ def test_custom_unreadable(tmp_path: Path) -> None:
     with pytest.raises(TlsError) as caught:
         _tls(script).install_custom(DOMAIN, cert, key)
     assert caught.value.error_id == "cert_unreadable"
+    assert caught.value.hint == "change KEYSTONE_SETUP_SERVICE_*_CERT_PATH"
+
+
+def test_custom_readability_uses_head_not_test(tmp_path: Path) -> None:
+    """``test -r`` is wrong under uutils coreutils (root can't read another
+
+    user's mode-600 file per the external ``test`` binary, even though an
+    actual read succeeds). keystonectl must attempt a real read instead.
+    """
+    script = Script(tmp_path)
+    cert, key = _sources(tmp_path)
+    _tls(script).install_custom(DOMAIN, cert, key)
+    readability_calls = []
+    for call in script.runner.calls:
+        body = call.args[2:] if call.args[:2] == ("sudo", "-n") else call.args
+        if body and body[-1] in (str(cert), str(key)) and body[0] in ("test", "head"):
+            readability_calls.append(body)
+    assert readability_calls, "no readability check was run"
+    for body in readability_calls:
+        assert body[:2] == ("head", "-c"), f"expected a read attempt, got {body!r}"
 
 
 def test_custom_chain_missing_warns(tmp_path: Path) -> None:

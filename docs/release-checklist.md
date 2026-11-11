@@ -13,7 +13,7 @@ The 0.1.0 run is archived at [`docs/releases/0.1.0-checklist.md`](releases/0.1.0
 | Release run (publish, pypi-verify, github-release) | |
 | Date | |
 | Checked by | |
-| keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.6.2` |
+| keystone-mcp image | `ghcr.io/keystone-codes/keystone-mcp:0.6.5` |
 | keystone-mcp commit | `5d7084ddc2fd65fc5377e66710781d9e9cd613b3` (tag `v0.6.2`) |
 | keystone-deploy commit | `<deploy-commit>` (`release/catalog`, after D01 and D02) |
 | keystone-catalog commit | `df995ba0d8dc8d3e807545a325fca79d2e8d91c7` (tag `v1.3.0` = `df995ba`) |

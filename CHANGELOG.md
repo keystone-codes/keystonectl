@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-11
+
+### Changed
+
+- The default catalog is `keystone-codes` at tag `v1.4.3`: file-mcp 1.0.4 and the stdio-box packages on image 0.3.3, with `apt` 2.6.2 (CVE-2026-109518).
+- e2e runs against keystone-mcp 0.6.5.
+
+### Fixed
+
+- Custom certificates on Ubuntu 26.04: the readability check used `test -r`, which in uutils coreutils reports a file owned by another user as unreadable even for root, so `service install`, `service apply` and `bundle install` failed with `cert_unreadable` when the certificate or key belonged to the user running keystonectl through sudo. keystonectl now tries to read the file instead.
+
 ## [0.2.2] - 2026-11-03
 
 ### Changed
