@@ -30,7 +30,7 @@ _URLS = (
     re.compile(r"^file:///\S+$"),
 )
 
-DEFAULT_CATALOG_REF = "v1.4.2"
+DEFAULT_CATALOG_REF = "v1.4.3"
 
 _CATALOG_SCHEMA = json.loads(CATALOG_SCHEMA_PATH.read_text(encoding="utf-8"))
 _SOURCES_SCHEMA = json.loads(SOURCES_SCHEMA_PATH.read_text(encoding="utf-8"))

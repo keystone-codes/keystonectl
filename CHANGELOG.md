@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-11
+
+### Changed
+
+- The default catalog is `keystone-codes` at tag `v1.4.3`: file-mcp 1.0.4 and the stdio-box packages on image 0.3.3, with `apt` 2.6.2 (CVE-2026-109518).
+- e2e runs against keystone-mcp 0.6.5.
+
 ## [0.2.2] - 2026-11-03
 
 ### Changed
