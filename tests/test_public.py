@@ -124,7 +124,7 @@ class Host:
             if target.is_symlink() or target.exists():
                 target.unlink()
             return CommandResult(recorded, 0, "", "")
-        if body[:2] in (["test", "-f"], ["test", "-r"]):
+        if body[:2] == ["test", "-f"] or body[:2] == ["head", "-c"]:
             ok = Path(body[-1]).is_file()
             return CommandResult(recorded, 0 if ok else 1, "", "")
         if body[:1] == ["openssl"] and "-enddate" in body:

@@ -288,13 +288,13 @@ class Tls:
     def install_custom(self, domain: str, cert: Path, key: Path) -> CertInfo:
         cert = Path(cert)
         key = Path(key)
-        if self._run(["test", "-r", str(cert)]).returncode != 0:
+        if self._run(["head", "-c", "1", str(cert)]).returncode != 0:
             raise TlsError(
                 "cert_unreadable",
                 f"cannot read {cert}",
                 hint="change KEYSTONE_SETUP_SERVICE_*_CERT_PATH",
             )
-        if self._run(["test", "-r", str(key)]).returncode != 0:
+        if self._run(["head", "-c", "1", str(key)]).returncode != 0:
             raise TlsError(
                 "cert_unreadable",
                 f"cannot read {key}",
